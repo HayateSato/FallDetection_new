@@ -1,0 +1,13 @@
+influxdb-client
+numpy
+pandas
+scikit-learn
+xgboost
+joblib
+Flask
+python-dotenv
+tqdm
+matplotlib
+seaborn
+scipy
+optuna

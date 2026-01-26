@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fall Detection Trigger</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        button {
+            width: 100%;
+            padding: 15px;
+            font-size: 18px;
+            font-weight: bold;
+            color: white;
+            background-color: #0e0e0e;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #73767a;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        .response {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 5px;
+            display: none;
+        }
+        .success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .loading {
+            text-align: center;
+            margin-top: 20px;
+            color: #666;
+        }
+        .fall-detected {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 2px solid #f5c6cb;
+            font-weight: bold;
+        }
+        .no-fall {
+            background-color: #d4edda;
+            color: #155724;
+            border: 2px solid #c3e6cb;
+        }
+        .result-details {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            color: #333;
+            font-weight: bold;
+        }
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        .gt-toggle-btn {
+            width: 100%;
+            padding: 15px;
+            font-size: 18px;
+            font-weight: bold;
+            color: white;
+            background-color: #e2626f;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            margin-bottom: 15px;
+        }
+        .gt-toggle-btn.active {
+            background-color: #28a745;
+        }
+        .gt-toggle-btn:hover {
+            opacity: 0.9;
+        }
+        .gt-status {
+            text-align: center;
+            padding: 10px;
+            margin-bottom: 15px;
+            border-radius: 5px;
+            font-weight: bold;
+        }
+        .gt-status.active {
+            background-color: #ffffff;
+            color: #155724;
+            border: 1px solid #155724;
+        }
+        .gt-status.inactive {
+            background-color: #ffffff;
+            color: #4a4a4a;
+            border: 1px solid #4a4a4a;
+        }
+        .record-btn {
+            width: 100%;
+            padding: 15px;
+            font-size: 18px;
+            font-weight: bold;
+            color: white;
+            background-color: #6c757d;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            margin-bottom: 15px;
+        }
+        .record-btn.recording {
+            background-color: #dc3545;
+            animation: pulse 1.5s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
+        }
+        .record-btn:hover {
+            opacity: 0.9;
+        }
+        .detection-display {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #e9ecef;
+            border-radius: 5px;
+            display: none;
+        }
+        .detection-display.visible {
+            display: block;
+        }
+        .detection-row {
+            padding: 5px 0;
+            font-size: 14px;
+        }
+        .detection-label {
+            font-weight: bold;
+            color: #495057;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Fall Detection Data Collection</h1>
+
+        <!-- Participant Information -->
+        <div class="form-group">
+            <label for="participantName">Participant Name:</label>
+            <input type="text" id="participantName" placeholder="Enter participant name" required>
+        </div>
+
+        <div class="form-group">
+            <label for="participantGender">Gender:</label>
+            <select id="participantGender" required>
+                <option value="">-- Select Gender --</option>
+                <option value="male">Male (0)</option>
+                <option value="female">Female (1)</option>
+            </select>
+        </div>
+
+        <!-- Ground Truth Annotation Button -->
+        <button id="gtMarkBtn" class="gt-toggle-btn" onclick="markGroundTruth()">
+            MARK FALL EVENT
+        </button>
+
+        <div id="gtStatus" class="gt-status inactive">
+            Click button above at the moment of fall to mark ground truth
+        </div>
+
+        <!-- Popup notification for ground truth -->
+        <div id="gtPopup" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #28a745; color: white; padding: 20px 40px; border-radius: 10px; font-size: 18px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.3); z-index: 9999;">
+            ✓ Ground Truth Marker Recorded!
+        </div>
+
+        <!-- Record Button -->
+        <button id="recordBtn" class="record-btn" onclick="toggleRecording()">
+            ⏺ START RECORDING
+        </button>
+
+        <!-- Real-time Detection Display -->
+        <div id="detectionDisplay" class="detection-display">
+            <h3 style="margin-top: 0;">Latest Detection</h3>
+            <div class="detection-row">
+                <span class="detection-label">Status:</span>
+                <span id="displayFallStatus">Waiting...</span>
+            </div>
+            <div class="detection-row">
+                <span class="detection-label">Confidence:</span>
+                <span id="displayConfidence">-</span>
+            </div>
+            <div class="detection-row">
+                <span class="detection-label">Peak Acceleration:</span>
+                <span id="displayPeakAcc">-</span>
+            </div>
+            <div class="detection-row">
+                <span class="detection-label">Peak Gyroscope:</span>
+                <span id="displayPeakGyr">-</span>
+            </div>
+            <div class="detection-row">
+                <span class="detection-label">Time Range:</span>
+                <span id="displayTimeRange">-</span>
+            </div>
+            <div class="detection-row">
+                <span class="detection-label">Detection Time:</span>
+                <span id="displayDetectionTime">-</span>
+            </div>
+        </div>
+
+        <div id="loading" class="loading" style="display: none;">Processing...</div>
+        <div id="response" class="response"></div>
+    </div>
+
+    <script>
+        // Recording state
+        let recordingActive = false;
+        let eventSource = null;
+
+        async function markGroundTruth() {
+            // Write marker with value=1 to InfluxDB at exact moment button pressed
+            const success = await writeGroundTruthMarker(1);
+
+            if (success) {
+                // Show popup confirmation
+                showGroundTruthPopup();
+            }
+        }
+
+        async function writeGroundTruthMarker(value) {
+            try {
+                const response = await fetch('/ground_truth/marker', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        value: value
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log(`Ground truth marker written to InfluxDB: value=${value} at ${data.timestamp}`);
+                    return true;
+                } else {
+                    console.error('Failed to write ground truth marker');
+                    alert('ERROR: Failed to write ground truth marker to InfluxDB');
+                    return false;
+                }
+            } catch (error) {
+                console.error('Error writing ground truth marker:', error);
+                alert('ERROR: ' + error.message);
+                return false;
+            }
+        }
+
+        function showGroundTruthPopup() {
+            const popup = document.getElementById('gtPopup');
+            popup.style.display = 'block';
+
+            // Hide after 2 seconds
+            setTimeout(() => {
+                popup.style.display = 'none';
+            }, 2000);
+        }
+
+        async function toggleRecording() {
+            const recordBtn = document.getElementById('recordBtn');
+            const participantName = document.getElementById('participantName').value.trim();
+            const participantGender = document.getElementById('participantGender').value;
+
+            // Validate inputs before starting recording
+            if (!recordingActive) {
+                if (!participantName) {
+                    alert('Please enter participant name before starting recording');
+                    return;
+                }
+                if (!participantGender) {
+                    alert('Please select gender before starting recording');
+                    return;
+                }
+            }
+
+            recordingActive = !recordingActive;
+
+            if (recordingActive) {
+                recordBtn.textContent = '⏹ STOP RECORDING';
+                recordBtn.classList.add('recording');
+
+                // Start SSE connection
+                startEventStream();
+
+                // Show detection display
+                document.getElementById('detectionDisplay').classList.add('visible');
+            } else {
+                recordBtn.textContent = '⏺ START RECORDING';
+                recordBtn.classList.remove('recording');
+
+                // Stop SSE connection
+                if (eventSource) {
+                    eventSource.close();
+                    eventSource = null;
+                }
+            }
+
+            // Send recording state to backend
+            updateRecordingState();
+        }
+
+        async function updateRecordingState() {
+            const participantName = document.getElementById('participantName').value.trim();
+            const participantGender = document.getElementById('participantGender').value;
+
+            try {
+                const response = await fetch('/recording/state', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        recording_active: recordingActive,
+                        participant_name: participantName,
+                        participant_gender: participantGender,
+                        ground_truth_fall: 0  // Not used anymore - ground truth written directly to InfluxDB
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log('Recording state updated:', data);
+                } else {
+                    console.error('Failed to update recording state:', response.status);
+                    alert('ERROR: Failed to update recording state');
+                }
+            } catch (error) {
+                console.error('Error updating recording state:', error);
+                alert('ERROR: ' + error.message);
+            }
+        }
+
+        function startEventStream() {
+            eventSource = new EventSource('/events');
+
+            eventSource.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+
+                if (data.type === 'fall_detected' || data.type === 'peak_detected') {
+                    updateDetectionDisplay(data);
+                }
+            };
+
+            eventSource.onerror = function(error) {
+                console.error('EventSource error:', error);
+                if (eventSource.readyState === EventSource.CLOSED) {
+                    console.log('Connection closed, attempting to reconnect...');
+                    setTimeout(startEventStream, 5000);
+                }
+            };
+        }
+
+        function updateDetectionDisplay(data) {
+            // Update status with color
+            const statusSpan = document.getElementById('displayFallStatus');
+            if (data.fall_detected) {
+                statusSpan.textContent = '🚨 FALL DETECTED';
+                statusSpan.style.color = '#dc3545';
+                statusSpan.style.fontWeight = 'bold';
+            } else {
+                statusSpan.textContent = '✓ No Fall';
+                statusSpan.style.color = '#28a745';
+                statusSpan.style.fontWeight = 'normal';
+            }
+
+            // Update other fields
+            document.getElementById('displayConfidence').textContent =
+                data.confidence ? (data.confidence * 100).toFixed(2) + '%' : '-';
+
+            document.getElementById('displayPeakAcc').textContent =
+                data.peak_acceleration ? data.peak_acceleration.toFixed(4) + ' g' : '-';
+
+            document.getElementById('displayPeakGyr').textContent =
+                data.peak_gyroscope ? data.peak_gyroscope.toFixed(2) + ' deg/s' : '-';
+
+            document.getElementById('displayTimeRange').textContent =
+                data.time_range ? data.time_range : '-';
+
+            document.getElementById('displayDetectionTime').textContent =
+                data.timestamp ? new Date(data.timestamp).toLocaleTimeString() : '-';
+        }
+
+    </script>
+</body>
+</html>
