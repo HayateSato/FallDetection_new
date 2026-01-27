@@ -930,6 +930,72 @@ def write_ground_truth_marker():
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/fall_feedback', methods=['POST'])
+def record_fall_feedback():
+    """
+    Record user feedback when fall alert popup is shown.
+    Saves feedback to a text file in the same directory as CSV exports.
+    """
+    from app.recording_state import recording_state
+    from config.settings import FALL_DATA_EXPORT_DIR, TIMEZONE_OFFSET_HOURS
+
+    try:
+        data = request.get_json()
+        is_fall = data.get('is_fall', False)  # True = user confirmed fall, False = false positive
+        detection_timestamp = data.get('detection_timestamp', '')
+        confidence = data.get('confidence', 0)
+
+        # Get current participant info
+        participant_name = recording_state.get_current_state().get('participant_name', 'unknown')
+
+        # Create timestamp for the feedback
+        now_utc = datetime.now(timezone.utc)
+        now_local = now_utc + timedelta(hours=TIMEZONE_OFFSET_HOURS)
+
+        # Prepare feedback record
+        feedback_type = "CONFIRMED_FALL" if is_fall else "FALSE_POSITIVE"
+        feedback_line = (
+            f"{now_local.strftime('%Y-%m-%d %H:%M:%S')} | "
+            f"{feedback_type} | "
+            f"Participant: {participant_name} | "
+            f"Confidence: {confidence:.2%} | "
+            f"Detection Time: {detection_timestamp}\n"
+        )
+
+        # Ensure export directory exists
+        export_dir = Path(FALL_DATA_EXPORT_DIR)
+        export_dir.mkdir(parents=True, exist_ok=True)
+
+        # Append to feedback log file
+        feedback_file = export_dir / "fall_feedback_log.txt"
+
+        # Write header if file doesn't exist
+        if not feedback_file.exists():
+            with open(feedback_file, 'w', encoding='utf-8') as f:
+                f.write("=" * 80 + "\n")
+                f.write("Fall Detection User Feedback Log\n")
+                f.write("=" * 80 + "\n")
+                f.write("Format: Timestamp | Feedback Type | Participant | Confidence | Detection Time\n")
+                f.write("-" * 80 + "\n")
+
+        # Append feedback record
+        with open(feedback_file, 'a', encoding='utf-8') as f:
+            f.write(feedback_line)
+
+        logger.info(f"Fall feedback recorded: {feedback_type} for {participant_name}")
+
+        return jsonify({
+            'message': 'Feedback recorded',
+            'feedback_type': feedback_type,
+            'file': str(feedback_file),
+            'timestamp': now_local.isoformat()
+        }), 200
+
+    except Exception as e:
+        logger.error(f"Error recording fall feedback: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/events')
 def sse_stream():
     """Server-Sent Events stream for real-time fall notifications."""

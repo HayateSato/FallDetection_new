@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fall Detection Trigger</title>
+    <title>Fall Detection Data Collection</title>
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
@@ -21,62 +21,6 @@
         h1 {
             color: #333;
             text-align: center;
-        }
-        button {
-            width: 100%;
-            padding: 15px;
-            font-size: 18px;
-            font-weight: bold;
-            color: white;
-            background-color: #0e0e0e;
-            border: none;
-            border-radius: 5px;
-            cursor: pointer;
-            transition: background-color 0.3s;
-        }
-        button:hover {
-            background-color: #73767a;
-        }
-        button:disabled {
-            background-color: #cccccc;
-            cursor: not-allowed;
-        }
-        .response {
-            margin-top: 20px;
-            padding: 15px;
-            border-radius: 5px;
-            display: none;
-        }
-        .success {
-            background-color: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
-        }
-        .error {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
-        }
-        .loading {
-            text-align: center;
-            margin-top: 20px;
-            color: #666;
-        }
-        .fall-detected {
-            background-color: #f8d7da;
-            color: #721c24;
-            border: 2px solid #f5c6cb;
-            font-weight: bold;
-        }
-        .no-fall {
-            background-color: #d4edda;
-            color: #155724;
-            border: 2px solid #c3e6cb;
-        }
-        .result-details {
-            margin-top: 10px;
-            font-size: 14px;
-            color: #666;
         }
         .form-group {
             margin-bottom: 20px;
@@ -109,9 +53,6 @@
             transition: background-color 0.3s;
             margin-bottom: 15px;
         }
-        .gt-toggle-btn.active {
-            background-color: #28a745;
-        }
         .gt-toggle-btn:hover {
             opacity: 0.9;
         }
@@ -121,11 +62,6 @@
             margin-bottom: 15px;
             border-radius: 5px;
             font-weight: bold;
-        }
-        .gt-status.active {
-            background-color: #ffffff;
-            color: #155724;
-            border: 1px solid #155724;
         }
         .gt-status.inactive {
             background-color: #ffffff;
@@ -156,23 +92,240 @@
         .record-btn:hover {
             opacity: 0.9;
         }
-        .detection-display {
+
+        /* Popup Toggle Section */
+        .popup-toggle-section {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 5px;
+            border: 1px solid #dee2e6;
+        }
+        .popup-toggle-section h3 {
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            color: #495057;
+        }
+        .toggle-container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .toggle-label {
+            font-size: 14px;
+            color: #666;
+        }
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 26px;
+        }
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #ccc;
+            transition: 0.3s;
+            border-radius: 26px;
+        }
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: 0.3s;
+            border-radius: 50%;
+        }
+        .toggle-switch input:checked + .toggle-slider {
+            background-color: #28a745;
+        }
+        .toggle-switch input:checked + .toggle-slider:before {
+            transform: translateX(24px);
+        }
+        .toggle-status {
+            margin-top: 8px;
+            font-size: 12px;
+            color: #888;
+            text-align: center;
+        }
+
+        /* Ground Truth Popup */
+        #gtPopup {
+            display: none;
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #28a745;
+            color: white;
+            padding: 20px 40px;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            z-index: 9999;
+        }
+
+        /* Watch-style Fall Detection Popup */
+        .watch-popup-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.6);
+            z-index: 10000;
+            justify-content: center;
+            align-items: center;
+        }
+        .watch-popup-overlay.visible {
+            display: flex;
+        }
+        .watch-frame {
+            width: 220px;
+            height: 260px;
+            background: linear-gradient(145deg, #2a2a2a, #1a1a1a);
+            border-radius: 35px;
+            padding: 15px;
+            box-shadow:
+                0 10px 40px rgba(0,0,0,0.5),
+                inset 0 1px 1px rgba(255,255,255,0.1);
+            position: relative;
+        }
+        .watch-frame::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            right: -8px;
+            transform: translateY(-50%);
+            width: 6px;
+            height: 40px;
+            background: linear-gradient(145deg, #3a3a3a, #2a2a2a);
+            border-radius: 3px;
+        }
+        .watch-screen {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(180deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 25px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 15px;
+            box-sizing: border-box;
+            border: 2px solid #333;
+        }
+        .watch-icon {
+            font-size: 36px;
+            margin-bottom: 8px;
+            animation: shake 0.5s ease-in-out infinite;
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            25% { transform: translateX(-3px) rotate(-5deg); }
+            75% { transform: translateX(3px) rotate(5deg); }
+        }
+        .watch-title {
+            color: #ff6b6b;
+            font-size: 13px;
+            font-weight: bold;
+            text-align: center;
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+        .watch-message {
+            color: #ffffff;
+            font-size: 14px;
+            text-align: center;
+            margin-bottom: 15px;
+            line-height: 1.3;
+        }
+        .watch-buttons {
+            display: flex;
+            gap: 10px;
+            width: 100%;
+        }
+        .watch-btn {
+            flex: 1;
+            padding: 12px 8px;
+            border: none;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-transform: uppercase;
+        }
+        .watch-btn-yes {
+            background: linear-gradient(145deg, #e74c3c, #c0392b);
+            color: white;
+            box-shadow: 0 4px 15px rgba(231, 76, 60, 0.4);
+        }
+        .watch-btn-yes:hover {
+            background: linear-gradient(145deg, #ff6b5b, #e74c3c);
+            transform: scale(1.05);
+        }
+        .watch-btn-no {
+            background: linear-gradient(145deg, #27ae60, #1e8449);
+            color: white;
+            box-shadow: 0 4px 15px rgba(39, 174, 96, 0.4);
+        }
+        .watch-btn-no:hover {
+            background: linear-gradient(145deg, #2ecc71, #27ae60);
+            transform: scale(1.05);
+        }
+        .watch-time {
+            position: absolute;
+            top: 8px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #888;
+            font-size: 10px;
+            font-family: monospace;
+        }
+
+        /* Status indicator */
+        .status-section {
             margin-top: 20px;
             padding: 15px;
             background-color: #e9ecef;
             border-radius: 5px;
-            display: none;
+            text-align: center;
         }
-        .detection-display.visible {
-            display: block;
-        }
-        .detection-row {
-            padding: 5px 0;
+        .status-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
             font-size: 14px;
-        }
-        .detection-label {
-            font-weight: bold;
             color: #495057;
+        }
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #6c757d;
+        }
+        .status-dot.active {
+            background-color: #28a745;
+            animation: blink 1s infinite;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
         }
     </style>
 </head>
@@ -205,7 +358,7 @@
         </div>
 
         <!-- Popup notification for ground truth -->
-        <div id="gtPopup" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #28a745; color: white; padding: 20px 40px; border-radius: 10px; font-size: 18px; font-weight: bold; box-shadow: 0 4px 6px rgba(0,0,0,0.3); z-index: 9999;">
+        <div id="gtPopup">
             ✓ Ground Truth Marker Recorded!
         </div>
 
@@ -214,50 +367,151 @@
             ⏺ START RECORDING
         </button>
 
-        <!-- Real-time Detection Display -->
-        <div id="detectionDisplay" class="detection-display">
-            <h3 style="margin-top: 0;">Latest Detection</h3>
-            <div class="detection-row">
-                <span class="detection-label">Status:</span>
-                <span id="displayFallStatus">Waiting...</span>
+        <!-- Fall Alert Popup Toggle -->
+        <div class="popup-toggle-section">
+            <h3>Fall Alert Popup</h3>
+            <div class="toggle-container">
+                <span class="toggle-label">Show popup when fall detected</span>
+                <label class="toggle-switch">
+                    <input type="checkbox" id="popupToggle" onchange="togglePopupSetting()">
+                    <span class="toggle-slider"></span>
+                </label>
             </div>
-            <div class="detection-row">
-                <span class="detection-label">Confidence:</span>
-                <span id="displayConfidence">-</span>
-            </div>
-            <div class="detection-row">
-                <span class="detection-label">Peak Acceleration:</span>
-                <span id="displayPeakAcc">-</span>
-            </div>
-            <div class="detection-row">
-                <span class="detection-label">Peak Gyroscope:</span>
-                <span id="displayPeakGyr">-</span>
-            </div>
-            <div class="detection-row">
-                <span class="detection-label">Time Range:</span>
-                <span id="displayTimeRange">-</span>
-            </div>
-            <div class="detection-row">
-                <span class="detection-label">Detection Time:</span>
-                <span id="displayDetectionTime">-</span>
-            </div>
+            <div class="toggle-status" id="popupToggleStatus">Popup disabled</div>
         </div>
 
-        <div id="loading" class="loading" style="display: none;">Processing...</div>
-        <div id="response" class="response"></div>
+        <!-- Monitoring Status -->
+        <div class="status-section">
+            <div class="status-indicator">
+                <span class="status-dot" id="statusDot"></span>
+                <span id="statusText">Monitoring inactive</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Watch-style Fall Detection Popup -->
+    <div class="watch-popup-overlay" id="watchPopup">
+        <div class="watch-frame">
+            <div class="watch-screen">
+                <div class="watch-time" id="watchTime">--:--</div>
+                <div class="watch-icon">⚠️</div>
+                <div class="watch-title">Strong Impact Detected</div>
+                <div class="watch-message">Did you fall?</div>
+                <div class="watch-buttons">
+                    <button class="watch-btn watch-btn-yes" onclick="respondToFallAlert(true)">Yes</button>
+                    <button class="watch-btn watch-btn-no" onclick="respondToFallAlert(false)">No</button>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
-        // Recording state
+        // State variables
         let recordingActive = false;
         let eventSource = null;
+        let popupEnabled = false;
+        let popupTimeout = null;
+        let currentDetectionData = null;  // Store detection data for feedback
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            updateWatchTime();
+            setInterval(updateWatchTime, 1000);
+        });
+
+        function updateWatchTime() {
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false
+            });
+            document.getElementById('watchTime').textContent = timeStr;
+        }
+
+        function togglePopupSetting() {
+            popupEnabled = document.getElementById('popupToggle').checked;
+            const statusText = document.getElementById('popupToggleStatus');
+
+            if (popupEnabled) {
+                statusText.textContent = 'Popup enabled - will show when fall detected';
+                statusText.style.color = '#28a745';
+            } else {
+                statusText.textContent = 'Popup disabled';
+                statusText.style.color = '#888';
+            }
+        }
+
+        function showFallPopup(detectionData) {
+            if (!popupEnabled) return;
+
+            // Store detection data for feedback
+            currentDetectionData = detectionData;
+
+            updateWatchTime();
+            const popup = document.getElementById('watchPopup');
+            popup.classList.add('visible');
+
+            // Auto-dismiss after 30 seconds if no response
+            popupTimeout = setTimeout(() => {
+                hideFallPopup();
+            }, 30000);
+        }
+
+        function hideFallPopup() {
+            const popup = document.getElementById('watchPopup');
+            popup.classList.remove('visible');
+
+            if (popupTimeout) {
+                clearTimeout(popupTimeout);
+                popupTimeout = null;
+            }
+        }
+
+        async function respondToFallAlert(isFall) {
+            hideFallPopup();
+
+            // Record feedback to txt file
+            await recordFallFeedback(isFall);
+
+            if (isFall) {
+                // User confirmed it was a fall - also mark ground truth in InfluxDB
+                writeGroundTruthMarker(1);
+                console.log('User confirmed fall - ground truth marker written');
+            } else {
+                // User said no fall - log as false positive
+                console.log('User indicated no fall - false positive');
+            }
+        }
+
+        async function recordFallFeedback(isFall) {
+            try {
+                const response = await fetch('/fall_feedback', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        is_fall: isFall,
+                        detection_timestamp: currentDetectionData ? currentDetectionData.timestamp : new Date().toISOString(),
+                        confidence: currentDetectionData ? currentDetectionData.confidence : 0
+                    })
+                });
+
+                if (response.ok) {
+                    const data = await response.json();
+                    console.log(`Fall feedback recorded: ${data.feedback_type}`);
+                } else {
+                    console.error('Failed to record fall feedback');
+                }
+            } catch (error) {
+                console.error('Error recording fall feedback:', error);
+            }
+        }
 
         async function markGroundTruth() {
-            // Write marker with value=1 to InfluxDB at exact moment button pressed
             const success = await writeGroundTruthMarker(1);
-
             if (success) {
-                // Show popup confirmation
                 showGroundTruthPopup();
             }
         }
@@ -294,7 +548,6 @@
             const popup = document.getElementById('gtPopup');
             popup.style.display = 'block';
 
-            // Hide after 2 seconds
             setTimeout(() => {
                 popup.style.display = 'none';
             }, 2000);
@@ -323,14 +576,19 @@
                 recordBtn.textContent = '⏹ STOP RECORDING';
                 recordBtn.classList.add('recording');
 
+                // Update status
+                document.getElementById('statusDot').classList.add('active');
+                document.getElementById('statusText').textContent = 'Monitoring active';
+
                 // Start SSE connection
                 startEventStream();
-
-                // Show detection display
-                document.getElementById('detectionDisplay').classList.add('visible');
             } else {
                 recordBtn.textContent = '⏺ START RECORDING';
                 recordBtn.classList.remove('recording');
+
+                // Update status
+                document.getElementById('statusDot').classList.remove('active');
+                document.getElementById('statusText').textContent = 'Monitoring inactive';
 
                 // Stop SSE connection
                 if (eventSource) {
@@ -357,7 +615,7 @@
                         recording_active: recordingActive,
                         participant_name: participantName,
                         participant_gender: participantGender,
-                        ground_truth_fall: 0  // Not used anymore - ground truth written directly to InfluxDB
+                        ground_truth_fall: 0
                     })
                 });
 
@@ -380,8 +638,10 @@
             eventSource.onmessage = function(event) {
                 const data = JSON.parse(event.data);
 
-                if (data.type === 'fall_detected' || data.type === 'peak_detected') {
-                    updateDetectionDisplay(data);
+                // Check if fall was detected
+                if (data.fall_detected === true) {
+                    console.log('Fall detected!', data);
+                    showFallPopup(data);  // Pass detection data for feedback recording
                 }
             };
 
@@ -393,37 +653,6 @@
                 }
             };
         }
-
-        function updateDetectionDisplay(data) {
-            // Update status with color
-            const statusSpan = document.getElementById('displayFallStatus');
-            if (data.fall_detected) {
-                statusSpan.textContent = '🚨 FALL DETECTED';
-                statusSpan.style.color = '#dc3545';
-                statusSpan.style.fontWeight = 'bold';
-            } else {
-                statusSpan.textContent = '✓ No Fall';
-                statusSpan.style.color = '#28a745';
-                statusSpan.style.fontWeight = 'normal';
-            }
-
-            // Update other fields
-            document.getElementById('displayConfidence').textContent =
-                data.confidence ? (data.confidence * 100).toFixed(2) + '%' : '-';
-
-            document.getElementById('displayPeakAcc').textContent =
-                data.peak_acceleration ? data.peak_acceleration.toFixed(4) + ' g' : '-';
-
-            document.getElementById('displayPeakGyr').textContent =
-                data.peak_gyroscope ? data.peak_gyroscope.toFixed(2) + ' deg/s' : '-';
-
-            document.getElementById('displayTimeRange').textContent =
-                data.time_range ? data.time_range : '-';
-
-            document.getElementById('displayDetectionTime').textContent =
-                data.timestamp ? new Date(data.timestamp).toLocaleTimeString() : '-';
-        }
-
     </script>
 </body>
 </html>
