@@ -41,7 +41,6 @@ from config.settings import (
     BAROMETER_FIELD,
     MONITORING_ENABLED,
     MONITORING_INTERVAL_SECONDS,
-    FALL_DATA_EXPORT_ENABLED,
     TIMEZONE_OFFSET_HOURS,
     WINDOW_SIZE_SECONDS,
     ACC_SAMPLE_RATE,
@@ -463,15 +462,12 @@ def export_detection_data(flux_records, is_fall: bool, confidence: float,
                           participant_name: str, participant_gender: str,
                           ground_truth_fall: int, timestamp_utc: datetime):
     """Export detection data to CSV."""
+    from config.settings import FALL_DATA_EXPORT_DIR, TIMEZONE_OFFSET_HOURS
     try:
-        if not FALL_DATA_EXPORT_ENABLED:
-            return
-
         timestamp_local = timestamp_utc + timedelta(hours=TIMEZONE_OFFSET_HOURS)
-        date_str = timestamp_local.strftime('%Y%m%d')
-        sensor_mode = str(COLLECT_ADDITIONAL_SENSORS)
+        sensor_mode = "with_additional_sensors" if COLLECT_ADDITIONAL_SENSORS else "basic_sensors"
 
-        base_dir = Path("results/fall_data_exports") / date_str / sensor_mode / participant_name
+        base_dir = Path(FALL_DATA_EXPORT_DIR) / sensor_mode / participant_name
         base_dir.mkdir(parents=True, exist_ok=True)
 
         prefix = "fall" if is_fall else "no_fall"

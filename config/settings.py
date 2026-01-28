@@ -150,15 +150,13 @@ COLLECT_ADDITIONAL_SENSORS = os.getenv('COLLECT_ADDITIONAL_SENSORS', 'false').lo
 # =============================================================================
 
 TIMEZONE_OFFSET_HOURS = float(os.getenv('TIMEZONE_OFFSET_HOURS', '0'))
-FALL_DATA_EXPORT_ENABLED = os.getenv('FALL_DATA_EXPORT_ENABLED', 'true').lower() == 'true'
 TODAY = datetime.today().strftime('%Y%m%d')
 BASE_DIR = os.getenv('FALL_DATA_EXPORT_DIR', 'results/')
 FALL_DATA_EXPORT_DIR = os.path.join(BASE_DIR, 'exported_flaskApp_data', TODAY)
 
 # Create export directory if it doesn't exist
-if FALL_DATA_EXPORT_ENABLED:
-    export_path = Path(FALL_DATA_EXPORT_DIR)
-    export_path.mkdir(parents=True, exist_ok=True)
+export_path = Path(FALL_DATA_EXPORT_DIR)
+export_path.mkdir(parents=True, exist_ok=True)
 
 # =============================================================================
 # PREPROCESSING SETTINGS (for reference, used by model registry)
@@ -230,5 +228,4 @@ def print_config():
         print(f"  Barometer Field:   {BAROMETER_FIELD}")
     print(f"  Monitoring:        {'Enabled' if MONITORING_ENABLED else 'Disabled'}")
     print(f"  Monitor Interval:  {MONITORING_INTERVAL_SECONDS}s")
-    print(f"  CSV Export:        {'Enabled' if FALL_DATA_EXPORT_ENABLED else 'Disabled'}")
     print("="*60)

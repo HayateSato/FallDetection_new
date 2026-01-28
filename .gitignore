@@ -205,10 +205,4 @@ temp/
 # Project specific
 
 .claude
-results/fall_data_exports/
-# results/logs/
-model/results_debug
-model/logs
-# model/_retraining/results
-results/csvdata_validation
-EXPERIMENT_LOG.txt
+results/
