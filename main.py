@@ -64,6 +64,12 @@ from config.settings import (
     WINDOW_SAMPLES,
     HARDWARE_WINDOW_SAMPLES,
     SENSOR_CALIBRATION_ENABLED,
+    # Public endpoint settings
+    PUBLIC_ENDPOINT_ENABLED,
+    API_KEYS,
+    RATE_LIMIT_PER_MINUTE,
+    CORS_ALLOWED_ORIGINS,
+    FLASK_DEBUG,
 )
 
 # Import resampler for sample rate conversion (25Hz->50Hz or 100Hz->50Hz)
@@ -412,6 +418,103 @@ model_info = inference_engine.get_model_info()
 
 app = Flask(__name__, static_folder='app/static')
 
+# ------------------------------------------------------------------------
+# API SECURITY: Authentication and Rate Limiting
+# ------------------------------------------------------------------------
+from functools import wraps
+from collections import defaultdict
+import time
+import threading
+
+# Rate limiting storage (in-memory, per IP)
+_rate_limit_storage = defaultdict(list)
+_rate_limit_lock = threading.Lock()
+
+
+def get_client_ip():
+    """Get client IP address, handling proxies."""
+    # Check for forwarded IP (when behind proxy/ngrok)
+    if request.headers.get('X-Forwarded-For'):
+        return request.headers.get('X-Forwarded-For').split(',')[0].strip()
+    return request.remote_addr or '127.0.0.1'
+
+
+def check_rate_limit(ip: str) -> bool:
+    """Check if IP is within rate limit. Returns True if allowed."""
+    if not PUBLIC_ENDPOINT_ENABLED:
+        return True
+
+    now = time.time()
+    window_start = now - 60  # 1 minute window
+
+    with _rate_limit_lock:
+        # Clean old entries
+        _rate_limit_storage[ip] = [t for t in _rate_limit_storage[ip] if t > window_start]
+
+        # Check limit
+        if len(_rate_limit_storage[ip]) >= RATE_LIMIT_PER_MINUTE:
+            return False
+
+        # Record this request
+        _rate_limit_storage[ip].append(now)
+        return True
+
+
+def require_api_key(f):
+    """Decorator to require API key authentication for endpoints."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Skip auth if public endpoint mode is disabled
+        if not PUBLIC_ENDPOINT_ENABLED:
+            return f(*args, **kwargs)
+
+        # Check rate limit first
+        client_ip = get_client_ip()
+        if not check_rate_limit(client_ip):
+            return jsonify({
+                "error": "Rate limit exceeded",
+                "message": f"Maximum {RATE_LIMIT_PER_MINUTE} requests per minute allowed"
+            }), 429
+
+        # Check API key
+        api_key = request.headers.get('X-API-Key') or request.args.get('api_key')
+
+        if not API_KEYS:
+            # No API keys configured - allow access but log warning
+            logger.warning("PUBLIC_ENDPOINT_ENABLED but no API_KEYS configured!")
+            return f(*args, **kwargs)
+
+        if not api_key:
+            return jsonify({
+                "error": "Authentication required",
+                "message": "Missing API key. Provide via X-API-Key header or api_key query parameter"
+            }), 401
+
+        if api_key not in API_KEYS:
+            logger.warning(f"Invalid API key attempt from {client_ip}")
+            return jsonify({
+                "error": "Invalid API key",
+                "message": "The provided API key is not valid"
+            }), 403
+
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+# Configure CORS if in public endpoint mode
+if PUBLIC_ENDPOINT_ENABLED:
+    @app.after_request
+    def add_cors_headers(response):
+        origin = request.headers.get('Origin', '*')
+        if CORS_ALLOWED_ORIGINS == '*':
+            response.headers['Access-Control-Allow-Origin'] = origin
+        elif origin in CORS_ALLOWED_ORIGINS.split(','):
+            response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, X-API-Key'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        return response
+
+
 # Global queue for fall notifications (for SSE)
 fall_notification_queue = queue.Queue()
 
@@ -515,12 +618,17 @@ def index() -> Response:
 
 
 @app.route('/trigger', methods=['POST'])
+@require_api_key
 def trigger() -> Tuple[Response, int]:
     """
     Main endpoint for fall detection - automatically uses configured model.
 
     Supports both InfluxDB (real-time) and CSV (batch validation) data sources.
     Set DATA_SOURCE in .env to switch between them.
+
+    Authentication (when PUBLIC_ENDPOINT_ENABLED=true):
+        - Header: X-API-Key: <your-api-key>
+        - Or query param: ?api_key=<your-api-key>
     """
     # Check data source
     if DATA_SOURCE == 'csv':
@@ -1116,4 +1224,10 @@ if __name__ == '__main__':
             logger.info("\nContinuous monitoring is disabled. Use /trigger endpoint for manual detection.")
 
         # Start Flask app for real-time mode
-        app.run(host="0.0.0.0", port=8000, debug=True, use_reloader=False, threaded=True)
+        if PUBLIC_ENDPOINT_ENABLED:
+            logger.info(f"PUBLIC ENDPOINT MODE ENABLED")
+            logger.info(f"  API Keys configured: {len(API_KEYS)}")
+            logger.info(f"  Rate limit: {RATE_LIMIT_PER_MINUTE} req/min")
+            logger.info(f"  Debug mode: {FLASK_DEBUG}")
+
+        app.run(host="0.0.0.0", port=8000, debug=FLASK_DEBUG, use_reloader=False, threaded=True)

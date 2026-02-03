@@ -201,6 +201,28 @@ def get_model_path() -> str:
 MODEL_PATH = get_model_path()
 
 # =============================================================================
+# PUBLIC ENDPOINT / API SECURITY SETTINGS
+# =============================================================================
+
+# Enable public endpoint mode (adds authentication, rate limiting, production settings)
+PUBLIC_ENDPOINT_ENABLED = os.getenv('PUBLIC_ENDPOINT_ENABLED', 'false').lower() == 'true'
+
+# API Keys for authentication (comma-separated list of valid keys)
+# Generate keys with: python -c "import secrets; print(secrets.token_urlsafe(32))"
+API_KEYS = [k.strip() for k in os.getenv('API_KEYS', '').split(',') if k.strip()]
+
+# Rate limiting: requests per minute per IP
+RATE_LIMIT_PER_MINUTE = int(os.getenv('RATE_LIMIT_PER_MINUTE', '30'))
+
+# CORS allowed origins (comma-separated, or * for all)
+CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', '*')
+
+# Flask debug mode (automatically disabled when PUBLIC_ENDPOINT_ENABLED=true)
+FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'true').lower() == 'true'
+if PUBLIC_ENDPOINT_ENABLED:
+    FLASK_DEBUG = False  # Force disable debug in public mode
+
+# =============================================================================
 # PRINT CONFIGURATION
 # =============================================================================
 
