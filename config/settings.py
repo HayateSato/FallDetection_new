@@ -207,6 +207,12 @@ MODEL_PATH = get_model_path()
 # Enable public endpoint mode (adds authentication, rate limiting, production settings)
 PUBLIC_ENDPOINT_ENABLED = os.getenv('PUBLIC_ENDPOINT_ENABLED', 'false').lower() == 'true'
 
+# Tunnel mode: 'local', 'ngrok', or 'cloudflare'
+TUNNEL_MODE = os.getenv('TUNNEL_MODE', 'local').lower()
+if TUNNEL_MODE not in ('local', 'ngrok', 'cloudflare'):
+    print(f"WARNING: Invalid TUNNEL_MODE '{TUNNEL_MODE}', defaulting to 'local'")
+    TUNNEL_MODE = 'local'
+
 # API Keys for authentication (comma-separated list of valid keys)
 # Generate keys with: python -c "import secrets; print(secrets.token_urlsafe(32))"
 API_KEYS = [k.strip() for k in os.getenv('API_KEYS', '').split(',') if k.strip()]
@@ -221,6 +227,12 @@ CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', '*')
 FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'true').lower() == 'true'
 if PUBLIC_ENDPOINT_ENABLED:
     FLASK_DEBUG = False  # Force disable debug in public mode
+
+# ngrok settings
+NGROK_REGION = os.getenv('NGROK_REGION', 'eu')
+
+# Cloudflare Tunnel settings
+CLOUDFLARE_TUNNEL_TOKEN = os.getenv('CLOUDFLARE_TUNNEL_TOKEN', '')
 
 # =============================================================================
 # PRINT CONFIGURATION

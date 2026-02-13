@@ -206,3 +206,5 @@ temp/
 
 .claude
 results/
+test.py
+api_key.txt

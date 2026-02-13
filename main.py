@@ -66,6 +66,7 @@ from config.settings import (
     SENSOR_CALIBRATION_ENABLED,
     # Public endpoint settings
     PUBLIC_ENDPOINT_ENABLED,
+    TUNNEL_MODE,
     API_KEYS,
     RATE_LIMIT_PER_MINUTE,
     CORS_ALLOWED_ORIGINS,
@@ -1226,6 +1227,7 @@ if __name__ == '__main__':
         # Start Flask app for real-time mode
         if PUBLIC_ENDPOINT_ENABLED:
             logger.info(f"PUBLIC ENDPOINT MODE ENABLED")
+            logger.info(f"  Tunnel mode: {TUNNEL_MODE}")
             logger.info(f"  API Keys configured: {len(API_KEYS)}")
             logger.info(f"  Rate limit: {RATE_LIMIT_PER_MINUTE} req/min")
             logger.info(f"  Debug mode: {FLASK_DEBUG}")
