@@ -526,6 +526,10 @@ fall_notification_queue = queue.Queue()
 _poll_notifications = []
 _poll_lock = threading.Lock()
 
+# Track the last exported CSV filepath so /fall_feedback can retroactively update it
+_last_exported_csv_path = None
+_csv_path_lock = threading.Lock()
+
 
 def add_poll_notification(fall_data: dict):
     """Store a fall notification for polling clients to pick up."""
@@ -583,6 +587,7 @@ def export_detection_data(flux_records, is_fall: bool, confidence: float,
                           participant_name: str, participant_gender: str,
                           ground_truth_fall: int, timestamp_utc: datetime):
     """Export detection data to CSV."""
+    global _last_exported_csv_path
     from config.settings import FALL_DATA_EXPORT_DIR, TIMEZONE_OFFSET_HOURS
     try:
         timestamp_local = timestamp_utc + timedelta(hours=TIMEZONE_OFFSET_HOURS)
@@ -614,6 +619,7 @@ def export_detection_data(flux_records, is_fall: bool, confidence: float,
             'confidence': confidence,
             'fall_detected': is_fall,
             'manual_truth_marker': ground_truth_fall,
+            'user_feedback': -1,  # -1 = pending (will be updated by /fall_feedback)
             'participant_name': participant_name,
             'participant_gender': participant_gender,
             'model_type': MODEL_VERSION
@@ -624,6 +630,12 @@ def export_detection_data(flux_records, is_fall: bool, confidence: float,
             metadata_df.to_csv(f, index=False)
             f.write("\n# Sensor Data\n")
             df.to_csv(f, index=False)
+
+        # Track last exported CSV so /fall_feedback can retroactively update it
+        with _csv_path_lock:
+            _last_exported_csv_path = str(filepath)
+
+        logger.info(f"Detection data exported to: {filepath}")
 
     except Exception as e:
         logger.error(f"Error exporting detection data: {e}", exc_info=True)
@@ -1056,42 +1068,85 @@ def write_ground_truth_marker():
 def record_fall_feedback():
     """
     Record user feedback when fall alert popup is shown.
-    Saves feedback to a text file in the same directory as CSV exports.
+    Writes user_feedback marker to InfluxDB and updates the last exported CSV.
+
+    Expected JSON body:
+        feedback_value: 0 (No/not a fall), 1 (Yes/confirmed fall), 3 (timeout/no response)
+        detection_timestamp: ISO timestamp of the original detection
+        confidence: detection confidence value
     """
+    global _last_exported_csv_path
     from app.recording_state import recording_state
+    from app.ground_truth_writer import write_user_feedback_marker
     from config.settings import FALL_DATA_EXPORT_DIR, TIMEZONE_OFFSET_HOURS
 
     try:
         data = request.get_json()
-        is_fall = data.get('is_fall', False)  # True = user confirmed fall, False = false positive
+        feedback_value = data.get('feedback_value', 3)  # 0=No, 1=Yes, 3=timeout
         detection_timestamp = data.get('detection_timestamp', '')
         confidence = data.get('confidence', 0)
 
         # Get current participant info
         participant_name = recording_state.get_current_state().get('participant_name', 'unknown')
 
-        # Create timestamp for the feedback
         now_utc = datetime.now(timezone.utc)
         now_local = now_utc + timedelta(hours=TIMEZONE_OFFSET_HOURS)
 
-        # Prepare feedback record
-        feedback_type = "CONFIRMED_FALL" if is_fall else "FALSE_POSITIVE"
+        feedback_labels = {0: "NO_FALL", 1: "CONFIRMED_FALL", 3: "TIMEOUT_NO_RESPONSE"}
+        feedback_type = feedback_labels.get(feedback_value, f"UNKNOWN({feedback_value})")
+
+        # 1. Write user_feedback marker to InfluxDB
+        influx_ok = write_user_feedback_marker(feedback_value)
+        if influx_ok:
+            logger.info(f"User feedback written to InfluxDB: {feedback_type} ({feedback_value})")
+        else:
+            logger.warning(f"Failed to write user feedback to InfluxDB")
+
+        # 2. Retroactively update the last exported CSV with user_feedback value
+        csv_updated = False
+        csv_path = None
+        with _csv_path_lock:
+            csv_path = _last_exported_csv_path
+
+        if csv_path and Path(csv_path).exists():
+            try:
+                with open(csv_path, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+
+                # Find the metadata header line and update the data row below it
+                for i, line in enumerate(lines):
+                    if 'user_feedback' in line and i + 1 < len(lines):
+                        # This is the metadata header — next line is the data row
+                        data_line = lines[i + 1]
+                        cols = line.strip().split(',')
+                        vals = data_line.strip().split(',')
+                        if 'user_feedback' in cols and len(vals) == len(cols):
+                            fb_idx = cols.index('user_feedback')
+                            vals[fb_idx] = str(feedback_value)
+                            lines[i + 1] = ','.join(vals) + '\n'
+                        break
+
+                with open(csv_path, 'w', encoding='utf-8') as f:
+                    f.writelines(lines)
+
+                csv_updated = True
+                logger.info(f"CSV updated with user_feedback={feedback_value}: {csv_path}")
+            except Exception as csv_err:
+                logger.error(f"Failed to update CSV with feedback: {csv_err}")
+
+        # 3. Also append to text log for human readability
+        export_dir = Path(FALL_DATA_EXPORT_DIR)
+        export_dir.mkdir(parents=True, exist_ok=True)
+        feedback_file = export_dir / "fall_feedback_log.txt"
+
         feedback_line = (
             f"{now_local.strftime('%Y-%m-%d %H:%M:%S')} | "
-            f"{feedback_type} | "
+            f"{feedback_type} (value={feedback_value}) | "
             f"Participant: {participant_name} | "
-            f"Confidence: {confidence:.2%} | "
+            f"Confidence: {confidence} | "
             f"Detection Time: {detection_timestamp}\n"
         )
 
-        # Ensure export directory exists
-        export_dir = Path(FALL_DATA_EXPORT_DIR)
-        export_dir.mkdir(parents=True, exist_ok=True)
-
-        # Append to feedback log file
-        feedback_file = export_dir / "fall_feedback_log.txt"
-
-        # Write header if file doesn't exist
         if not feedback_file.exists():
             with open(feedback_file, 'w', encoding='utf-8') as f:
                 f.write("=" * 80 + "\n")
@@ -1100,7 +1155,6 @@ def record_fall_feedback():
                 f.write("Format: Timestamp | Feedback Type | Participant | Confidence | Detection Time\n")
                 f.write("-" * 80 + "\n")
 
-        # Append feedback record
         with open(feedback_file, 'a', encoding='utf-8') as f:
             f.write(feedback_line)
 
@@ -1109,7 +1163,10 @@ def record_fall_feedback():
         return jsonify({
             'message': 'Feedback recorded',
             'feedback_type': feedback_type,
-            'file': str(feedback_file),
+            'feedback_value': feedback_value,
+            'influx_written': influx_ok,
+            'csv_updated': csv_updated,
+            'csv_path': csv_path,
             'timestamp': now_local.isoformat()
         }), 200
 

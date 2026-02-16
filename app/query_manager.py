@@ -34,7 +34,7 @@ def execute_query(collect_additional_sensors: bool, lookback_seconds: int):
                                    r["_field"] == "green" or r["_field"] == "infra_red" or
                                    r["_field"] == "hr" or r["_field"] == "hr_conf" or
                                    r["_field"] == "pressure" or r["_field"] == "pressure_in_pa" or r["_field"] == "red" or
-                                   r["_field"] == "ground_truth")
+                                   r["_field"] == "manual_truth_marker" or r["_field"] == "user_feedback")
             '''
         else:
             logger.debug("Collecting IMU sensor data only...")
@@ -46,7 +46,7 @@ def execute_query(collect_additional_sensors: bool, lookback_seconds: int):
                                            r["_field"] == "bosch_acc_y" or
                                            r["_field"] == "bosch_acc_z" or
                                            r["_field"] == "bosch_gyr_x" or
-                                           r["_field"] == "ground_truth")
+                                           r["_field"] == "manual_truth_marker" or r["_field"] == "user_feedback")
             '''
         tables = fetch_data(query)
         return tables
