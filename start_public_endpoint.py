@@ -24,15 +24,10 @@ import subprocess
 import sys
 import time
 import os
-# import json
 import secrets
 from pathlib import Path
+# custom imports
 from config.settings import FLASK_PORT
-# from dotenv import load_dotenv
-# # Load .env from project root
-# load_dotenv(Path(__file__).parent / ".env")
-# FLASK_PORT = os.getenv("FLASK_PORT")
-
 from API_helpers.ngrok_api import start_ngrok
 from API_helpers.cloudflare_api import start_cloudflared
 

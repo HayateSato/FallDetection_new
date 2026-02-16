@@ -1,6 +1,6 @@
 ## Updated the InfluxDB field name across all files:
 
-- `ground_truth_writer.py:43` — .field("manual_truth_marker", value)
+- `manual_truth_writer.py:43` — .field("manual_truth_marker", value)
 - `continuous_monitoring.py:242` — InfluxDB query filter
 - `query_manager.py:37,49` — both query variants
 - `main.py:711` — trigger endpoint query filter
@@ -21,7 +21,7 @@
 ## Updated frontend popup
 
 - `index.html:457` — Timeout changed from **30s → 10s**
-- On timeout: automatically sends `feedback_value=3` (unknown/no response)
+- **On timeout**: automatically sends `feedback_value=3` (unknown/no response)
 - `respondToFallAlert()` — sends `feedback_value=1` (Yes) or 0 (No)
 - `recordFallFeedback()` — sends numeric `feedback_value` instead of boolean is_fall
   

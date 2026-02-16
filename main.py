@@ -41,7 +41,7 @@ from config.settings import (
     BAROMETER_FIELD,
     MONITORING_ENABLED,
     MONITORING_INTERVAL_SECONDS,
-    TIMEZONE_OFFSET_HOURS,
+    # TIMEZONE_OFFSET_HOURS,
     WINDOW_SIZE_SECONDS,
     ACC_SAMPLE_RATE,
     BARO_SAMPLE_RATE,
@@ -619,7 +619,7 @@ def export_detection_data(flux_records, is_fall: bool, confidence: float,
             'confidence': confidence,
             'fall_detected': is_fall,
             'manual_truth_marker': ground_truth_fall,
-            'user_feedback': -1,  # -1 = pending (will be updated by /fall_feedback)
+            'user_feedback': -1,  # -1 = pending (will be updated by /fall_feedback) 
             'participant_name': participant_name,
             'participant_gender': participant_gender,
             'model_type': MODEL_VERSION
@@ -1017,7 +1017,7 @@ def update_recording_state():
 
         recording_state.update_participant_name(participant_name)
         recording_state.update_participant_gender(participant_gender)
-        recording_state.update_ground_truth(ground_truth_fall)
+        recording_state.update_manual_truth(ground_truth_fall)
         recording_state.set_recording_active(recording_active)
 
         logger.info(f"Recording state updated: active={recording_active}, name={participant_name}")
@@ -1033,12 +1033,12 @@ def update_recording_state():
 
 
 @app.route('/ground_truth/marker', methods=['POST'])
-def write_ground_truth_marker():
+def write_manual_truth_marker():
     """
     Write ground truth marker directly to InfluxDB at current timestamp.
     This is called when user presses the ground truth button.
     """
-    from app.ground_truth_writer import write_ground_truth_marker as write_marker
+    from app.manual_truth_writer import write_manual_truth_marker as write_marker
 
     try:
         data = request.get_json()
@@ -1077,7 +1077,7 @@ def record_fall_feedback():
     """
     global _last_exported_csv_path
     from app.recording_state import recording_state
-    from app.ground_truth_writer import write_user_feedback_marker
+    from app.manual_truth_writer import write_user_feedback_marker
     from config.settings import FALL_DATA_EXPORT_DIR, TIMEZONE_OFFSET_HOURS
 
     try:
