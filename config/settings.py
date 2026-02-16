@@ -11,6 +11,11 @@ from datetime import datetime
 
 # Load environment variables from .env file
 load_dotenv()
+# =============================================================================
+# FLASK SETTINGS
+# =============================================================================
+FLASK_PORT = os.getenv("FLASK_PORT", 8000)
+
 
 # =============================================================================
 # MODEL SELECTION
@@ -142,6 +147,15 @@ MONITORING_ENABLED = os.getenv('MONITORING_ENABLED', 'true').lower() == 'true'
 MONITORING_INTERVAL_SECONDS = int(os.getenv('MONITORING_INTERVAL_SECONDS', '5'))
 MONITORING_LOOKBACK_SECONDS = int(os.getenv('MONITORING_LOOKBACK_SECONDS', '15'))
 
+# Notification mode: 'sse' (Server-Sent Events) or 'polling'
+NOTIFICATION_MODE = os.getenv('NOTIFICATION_MODE', 'sse').lower()
+if NOTIFICATION_MODE not in ('sse', 'polling'):
+    print(f"WARNING: Invalid NOTIFICATION_MODE '{NOTIFICATION_MODE}', defaulting to 'sse'")
+    NOTIFICATION_MODE = 'sse'
+
+# Polling interval in seconds (only when NOTIFICATION_MODE=polling)
+POLLING_INTERVAL_SECONDS = int(os.getenv('POLLING_INTERVAL_SECONDS', '3'))
+
 # Additional sensor data collection
 COLLECT_ADDITIONAL_SENSORS = os.getenv('COLLECT_ADDITIONAL_SENSORS', 'false').lower() == 'true'
 
@@ -185,13 +199,13 @@ def get_model_path() -> str:
     # Default paths for each version
     default_paths = {
         'v0': 'model/model_v0/model_v0_xgboost.pkl',
-        'v1': 'model/model_v1/model_v1_xgboost.pkl',
-        'v2': 'model/model_v2/model_v2_xgboost.pkl',
+        # 'v1': 'model/model_v1/model_v1_xgboost.pkl',
+        # 'v2': 'model/model_v2/model_v2_xgboost.pkl',
         'v3': 'model/model_v3/model_v3_xgboost.pkl',
-        'v4': 'model/model_v4/model_v4_xgboost.pkl',
-        'v5': 'model/model_v5/model_v5_xgboost.pkl',
-        'v1_tuned': 'model/model_v1_tuned/model_v1_tuned.pkl',
-        'v3_tuned': 'model/model_v3_tuned/model_v3_tuned.pkl',
+    #     'v4': 'model/model_v4/model_v4_xgboost.pkl',
+    #     'v5': 'model/model_v5/model_v5_xgboost.pkl',
+    #     'v1_tuned': 'model/model_v1_tuned/model_v1_tuned.pkl',
+    #     'v3_tuned': 'model/model_v3_tuned/model_v3_tuned.pkl',
     }
 
     version_lower = MODEL_VERSION.lower()
@@ -199,6 +213,40 @@ def get_model_path() -> str:
 
 # Set MODEL_PATH for backward compatibility
 MODEL_PATH = get_model_path()
+
+# =============================================================================
+# PUBLIC ENDPOINT / API SECURITY SETTINGS
+# =============================================================================
+
+# Enable public endpoint mode (adds authentication, rate limiting, production settings)
+PUBLIC_ENDPOINT_ENABLED = os.getenv('PUBLIC_ENDPOINT_ENABLED', 'false').lower() == 'true'
+
+# Tunnel mode: 'local', 'ngrok', or 'cloudflare'
+TUNNEL_MODE = os.getenv('TUNNEL_MODE', 'local').lower()
+if TUNNEL_MODE not in ('local', 'ngrok', 'cloudflare'):
+    print(f"WARNING: Invalid TUNNEL_MODE '{TUNNEL_MODE}', defaulting to 'local'")
+    TUNNEL_MODE = 'local'
+
+# API Keys for authentication (comma-separated list of valid keys)
+# Generate keys with: python -c "import secrets; print(secrets.token_urlsafe(32))"
+API_KEYS = [k.strip() for k in os.getenv('API_KEYS', '').split(',') if k.strip()]
+
+# Rate limiting: requests per minute per IP
+RATE_LIMIT_PER_MINUTE = int(os.getenv('RATE_LIMIT_PER_MINUTE', '30'))
+
+# CORS allowed origins (comma-separated, or * for all)
+CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', '*')
+
+# Flask debug mode (automatically disabled when PUBLIC_ENDPOINT_ENABLED=true)
+FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'true').lower() == 'true'
+if PUBLIC_ENDPOINT_ENABLED:
+    FLASK_DEBUG = False  # Force disable debug in public mode
+
+# ngrok settings
+NGROK_REGION = os.getenv('NGROK_REGION', 'eu')
+
+# Cloudflare Tunnel settings
+CLOUDFLARE_TUNNEL_TOKEN = os.getenv('CLOUDFLARE_TUNNEL_TOKEN', '')
 
 # =============================================================================
 # PRINT CONFIGURATION

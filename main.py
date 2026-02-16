@@ -41,7 +41,7 @@ from config.settings import (
     BAROMETER_FIELD,
     MONITORING_ENABLED,
     MONITORING_INTERVAL_SECONDS,
-    TIMEZONE_OFFSET_HOURS,
+    # TIMEZONE_OFFSET_HOURS,
     WINDOW_SIZE_SECONDS,
     ACC_SAMPLE_RATE,
     BARO_SAMPLE_RATE,
@@ -64,6 +64,16 @@ from config.settings import (
     WINDOW_SAMPLES,
     HARDWARE_WINDOW_SAMPLES,
     SENSOR_CALIBRATION_ENABLED,
+    # Public endpoint settings
+    PUBLIC_ENDPOINT_ENABLED,
+    TUNNEL_MODE,
+    API_KEYS,
+    RATE_LIMIT_PER_MINUTE,
+    CORS_ALLOWED_ORIGINS,
+    FLASK_DEBUG,
+    # Notification settings
+    NOTIFICATION_MODE,
+    POLLING_INTERVAL_SECONDS,
 )
 
 # Import resampler for sample rate conversion (25Hz->50Hz or 100Hz->50Hz)
@@ -412,8 +422,123 @@ model_info = inference_engine.get_model_info()
 
 app = Flask(__name__, static_folder='app/static')
 
+# ------------------------------------------------------------------------
+# API SECURITY: Authentication and Rate Limiting
+# ------------------------------------------------------------------------
+from functools import wraps
+from collections import defaultdict
+import time
+import threading
+
+# Rate limiting storage (in-memory, per IP)
+_rate_limit_storage = defaultdict(list)
+_rate_limit_lock = threading.Lock()
+
+
+def get_client_ip():
+    """Get client IP address, handling proxies."""
+    # Check for forwarded IP (when behind proxy/ngrok)
+    if request.headers.get('X-Forwarded-For'):
+        return request.headers.get('X-Forwarded-For').split(',')[0].strip()
+    return request.remote_addr or '127.0.0.1'
+
+
+def check_rate_limit(ip: str) -> bool:
+    """Check if IP is within rate limit. Returns True if allowed."""
+    if not PUBLIC_ENDPOINT_ENABLED:
+        return True
+
+    now = time.time()
+    window_start = now - 60  # 1 minute window
+
+    with _rate_limit_lock:
+        # Clean old entries
+        _rate_limit_storage[ip] = [t for t in _rate_limit_storage[ip] if t > window_start]
+
+        # Check limit
+        if len(_rate_limit_storage[ip]) >= RATE_LIMIT_PER_MINUTE:
+            return False
+
+        # Record this request
+        _rate_limit_storage[ip].append(now)
+        return True
+
+
+def require_api_key(f):
+    """Decorator to require API key authentication for endpoints."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Skip auth if public endpoint mode is disabled
+        if not PUBLIC_ENDPOINT_ENABLED:
+            return f(*args, **kwargs)
+
+        # Check rate limit first
+        client_ip = get_client_ip()
+        if not check_rate_limit(client_ip):
+            return jsonify({
+                "error": "Rate limit exceeded",
+                "message": f"Maximum {RATE_LIMIT_PER_MINUTE} requests per minute allowed"
+            }), 429
+
+        # Check API key
+        api_key = request.headers.get('X-API-Key') or request.args.get('api_key')
+
+        if not API_KEYS:
+            # No API keys configured - allow access but log warning
+            logger.warning("PUBLIC_ENDPOINT_ENABLED but no API_KEYS configured!")
+            return f(*args, **kwargs)
+
+        if not api_key:
+            return jsonify({
+                "error": "Authentication required",
+                "message": "Missing API key. Provide via X-API-Key header or api_key query parameter"
+            }), 401
+
+        if api_key not in API_KEYS:
+            logger.warning(f"Invalid API key attempt from {client_ip}")
+            return jsonify({
+                "error": "Invalid API key",
+                "message": "The provided API key is not valid"
+            }), 403
+
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+# Configure CORS if in public endpoint mode
+if PUBLIC_ENDPOINT_ENABLED:
+    @app.after_request
+    def add_cors_headers(response):
+        origin = request.headers.get('Origin', '*')
+        if CORS_ALLOWED_ORIGINS == '*':
+            response.headers['Access-Control-Allow-Origin'] = origin
+        elif origin in CORS_ALLOWED_ORIGINS.split(','):
+            response.headers['Access-Control-Allow-Origin'] = origin
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type, X-API-Key'
+        response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+        return response
+
+
 # Global queue for fall notifications (for SSE)
 fall_notification_queue = queue.Queue()
+
+# Polling notification storage (thread-safe list of unread fall events)
+_poll_notifications = []
+_poll_lock = threading.Lock()
+
+# Track the last exported CSV filepath so /fall_feedback can retroactively update it
+_last_exported_csv_path = None
+_csv_path_lock = threading.Lock()
+
+
+def add_poll_notification(fall_data: dict):
+    """Store a fall notification for polling clients to pick up."""
+    with _poll_lock:
+        _poll_notifications.append(fall_data)
+        # Keep max 50 to prevent unbounded growth
+        if len(_poll_notifications) > 50:
+            _poll_notifications.pop(0)
+
 
 # Global monitor instance
 continuous_monitor = None
@@ -462,6 +587,7 @@ def export_detection_data(flux_records, is_fall: bool, confidence: float,
                           participant_name: str, participant_gender: str,
                           ground_truth_fall: int, timestamp_utc: datetime):
     """Export detection data to CSV."""
+    global _last_exported_csv_path
     from config.settings import FALL_DATA_EXPORT_DIR, TIMEZONE_OFFSET_HOURS
     try:
         timestamp_local = timestamp_utc + timedelta(hours=TIMEZONE_OFFSET_HOURS)
@@ -492,7 +618,8 @@ def export_detection_data(flux_records, is_fall: bool, confidence: float,
             'timezone_offset_hours': TIMEZONE_OFFSET_HOURS,
             'confidence': confidence,
             'fall_detected': is_fall,
-            'ground_truth_fall': ground_truth_fall,
+            'manual_truth_marker': ground_truth_fall,
+            'user_feedback': -1,  # -1 = pending (will be updated by /fall_feedback) 
             'participant_name': participant_name,
             'participant_gender': participant_gender,
             'model_type': MODEL_VERSION
@@ -503,6 +630,12 @@ def export_detection_data(flux_records, is_fall: bool, confidence: float,
             metadata_df.to_csv(f, index=False)
             f.write("\n# Sensor Data\n")
             df.to_csv(f, index=False)
+
+        # Track last exported CSV so /fall_feedback can retroactively update it
+        with _csv_path_lock:
+            _last_exported_csv_path = str(filepath)
+
+        logger.info(f"Detection data exported to: {filepath}")
 
     except Exception as e:
         logger.error(f"Error exporting detection data: {e}", exc_info=True)
@@ -515,12 +648,17 @@ def index() -> Response:
 
 
 @app.route('/trigger', methods=['POST'])
+@require_api_key
 def trigger() -> Tuple[Response, int]:
     """
     Main endpoint for fall detection - automatically uses configured model.
 
     Supports both InfluxDB (real-time) and CSV (batch validation) data sources.
     Set DATA_SOURCE in .env to switch between them.
+
+    Authentication (when PUBLIC_ENDPOINT_ENABLED=true):
+        - Header: X-API-Key: <your-api-key>
+        - Or query param: ?api_key=<your-api-key>
     """
     # Check data source
     if DATA_SOURCE == 'csv':
@@ -581,8 +719,8 @@ def trigger() -> Tuple[Response, int]:
         if BAROMETER_ENABLED and inference_engine.uses_barometer():
             fields_filter += f' or r["_field"] == "{BAROMETER_FIELD}"'
 
-        # Always include ground_truth field so it appears in exported CSVs
-        fields_filter += ' or r["_field"] == "ground_truth"'
+        # Always include manual_truth_marker and user_feedback fields so they appear in exported CSVs
+        fields_filter += ' or r["_field"] == "manual_truth_marker" or r["_field"] == "user_feedback"'
 
         query = f'''from(bucket: "{INFLUXDB_BUCKET}")
           |> range(start: -30s)
@@ -797,7 +935,7 @@ def trigger() -> Tuple[Response, int]:
             "baro_samples": baro_count,
             "participant_name": participant_name,
             "participant_gender": participant_gender,
-            "ground_truth_fall": ground_truth_fall
+            "manual_truth_marker": ground_truth_fall
         }), 200
 
     except ConnectionError as e:
@@ -879,7 +1017,7 @@ def update_recording_state():
 
         recording_state.update_participant_name(participant_name)
         recording_state.update_participant_gender(participant_gender)
-        recording_state.update_ground_truth(ground_truth_fall)
+        recording_state.update_manual_truth(ground_truth_fall)
         recording_state.set_recording_active(recording_active)
 
         logger.info(f"Recording state updated: active={recording_active}, name={participant_name}")
@@ -895,34 +1033,34 @@ def update_recording_state():
 
 
 @app.route('/ground_truth/marker', methods=['POST'])
-def write_ground_truth_marker():
+def write_manual_truth_marker():
     """
     Write ground truth marker directly to InfluxDB at current timestamp.
     This is called when user presses the ground truth button.
     """
-    from app.ground_truth_writer import write_ground_truth_marker as write_marker
+    from app.manual_truth_writer import write_manual_truth_marker as write_marker
 
     try:
         data = request.get_json()
         value = data.get('value', 1)  # 1 = fall event, 0 = no fall
 
-        # Write marker to InfluxDB at current timestamp
+        # Write manual_truth_marker to InfluxDB at current timestamp
         success = write_marker(value)
 
         if success:
-            logger.info(f"Ground truth marker written to InfluxDB: value={value}")
+            logger.info(f"Manual truth marker written to InfluxDB: value={value}")
             return jsonify({
-                'message': 'Ground truth marker written',
+                'message': 'Manual truth marker written',
                 'value': value,
                 'timestamp': datetime.now(timezone.utc).isoformat()
             }), 200
         else:
             return jsonify({
-                'error': 'Failed to write ground truth marker'
+                'error': 'Failed to write manual truth marker'
             }), 500
 
     except Exception as e:
-        logger.error(f"Error writing ground truth marker: {e}")
+        logger.error(f"Error writing manual truth marker: {e}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -930,42 +1068,85 @@ def write_ground_truth_marker():
 def record_fall_feedback():
     """
     Record user feedback when fall alert popup is shown.
-    Saves feedback to a text file in the same directory as CSV exports.
+    Writes user_feedback marker to InfluxDB and updates the last exported CSV.
+
+    Expected JSON body:
+        feedback_value: 0 (No/not a fall), 1 (Yes/confirmed fall), 3 (timeout/no response)
+        detection_timestamp: ISO timestamp of the original detection
+        confidence: detection confidence value
     """
+    global _last_exported_csv_path
     from app.recording_state import recording_state
+    from app.manual_truth_writer import write_user_feedback_marker
     from config.settings import FALL_DATA_EXPORT_DIR, TIMEZONE_OFFSET_HOURS
 
     try:
         data = request.get_json()
-        is_fall = data.get('is_fall', False)  # True = user confirmed fall, False = false positive
+        feedback_value = data.get('feedback_value', 3)  # 0=No, 1=Yes, 3=timeout
         detection_timestamp = data.get('detection_timestamp', '')
         confidence = data.get('confidence', 0)
 
         # Get current participant info
         participant_name = recording_state.get_current_state().get('participant_name', 'unknown')
 
-        # Create timestamp for the feedback
         now_utc = datetime.now(timezone.utc)
         now_local = now_utc + timedelta(hours=TIMEZONE_OFFSET_HOURS)
 
-        # Prepare feedback record
-        feedback_type = "CONFIRMED_FALL" if is_fall else "FALSE_POSITIVE"
+        feedback_labels = {0: "NO_FALL", 1: "CONFIRMED_FALL", 3: "TIMEOUT_NO_RESPONSE"}
+        feedback_type = feedback_labels.get(feedback_value, f"UNKNOWN({feedback_value})")
+
+        # 1. Write user_feedback marker to InfluxDB
+        influx_ok = write_user_feedback_marker(feedback_value)
+        if influx_ok:
+            logger.info(f"User feedback written to InfluxDB: {feedback_type} ({feedback_value})")
+        else:
+            logger.warning(f"Failed to write user feedback to InfluxDB")
+
+        # 2. Retroactively update the last exported CSV with user_feedback value
+        csv_updated = False
+        csv_path = None
+        with _csv_path_lock:
+            csv_path = _last_exported_csv_path
+
+        if csv_path and Path(csv_path).exists():
+            try:
+                with open(csv_path, 'r', encoding='utf-8') as f:
+                    lines = f.readlines()
+
+                # Find the metadata header line and update the data row below it
+                for i, line in enumerate(lines):
+                    if 'user_feedback' in line and i + 1 < len(lines):
+                        # This is the metadata header — next line is the data row
+                        data_line = lines[i + 1]
+                        cols = line.strip().split(',')
+                        vals = data_line.strip().split(',')
+                        if 'user_feedback' in cols and len(vals) == len(cols):
+                            fb_idx = cols.index('user_feedback')
+                            vals[fb_idx] = str(feedback_value)
+                            lines[i + 1] = ','.join(vals) + '\n'
+                        break
+
+                with open(csv_path, 'w', encoding='utf-8') as f:
+                    f.writelines(lines)
+
+                csv_updated = True
+                logger.info(f"CSV updated with user_feedback={feedback_value}: {csv_path}")
+            except Exception as csv_err:
+                logger.error(f"Failed to update CSV with feedback: {csv_err}")
+
+        # 3. Also append to text log for human readability
+        export_dir = Path(FALL_DATA_EXPORT_DIR)
+        export_dir.mkdir(parents=True, exist_ok=True)
+        feedback_file = export_dir / "fall_feedback_log.txt"
+
         feedback_line = (
             f"{now_local.strftime('%Y-%m-%d %H:%M:%S')} | "
-            f"{feedback_type} | "
+            f"{feedback_type} (value={feedback_value}) | "
             f"Participant: {participant_name} | "
-            f"Confidence: {confidence:.2%} | "
+            f"Confidence: {confidence} | "
             f"Detection Time: {detection_timestamp}\n"
         )
 
-        # Ensure export directory exists
-        export_dir = Path(FALL_DATA_EXPORT_DIR)
-        export_dir.mkdir(parents=True, exist_ok=True)
-
-        # Append to feedback log file
-        feedback_file = export_dir / "fall_feedback_log.txt"
-
-        # Write header if file doesn't exist
         if not feedback_file.exists():
             with open(feedback_file, 'w', encoding='utf-8') as f:
                 f.write("=" * 80 + "\n")
@@ -974,7 +1155,6 @@ def record_fall_feedback():
                 f.write("Format: Timestamp | Feedback Type | Participant | Confidence | Detection Time\n")
                 f.write("-" * 80 + "\n")
 
-        # Append feedback record
         with open(feedback_file, 'a', encoding='utf-8') as f:
             f.write(feedback_line)
 
@@ -983,7 +1163,10 @@ def record_fall_feedback():
         return jsonify({
             'message': 'Feedback recorded',
             'feedback_type': feedback_type,
-            'file': str(feedback_file),
+            'feedback_value': feedback_value,
+            'influx_written': influx_ok,
+            'csv_updated': csv_updated,
+            'csv_path': csv_path,
             'timestamp': now_local.isoformat()
         }), 200
 
@@ -1013,7 +1196,42 @@ def sse_stream():
             except queue.Empty:
                 yield f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
 
-    return Response(event_stream(), mimetype='text/event-stream')
+    response = Response(event_stream(), mimetype='text/event-stream')
+    # Disable buffering so Cloudflare/nginx/proxies stream SSE events immediately
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['X-Accel-Buffering'] = 'no'
+    return response
+
+
+@app.route('/notification/config')
+def notification_config():
+    """Tell the frontend which notification mode to use."""
+    return jsonify({
+        'mode': NOTIFICATION_MODE,
+        'polling_interval_seconds': POLLING_INTERVAL_SECONDS
+    })
+
+
+@app.route('/notifications/poll')
+def poll_notifications():
+    """Return and clear any pending fall notifications (for polling mode)."""
+    with _poll_lock:
+        events = list(_poll_notifications)
+        _poll_notifications.clear()
+
+    # Format the same way as SSE events
+    formatted = []
+    for fall_data in events:
+        formatted.append({
+            'fall_detected': fall_data.get('is_fall', False),
+            'timestamp': fall_data.get('timestamp', ''),
+            'confidence': fall_data.get('confidence', 0),
+            'model_type': fall_data.get('model_version', MODEL_VERSION),
+            'message': f"Fall detected with {fall_data.get('confidence', 0):.0%} confidence"
+                       if fall_data.get('is_fall', False) else "No fall detected"
+        })
+
+    return jsonify({'events': formatted})
 
 
 @app.route('/monitoring/status', methods=['GET'])
@@ -1106,7 +1324,8 @@ if __name__ == '__main__':
             continuous_monitor = ContinuousMonitor(
                 inference_engine=inference_engine,
                 notification_queue=fall_notification_queue,
-                export_callback=export_detection_data
+                export_callback=export_detection_data,
+                notification_callback=add_poll_notification
             )
 
             # Start monitoring
@@ -1116,4 +1335,11 @@ if __name__ == '__main__':
             logger.info("\nContinuous monitoring is disabled. Use /trigger endpoint for manual detection.")
 
         # Start Flask app for real-time mode
-        app.run(host="0.0.0.0", port=8000, debug=True, use_reloader=False, threaded=True)
+        if PUBLIC_ENDPOINT_ENABLED:
+            logger.info(f"PUBLIC ENDPOINT MODE ENABLED")
+            logger.info(f"  Tunnel mode: {TUNNEL_MODE}")
+            logger.info(f"  API Keys configured: {len(API_KEYS)}")
+            logger.info(f"  Rate limit: {RATE_LIMIT_PER_MINUTE} req/min")
+            logger.info(f"  Debug mode: {FLASK_DEBUG}")
+
+        app.run(host="0.0.0.0", port=8000, debug=FLASK_DEBUG, use_reloader=False, threaded=True)

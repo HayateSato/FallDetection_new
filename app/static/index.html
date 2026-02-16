@@ -160,7 +160,7 @@
             text-align: center;
         }
 
-        /* Ground Truth Popup */
+        /* Manual Truth Popup */
         #gtPopup {
             display: none;
             position: fixed;
@@ -348,18 +348,18 @@
             </select>
         </div>
 
-        <!-- Ground Truth Annotation Button -->
-        <button id="gtMarkBtn" class="gt-toggle-btn" onclick="markGroundTruth()">
+        <!-- Manual Truth Annotation Button -->
+        <button id="gtMarkBtn" class="gt-toggle-btn" onclick="markManualTruth()">
             MARK FALL EVENT
         </button>
 
         <div id="gtStatus" class="gt-status inactive">
-            Click button above at the moment of fall to mark ground truth
+            Click button above at the moment of fall to mark Manual Truth
         </div>
 
-        <!-- Popup notification for ground truth -->
+        <!-- Popup notification for Manual Truth -->
         <div id="gtPopup">
-            ✓ Ground Truth Marker Recorded!
+            ✓ Manual Truth Marker Recorded!
         </div>
 
         <!-- Record Button -->
@@ -409,6 +409,7 @@
         // State variables
         let recordingActive = false;
         let eventSource = null;
+        let pollIntervalId = null;
         let popupEnabled = false;
         let popupTimeout = null;
         let currentDetectionData = null;  // Store detection data for feedback
@@ -452,10 +453,12 @@
             const popup = document.getElementById('watchPopup');
             popup.classList.add('visible');
 
-            // Auto-dismiss after 30 seconds if no response
+            // Auto-dismiss after 10 seconds if no response → send feedback_value=3 (timeout)
             popupTimeout = setTimeout(() => {
                 hideFallPopup();
-            }, 30000);
+                recordFallFeedback(3);  // 3 = timeout / no user response
+                console.log('Popup timed out - sending feedback_value=3 (unknown)');
+            }, 10000);
         }
 
         function hideFallPopup() {
@@ -471,20 +474,19 @@
         async function respondToFallAlert(isFall) {
             hideFallPopup();
 
-            // Record feedback to txt file
-            await recordFallFeedback(isFall);
+            // Send feedback: 1 = Yes (confirmed fall), 0 = No (not a fall)
+            const feedbackValue = isFall ? 1 : 0;
+            await recordFallFeedback(feedbackValue);
 
             if (isFall) {
-                // User confirmed it was a fall - also mark ground truth in InfluxDB
-                writeGroundTruthMarker(1);
-                console.log('User confirmed fall - ground truth marker written');
+                console.log('User confirmed fall - feedback_value=1');
             } else {
-                // User said no fall - log as false positive
-                console.log('User indicated no fall - false positive');
+                console.log('User indicated no fall - feedback_value=0');
             }
         }
 
-        async function recordFallFeedback(isFall) {
+        async function recordFallFeedback(feedbackValue) {
+            // feedbackValue: 0 = No (not a fall), 1 = Yes (confirmed fall), 3 = timeout (no response)
             try {
                 const response = await fetch('/fall_feedback', {
                     method: 'POST',
@@ -492,7 +494,7 @@
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        is_fall: isFall,
+                        feedback_value: feedbackValue,
                         detection_timestamp: currentDetectionData ? currentDetectionData.timestamp : new Date().toISOString(),
                         confidence: currentDetectionData ? currentDetectionData.confidence : 0
                     })
@@ -500,7 +502,7 @@
 
                 if (response.ok) {
                     const data = await response.json();
-                    console.log(`Fall feedback recorded: ${data.feedback_type}`);
+                    console.log(`Fall feedback recorded: ${data.feedback_type} (value=${data.feedback_value})`);
                 } else {
                     console.error('Failed to record fall feedback');
                 }
@@ -509,14 +511,14 @@
             }
         }
 
-        async function markGroundTruth() {
-            const success = await writeGroundTruthMarker(1);
+        async function markManualTruth() {
+            const success = await writeManualTruthMarker(1);
             if (success) {
-                showGroundTruthPopup();
+                showManualTruthPopup();
             }
         }
 
-        async function writeGroundTruthMarker(value) {
+        async function writeManualTruthMarker(value) {
             try {
                 const response = await fetch('/ground_truth/marker', {
                     method: 'POST',
@@ -530,21 +532,21 @@
 
                 if (response.ok) {
                     const data = await response.json();
-                    console.log(`Ground truth marker written to InfluxDB: value=${value} at ${data.timestamp}`);
+                    console.log(`Manual Truth marker written to InfluxDB: value=${value} at ${data.timestamp}`);
                     return true;
                 } else {
-                    console.error('Failed to write ground truth marker');
-                    alert('ERROR: Failed to write ground truth marker to InfluxDB');
+                    console.error('Failed to write Manual Truth marker');
+                    alert('ERROR: Failed to write Manual Truth marker to InfluxDB');
                     return false;
                 }
             } catch (error) {
-                console.error('Error writing ground truth marker:', error);
+                console.error('Error writing Manual Truth marker:', error);
                 alert('ERROR: ' + error.message);
                 return false;
             }
         }
 
-        function showGroundTruthPopup() {
+        function showManualTruthPopup() {
             const popup = document.getElementById('gtPopup');
             popup.style.display = 'block';
 
@@ -632,26 +634,61 @@
             }
         }
 
-        function startEventStream() {
+        function handleFallEvent(data) {
+            if (data.fall_detected === true) {
+                console.log('Fall detected!', data);
+                showFallPopup(data);
+            }
+        }
+
+        // --- SSE mode ---
+        function startSSE() {
+            console.log('Notification mode: SSE');
             eventSource = new EventSource('/events');
-
             eventSource.onmessage = function(event) {
-                const data = JSON.parse(event.data);
-
-                // Check if fall was detected
-                if (data.fall_detected === true) {
-                    console.log('Fall detected!', data);
-                    showFallPopup(data);  // Pass detection data for feedback recording
-                }
+                handleFallEvent(JSON.parse(event.data));
             };
-
             eventSource.onerror = function(error) {
                 console.error('EventSource error:', error);
                 if (eventSource.readyState === EventSource.CLOSED) {
-                    console.log('Connection closed, attempting to reconnect...');
-                    setTimeout(startEventStream, 5000);
+                    console.log('SSE closed, reconnecting in 5s...');
+                    setTimeout(startSSE, 5000);
                 }
             };
+        }
+
+        // --- Polling mode ---
+        function startPolling(intervalSeconds) {
+            console.log('Notification mode: polling (every ' + intervalSeconds + 's)');
+            pollIntervalId = setInterval(async function() {
+                try {
+                    const resp = await fetch('/notifications/poll');
+                    if (!resp.ok) return;
+                    const data = await resp.json();
+                    for (const event of (data.events || [])) {
+                        handleFallEvent(event);
+                    }
+                } catch (err) {
+                    console.error('Polling error:', err);
+                }
+            }, intervalSeconds * 1000);
+        }
+
+        // --- Auto-detect mode from server config ---
+        async function startEventStream() {
+            try {
+                const resp = await fetch('/notification/config');
+                const config = await resp.json();
+                if (config.mode === 'polling') {
+                    startPolling(config.polling_interval_seconds || 3);
+                } else {
+                    startSSE();
+                }
+            } catch (err) {
+                // Fallback to SSE if config endpoint unavailable
+                console.warn('Could not fetch notification config, defaulting to SSE');
+                startSSE();
+            }
         }
     </script>
 </body>

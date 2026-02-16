@@ -27,10 +27,10 @@ class RecordingState:
         self._recording_active = False
         self._participant_name = "unknown"
         self._participant_gender = "unknown"
-        self._ground_truth_fall = 0
+        self._manual_truth_fall = 0
         self._pending_name = None
         self._pending_gender = None
-        self._pending_ground_truth = None
+        self._pending_manual_truth = None
 
     def set_recording_active(self, active: bool):
         """Set recording state and apply pending values when activated"""
@@ -47,9 +47,9 @@ class RecordingState:
                     self._participant_gender = self._pending_gender
                     self._pending_gender = None
 
-                if self._pending_ground_truth is not None:
-                    self._ground_truth_fall = self._pending_ground_truth
-                    self._pending_ground_truth = None
+                if self._pending_manual_truth is not None:
+                    self._manual_truth_fall = self._pending_manual_truth
+                    self._pending_manual_truth = None
 
     def is_recording_active(self) -> bool:
         """Check if recording is currently active"""
@@ -71,10 +71,10 @@ class RecordingState:
             else:
                 self._pending_gender = 0
 
-    def update_ground_truth(self, ground_truth: int):
+    def update_manual_truth(self, ground_truth: int):
         """Update ground truth annotation"""
         with self._state_lock:
-            self._pending_ground_truth = ground_truth
+            self._pending_manual_truth = ground_truth
 
     def get_current_state(self) -> dict:
         """Get current recording state"""
@@ -83,7 +83,7 @@ class RecordingState:
                 'recording_active': self._recording_active,
                 'participant_name': self._participant_name,
                 'participant_gender': self._participant_gender,
-                'ground_truth_fall': self._ground_truth_fall
+                'ground_truth_fall': self._manual_truth_fall
             }
 
     def get_active_values(self) -> tuple:
@@ -92,7 +92,7 @@ class RecordingState:
             return (
                 self._participant_name,
                 self._participant_gender,
-                self._ground_truth_fall
+                self._manual_truth_fall
             )
 
 

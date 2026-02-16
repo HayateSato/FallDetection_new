@@ -17,7 +17,7 @@ from config import settings
 INFLUXDB_BUCKET = settings.INFLUXDB_BUCKET
 
 
-def write_ground_truth_marker(value: int, measurement: str = "SMART_DATA") -> bool:
+def write_manual_truth_marker(value: int, measurement: str = "SMART_DATA") -> bool:
     """
     Write a ground truth marker to InfluxDB at the current timestamp.
     Uses SMART_DATA measurement to appear at same level as sensor data.
@@ -40,7 +40,7 @@ def write_ground_truth_marker(value: int, measurement: str = "SMART_DATA") -> bo
         # Create InfluxDB point with same measurement as sensor data
         # This ensures ground_truth appears as a field alongside bosch_acc_x, etc.
         point = Point(measurement) \
-            .field("ground_truth", value) \
+            .field("manual_truth_marker", value) \
             .time(timestamp)
 
         # Write to InfluxDB
@@ -55,7 +55,39 @@ def write_ground_truth_marker(value: int, measurement: str = "SMART_DATA") -> bo
     # Note: Don't close the client - it's a singleton that will be reused
 
 
-def write_ground_truth_event(event_type: str, value: int = 1) -> bool:
+def write_user_feedback_marker(value: int, measurement: str = "SMART_DATA") -> bool:
+    """
+    Write a user_feedback marker to InfluxDB at the current timestamp.
+    Called when user responds to the fall detection popup (or on timeout).
+
+    Args:
+        value: 0 = user said No (not a fall), 1 = user said Yes (fall), 3 = timeout (no response)
+        measurement: Measurement name in InfluxDB (default: "SMART_DATA")
+
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        client = _get_influxdb_client()
+        write_api = client.write_api(write_options=SYNCHRONOUS)
+
+        timestamp = datetime.now(timezone.utc)
+
+        point = Point(measurement) \
+            .field("user_feedback", value) \
+            .time(timestamp)
+
+        write_api.write(bucket=INFLUXDB_BUCKET, record=point)
+
+        logger.info(f"User feedback marker written: value={value} at {timestamp.isoformat()}")
+        return True
+
+    except Exception as e:
+        logger.error(f"Failed to write user feedback marker: {e}", exc_info=True)
+        return False
+
+
+def write_manual_truth_event(event_type: str, value: int = 1) -> bool:
     """
     Write a ground truth event marker to InfluxDB.
 

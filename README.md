@@ -110,7 +110,7 @@ The application will start on `http://localhost:8000`. Open this URL in your bro
 
 The Flask app provides a web-based dashboard for monitoring and data collection.
 
-![Fall Detection Web UI](Docu/FD_WebUI.png)
+![Fall Detection Web UI](Docu/FD_WatchUI.png)
 
 ### Features
 
@@ -277,7 +277,7 @@ SmarKo_Fall_Detection/
 │   ├── model_v0/               # V0 trained model (ACC only)
 │   └── model_v3/               # V3 trained model (ACC + BARO)
 ├── Docu/
-│   └── FD_WebUI.png            # Web UI screenshot
+│   └── FD_WatchUI.png         # Watch UI screenshot
 └── results/
     ├── logs/                   # Application logs
     └── fall_data_exports/      # Exported CSV data
