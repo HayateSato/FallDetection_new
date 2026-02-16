@@ -56,7 +56,8 @@ class ContinuousMonitor:
         self,
         inference_engine: UnifiedInference,
         notification_queue: Optional[queue.Queue] = None,
-        export_callback: Optional[Callable] = None
+        export_callback: Optional[Callable] = None,
+        notification_callback: Optional[Callable] = None
     ):
         """
         Initialize the continuous monitor.
@@ -65,10 +66,12 @@ class ContinuousMonitor:
             inference_engine: UnifiedInference instance for fall detection
             notification_queue: Queue for sending fall notifications (SSE)
             export_callback: Optional callback for exporting detection data
+            notification_callback: Optional callback called with fall data dict (for polling)
         """
         self.inference_engine = inference_engine
         self.notification_queue = notification_queue
         self.export_callback = export_callback
+        self.notification_callback = notification_callback
 
         self.is_running = False
         self._thread: Optional[threading.Thread] = None
@@ -200,13 +203,16 @@ class ContinuousMonitor:
                 logger.info(f"  Result: No fall (confidence: {confidence:.2%})")
 
             # Send notification
+            notification_data = {
+                'is_fall': is_fall,
+                'confidence': confidence,
+                'timestamp': timestamp.isoformat(),
+                'model_version': MODEL_VERSION
+            }
             if self.notification_queue is not None:
-                self.notification_queue.put({
-                    'is_fall': is_fall,
-                    'confidence': confidence,
-                    'timestamp': timestamp.isoformat(),
-                    'model_version': MODEL_VERSION
-                })
+                self.notification_queue.put(notification_data)
+            if self.notification_callback is not None:
+                self.notification_callback(notification_data)
 
             # Export data only when recording is active
             if self.export_callback and flux_records and state.get('recording_active', False):
@@ -232,8 +238,8 @@ class ContinuousMonitor:
         if self.uses_barometer and BAROMETER_ENABLED:
             fields_filter += f' or r["_field"] == "{BAROMETER_FIELD}"'
 
-        # Always include ground_truth field so it appears in exported CSVs
-        fields_filter += ' or r["_field"] == "ground_truth"'
+        # Always include manual_truth_marker and user_feedback fields so they appear in exported CSVs
+        fields_filter += ' or r["_field"] == "manual_truth_marker" or r["_field"] == "user_feedback"'
 
         query = f'''from(bucket: "{INFLUXDB_BUCKET}")
           |> range(start: -{self.lookback_seconds}s)

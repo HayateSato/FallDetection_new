@@ -71,6 +71,9 @@ from config.settings import (
     RATE_LIMIT_PER_MINUTE,
     CORS_ALLOWED_ORIGINS,
     FLASK_DEBUG,
+    # Notification settings
+    NOTIFICATION_MODE,
+    POLLING_INTERVAL_SECONDS,
 )
 
 # Import resampler for sample rate conversion (25Hz->50Hz or 100Hz->50Hz)
@@ -519,6 +522,20 @@ if PUBLIC_ENDPOINT_ENABLED:
 # Global queue for fall notifications (for SSE)
 fall_notification_queue = queue.Queue()
 
+# Polling notification storage (thread-safe list of unread fall events)
+_poll_notifications = []
+_poll_lock = threading.Lock()
+
+
+def add_poll_notification(fall_data: dict):
+    """Store a fall notification for polling clients to pick up."""
+    with _poll_lock:
+        _poll_notifications.append(fall_data)
+        # Keep max 50 to prevent unbounded growth
+        if len(_poll_notifications) > 50:
+            _poll_notifications.pop(0)
+
+
 # Global monitor instance
 continuous_monitor = None
 
@@ -596,7 +613,7 @@ def export_detection_data(flux_records, is_fall: bool, confidence: float,
             'timezone_offset_hours': TIMEZONE_OFFSET_HOURS,
             'confidence': confidence,
             'fall_detected': is_fall,
-            'ground_truth_fall': ground_truth_fall,
+            'manual_truth_marker': ground_truth_fall,
             'participant_name': participant_name,
             'participant_gender': participant_gender,
             'model_type': MODEL_VERSION
@@ -690,8 +707,8 @@ def trigger() -> Tuple[Response, int]:
         if BAROMETER_ENABLED and inference_engine.uses_barometer():
             fields_filter += f' or r["_field"] == "{BAROMETER_FIELD}"'
 
-        # Always include ground_truth field so it appears in exported CSVs
-        fields_filter += ' or r["_field"] == "ground_truth"'
+        # Always include manual_truth_marker and user_feedback fields so they appear in exported CSVs
+        fields_filter += ' or r["_field"] == "manual_truth_marker" or r["_field"] == "user_feedback"'
 
         query = f'''from(bucket: "{INFLUXDB_BUCKET}")
           |> range(start: -30s)
@@ -906,7 +923,7 @@ def trigger() -> Tuple[Response, int]:
             "baro_samples": baro_count,
             "participant_name": participant_name,
             "participant_gender": participant_gender,
-            "ground_truth_fall": ground_truth_fall
+            "manual_truth_marker": ground_truth_fall
         }), 200
 
     except ConnectionError as e:
@@ -1015,23 +1032,23 @@ def write_ground_truth_marker():
         data = request.get_json()
         value = data.get('value', 1)  # 1 = fall event, 0 = no fall
 
-        # Write marker to InfluxDB at current timestamp
+        # Write manual_truth_marker to InfluxDB at current timestamp
         success = write_marker(value)
 
         if success:
-            logger.info(f"Ground truth marker written to InfluxDB: value={value}")
+            logger.info(f"Manual truth marker written to InfluxDB: value={value}")
             return jsonify({
-                'message': 'Ground truth marker written',
+                'message': 'Manual truth marker written',
                 'value': value,
                 'timestamp': datetime.now(timezone.utc).isoformat()
             }), 200
         else:
             return jsonify({
-                'error': 'Failed to write ground truth marker'
+                'error': 'Failed to write manual truth marker'
             }), 500
 
     except Exception as e:
-        logger.error(f"Error writing ground truth marker: {e}")
+        logger.error(f"Error writing manual truth marker: {e}")
         return jsonify({'error': str(e)}), 500
 
 
@@ -1122,7 +1139,42 @@ def sse_stream():
             except queue.Empty:
                 yield f"data: {json.dumps({'type': 'heartbeat'})}\n\n"
 
-    return Response(event_stream(), mimetype='text/event-stream')
+    response = Response(event_stream(), mimetype='text/event-stream')
+    # Disable buffering so Cloudflare/nginx/proxies stream SSE events immediately
+    response.headers['Cache-Control'] = 'no-cache'
+    response.headers['X-Accel-Buffering'] = 'no'
+    return response
+
+
+@app.route('/notification/config')
+def notification_config():
+    """Tell the frontend which notification mode to use."""
+    return jsonify({
+        'mode': NOTIFICATION_MODE,
+        'polling_interval_seconds': POLLING_INTERVAL_SECONDS
+    })
+
+
+@app.route('/notifications/poll')
+def poll_notifications():
+    """Return and clear any pending fall notifications (for polling mode)."""
+    with _poll_lock:
+        events = list(_poll_notifications)
+        _poll_notifications.clear()
+
+    # Format the same way as SSE events
+    formatted = []
+    for fall_data in events:
+        formatted.append({
+            'fall_detected': fall_data.get('is_fall', False),
+            'timestamp': fall_data.get('timestamp', ''),
+            'confidence': fall_data.get('confidence', 0),
+            'model_type': fall_data.get('model_version', MODEL_VERSION),
+            'message': f"Fall detected with {fall_data.get('confidence', 0):.0%} confidence"
+                       if fall_data.get('is_fall', False) else "No fall detected"
+        })
+
+    return jsonify({'events': formatted})
 
 
 @app.route('/monitoring/status', methods=['GET'])
@@ -1215,7 +1267,8 @@ if __name__ == '__main__':
             continuous_monitor = ContinuousMonitor(
                 inference_engine=inference_engine,
                 notification_queue=fall_notification_queue,
-                export_callback=export_detection_data
+                export_callback=export_detection_data,
+                notification_callback=add_poll_notification
             )
 
             # Start monitoring
