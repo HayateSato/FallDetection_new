@@ -11,6 +11,11 @@ from datetime import datetime
 
 # Load environment variables from .env file
 load_dotenv()
+# =============================================================================
+# FLASK SETTINGS
+# =============================================================================
+FLASK_PORT = os.getenv("FLASK_PORT", 8000)
+
 
 # =============================================================================
 # MODEL SELECTION
@@ -142,6 +147,15 @@ MONITORING_ENABLED = os.getenv('MONITORING_ENABLED', 'true').lower() == 'true'
 MONITORING_INTERVAL_SECONDS = int(os.getenv('MONITORING_INTERVAL_SECONDS', '5'))
 MONITORING_LOOKBACK_SECONDS = int(os.getenv('MONITORING_LOOKBACK_SECONDS', '15'))
 
+# Notification mode: 'sse' (Server-Sent Events) or 'polling'
+NOTIFICATION_MODE = os.getenv('NOTIFICATION_MODE', 'sse').lower()
+if NOTIFICATION_MODE not in ('sse', 'polling'):
+    print(f"WARNING: Invalid NOTIFICATION_MODE '{NOTIFICATION_MODE}', defaulting to 'sse'")
+    NOTIFICATION_MODE = 'sse'
+
+# Polling interval in seconds (only when NOTIFICATION_MODE=polling)
+POLLING_INTERVAL_SECONDS = int(os.getenv('POLLING_INTERVAL_SECONDS', '3'))
+
 # Additional sensor data collection
 COLLECT_ADDITIONAL_SENSORS = os.getenv('COLLECT_ADDITIONAL_SENSORS', 'false').lower() == 'true'
 
@@ -185,13 +199,13 @@ def get_model_path() -> str:
     # Default paths for each version
     default_paths = {
         'v0': 'model/model_v0/model_v0_xgboost.pkl',
-        'v1': 'model/model_v1/model_v1_xgboost.pkl',
-        'v2': 'model/model_v2/model_v2_xgboost.pkl',
+        # 'v1': 'model/model_v1/model_v1_xgboost.pkl',
+        # 'v2': 'model/model_v2/model_v2_xgboost.pkl',
         'v3': 'model/model_v3/model_v3_xgboost.pkl',
-        'v4': 'model/model_v4/model_v4_xgboost.pkl',
-        'v5': 'model/model_v5/model_v5_xgboost.pkl',
-        'v1_tuned': 'model/model_v1_tuned/model_v1_tuned.pkl',
-        'v3_tuned': 'model/model_v3_tuned/model_v3_tuned.pkl',
+    #     'v4': 'model/model_v4/model_v4_xgboost.pkl',
+    #     'v5': 'model/model_v5/model_v5_xgboost.pkl',
+    #     'v1_tuned': 'model/model_v1_tuned/model_v1_tuned.pkl',
+    #     'v3_tuned': 'model/model_v3_tuned/model_v3_tuned.pkl',
     }
 
     version_lower = MODEL_VERSION.lower()
