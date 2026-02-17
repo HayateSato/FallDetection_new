@@ -1,5 +1,5 @@
 """
-Unified Inference Engine - Handles all model versions with automatic preprocessing.
+Inference Engine for data processing and feeds data into ML based on the selected model version  - Handles all model versions with automatic preprocessing.
 
 This module provides a single interface for running fall detection inference
 regardless of which model version is selected. It automatically applies the
@@ -8,7 +8,7 @@ correct preprocessing pipeline based on the model configuration.
 
 import numpy as np
 import pandas as pd
-from typing import Dict, Optional, Tuple, Any
+from typing import Dict, Optional, Any
 import sys
 from pathlib import Path
 
@@ -18,18 +18,21 @@ if str(_analysis_dir) not in sys.path:
     sys.path.insert(0, str(_analysis_dir))
 
 from .model_registry import (
-    ModelType, ModelConfig, get_model_type, get_model_config,
-    load_inference_class, get_model_path
+    ModelType, 
+    # ModelConfig, 
+    get_model_type, get_model_config,
+    # load_inference_class, 
+    get_model_path
 )
 
 
-class UnifiedInference:
+class PipelineSelector:
     """
     Unified inference engine that automatically selects the correct
     preprocessing pipeline based on model version.
 
     Usage:
-        >>> engine = UnifiedInference('v3')
+        >>> engine = PipelineSelector('v3')
         >>> result = engine.predict(acc_df, pressure, pressure_time)
     """
 
@@ -54,7 +57,7 @@ class UnifiedInference:
     def _init_inference(self):
         """Initialize the model-specific inference class."""
         # All models use the generic XGBoost loader
-        # UnifiedInference handles all preprocessing and feature extraction internally
+        # PipelineSelector handles all preprocessing and feature extraction internally
         self._init_generic_inference()
 
     def _init_generic_inference(self):
@@ -83,20 +86,20 @@ class UnifiedInference:
 
         # Initialize ACC preprocessor
         if self.config.acc_preprocessing == 'v2_paper':
-            from app.preprocessor.accelerometer_processor_paper import (
-                PaperAccelerometerConfig, PaperAccelerometerProcessor
+            from app.data_input.accelerometer_processor.magnitude_based_acc_processor_paper import (
+                PaperMagnitudeAccelerometerProcessor, PaperMagnitudeAccelerometerProcessor
             )
-            acc_config = PaperAccelerometerConfig(
+            acc_config = PaperMagnitudeAccelerometerProcessor(
                 impact_threshold_g=4.0,
                 crossing_threshold_g=1.0,
                 sample_rate=50.0,
             )
-            self.acc_preprocessor = PaperAccelerometerProcessor(acc_config)
+            self.acc_preprocessor = PaperMagnitudeAccelerometerProcessor(acc_config)
 
         # Initialize BARO preprocessor
         if self.config.baro_preprocessing == 'v1_ema':
-            from app.preprocessor.barometer_config import BarometerConfig
-            from app.preprocessor.barometer_processor import BarometerProcessor
+            from app.data_input.barometer_processor.barometer_config import BarometerConfig
+            from app.data_input.barometer_processor.barometer_ema_filter import BarometerProcessor
             baro_config = BarometerConfig(
                 median_window=5,
                 tau_fast=0.5,
@@ -105,7 +108,7 @@ class UnifiedInference:
             self.baro_preprocessor = BarometerProcessor(baro_config)
 
         elif self.config.baro_preprocessing == 'v2_paper':
-            from app.preprocessor.barometer_processor_paper import (
+            from app.data_input.barometer_processor.barometer_slope_limit_paper import (
                 PaperBarometerConfig, PaperBarometerProcessor
             )
             baro_config = PaperBarometerConfig(

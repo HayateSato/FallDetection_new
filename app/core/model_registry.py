@@ -56,7 +56,7 @@ MODEL_CONFIGS: Dict[ModelType, ModelConfig] = {
         name="V0",
         description="ACC only: Statistical features (no barometer, baseline)",
         model_path="model/model_v0/model_v0_xgboost.pkl",
-        inference_class="app.unified_inference.UnifiedInference",
+        inference_class="app.data_processing_registry.PipelineSelector",
         uses_barometer=False,
         acc_preprocessing="v1_features",
         baro_preprocessing="none",
@@ -116,7 +116,7 @@ MODEL_CONFIGS: Dict[ModelType, ModelConfig] = {
         name="V5",
         description="Raw features with minimal preprocessing",
         model_path="model/model_v5/model_v5_xgboost.pkl",
-        inference_class="app.unified_inference.UnifiedInference",
+        inference_class="app.data_processing_registry.PipelineSelector",
         uses_barometer=True,
         acc_preprocessing="raw",
         baro_preprocessing="raw",
@@ -128,7 +128,7 @@ MODEL_CONFIGS: Dict[ModelType, ModelConfig] = {
         name="V1_TUNED",
         description="V1 with tuned hyperparameters (optimized for recall)",
         model_path="model/model_v1_tuned/model_v1_tuned.pkl",
-        inference_class="app.unified_inference.UnifiedInference",
+        inference_class="app.data_processing_registry.PipelineSelector",
         uses_barometer=True,
         acc_preprocessing="v1_features",
         baro_preprocessing="v1_ema",
@@ -140,7 +140,7 @@ MODEL_CONFIGS: Dict[ModelType, ModelConfig] = {
         name="V3_TUNED",
         description="V3 with tuned hyperparameters (optimized for recall)",
         model_path="model/model_v3_tuned/model_v3_tuned.pkl",
-        inference_class="app.unified_inference.UnifiedInference",
+        inference_class="app.data_processing_registry.PipelineSelector",
         uses_barometer=True,
         acc_preprocessing="v1_features",
         baro_preprocessing="v2_paper",
@@ -194,27 +194,27 @@ def get_model_config(model_type: ModelType) -> ModelConfig:
     return MODEL_CONFIGS[model_type]
 
 
-def load_inference_class(model_type: ModelType):
-    """
-    Dynamically load the inference class for a model type.
+# def load_inference_class(model_type: ModelType):
+#     """
+#     Dynamically load the inference class for a model type.
 
-    Args:
-        model_type: The model type to load
+#     Args:
+#         model_type: The model type to load
 
-    Returns:
-        The inference class (not instantiated)
-    """
-    config = get_model_config(model_type)
+#     Returns:
+#         The inference class (not instantiated)
+#     """
+#     config = get_model_config(model_type)
 
-    # Parse module path and class name
-    module_path, class_name = config.inference_class.rsplit('.', 1)
+#     # Parse module path and class name
+#     module_path, class_name = config.inference_class.rsplit('.', 1)
 
-    # Dynamic import
-    import importlib
-    module = importlib.import_module(module_path)
-    inference_class = getattr(module, class_name)
+#     # Dynamic import
+#     import importlib
+#     module = importlib.import_module(module_path)
+#     inference_class = getattr(module, class_name)
 
-    return inference_class
+#     return inference_class
 
 
 def get_model_path(model_type: ModelType, custom_path: Optional[str] = None) -> str:
