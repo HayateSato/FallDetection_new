@@ -29,8 +29,8 @@ from typing import Dict, Any, Optional, Tuple, Union
 import numpy as np
 
 from barometer_config import BarometerConfig
-from barometer_processor import BarometerProcessor, StreamingBarometerProcessor
-from barometer_processor_paper import (
+from app.data_input.barometer_processor.barometer_ema_filter import BarometerProcessor, StreamingBarometerProcessor
+from app.data_input.barometer_processor.barometer_slope_limit_paper import (
     PaperBarometerConfig,
     PaperBarometerProcessor,
     StreamingPaperBarometerProcessor

@@ -6,7 +6,7 @@ Supports both accelerometer and barometer data preprocessing with switchable
 barometer preprocessing versions (V1: dual-path EMA, V2: slope-limit from paper).
 """
 
-from typing import List, Tuple, Optional, Union
+from typing import List, Tuple
 import numpy as np
 from influxdb_client.client.flux_table import FluxRecord
 

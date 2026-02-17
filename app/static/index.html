@@ -520,7 +520,7 @@
 
         async function writeManualTruthMarker(value) {
             try {
-                const response = await fetch('/ground_truth/marker', {
+                const response = await fetch('/manual_truth/marker', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -617,7 +617,7 @@
                         recording_active: recordingActive,
                         participant_name: participantName,
                         participant_gender: participantGender,
-                        ground_truth_fall: 0
+                        manual_truth_fall: 0
                     })
                 });
 

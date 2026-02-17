@@ -21,7 +21,7 @@ from dataclasses import dataclass
 
 
 @dataclass
-class PaperAccelerometerConfig:
+class PaperMagnitudeAccelerometerProcessor:
     """
     Configuration for paper-based accelerometer processing.
 
@@ -108,7 +108,7 @@ class ImpactEvent:
     peak_time_ms: Optional[float] = None
 
 
-class PaperAccelerometerProcessor:
+class PaperMagnitudeAccelerometerProcessor:
     """
     Batch processor implementing the paper's accelerometer processing approach.
 
@@ -127,8 +127,8 @@ class PaperAccelerometerProcessor:
     --------
     Basic usage:
 
-    >>> config = PaperAccelerometerConfig(sample_rate=50.0)
-    >>> processor = PaperAccelerometerProcessor(config)
+    >>> config = PaperMagnitudeAccelerometerProcessor(sample_rate=50.0)
+    >>> processor = PaperMagnitudeAccelerometerProcessor(config)
     >>> magnitude = processor.compute_magnitude(acc_x, acc_y, acc_z)
     >>> events = processor.detect_impact_events(magnitude, timestamps)
 
@@ -139,13 +139,13 @@ class PaperAccelerometerProcessor:
     ...     print(f"Reference point: {event.reference_index}")
     """
 
-    def __init__(self, config: PaperAccelerometerConfig):
+    def __init__(self, config: PaperMagnitudeAccelerometerProcessor):
         """
         Initialize the paper-based accelerometer processor.
 
         Parameters
         ----------
-        config : PaperAccelerometerConfig
+        config : PaperMagnitudeAccelerometerProcessor
             Configuration object with processing parameters
         """
         self.config = config
@@ -372,19 +372,19 @@ class PaperAccelerometerProcessor:
 
         return magnitude, events
 
-    def get_config(self) -> PaperAccelerometerConfig:
+    def get_config(self) -> PaperMagnitudeAccelerometerProcessor:
         """Get current configuration."""
         return self.config
 
 
-class StreamingPaperAccelerometerProcessor:
+class StreamingPaperMagnitudeAccelerometerProcessor:
     """
     Real-time streaming processor for accelerometer data.
 
     Maintains a buffer and detects events in real-time.
     """
 
-    def __init__(self, config: PaperAccelerometerConfig):
+    def __init__(self, config: PaperMagnitudeAccelerometerProcessor):
         """Initialize streaming processor."""
         self.config = config
         self.buffer_size = config.total_patch_samples

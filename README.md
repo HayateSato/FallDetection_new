@@ -118,7 +118,7 @@ The Flask app provides a web-based dashboard for monitoring and data collection.
 |---------|-------------|
 | **Start/Stop Recording** | Toggle data collection on/off. When recording is active, sensor data is saved to CSV files. |
 | **Participant Name** | Free-text input field. The entered name is included in the exported CSV filename for easy identification (e.g., `fall_John_20260123_143022.csv`). |
-| **Annotation Marker** | Insert ground truth markers into the data stream. Use this button when a fall event occurs during data collection to mark the exact timestamp. |
+| **Annotation Marker** | Insert manual truth markers into the data stream. Use this button when a fall event occurs during data collection to mark the exact timestamp. |
 | **Real-time Status** | Displays current monitoring status, model version, and detection results. |
 
 ## Model Versions
@@ -251,7 +251,7 @@ Processes a CSV file with sliding windows for offline validation.
 | `/validate-csv` | POST | Validate specific CSV file |
 | `/model/info` | GET | Get current model information |
 | `/recording/state` | POST | Update recording state and participant info |
-| `/ground_truth/marker` | POST | Write ground truth annotation marker |
+| `/manual_truth/marker` | POST | Write manual truth annotation marker |
 | `/events` | GET | SSE stream for real-time notifications |
 | `/monitoring/status` | GET | Get monitoring status |
 | `/monitoring/stop` | POST | Stop continuous monitoring |
@@ -259,28 +259,29 @@ Processes a CSV file with sliding windows for offline validation.
 ## Directory Structure
 
 ```
-SmarKo_Fall_Detection/
+FallDetection/
 ├── main.py                     # Flask application entry point
 ├── requirements.txt            # Python dependencies
 ├── .env.example                # Environment variable template
 ├── docker-compose.yml          # InfluxDB local setup
 ├── config/
-│   └── settings.py             # Configuration loader
+│   └── settings.py             # Configuration loader (.env parsing)
 ├── app/
-│   ├── data_fetcher.py         # InfluxDB client
-│   ├── data_processor.py       # Sensor data extraction
-│   ├── model_registry.py       # Model version registry
-│   ├── unified_inference.py    # Unified inference engine
-│   ├── continuous_monitoring.py # Real-time monitoring loop
-│   └── preprocessor/           # Feature extraction modules
+│   ├── core/                   # Business logic: inference engine, model config, session state
+│   ├── services/               # Background workers: continuous monitoring thread
+│   ├── middleware/             # Request interceptors: API key auth, rate limiting, CORS
+│   ├── routes/                 # Flask blueprints (organizational container for event_handlers = route functions): /trigger, /recording, /monitoring endpoints
+│   ├── data_input/             # Inbound I/O: InfluxDB fetching, preprocessing, resampling, calibration
+│   ├── data_output/            # Outbound I/O: CSV export, InfluxDB marker writing
+│   ├── utils/                  # Shared helpers: logging, shared state (queues, locks)
+│   └── static/                 # Frontend: web dashboard (index.html)
 ├── model/
 │   ├── model_v0/               # V0 trained model (ACC only)
 │   └── model_v3/               # V3 trained model (ACC + BARO)
-├── Docu/
-│   └── FD_WatchUI.png         # Watch UI screenshot
+├── Docu/                       # Documentation and screenshots
 └── results/
     ├── logs/                   # Application logs
-    └── fall_data_exports/      # Exported CSV data
+    └── exported_flaskApp_data/ # Exported CSV detection data
 ```
 
 ## References

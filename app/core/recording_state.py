@@ -1,6 +1,24 @@
 """
-Global state manager for recording session data
-This allows continuous monitoring to access participant information and recording state
+State manager for recording session data (bridge between the frontend UI and the background monitoring thread)
+This allows continuous monitoring to access participant information and recording state, tracking:
+- Who is being monitored and 
+- Whether data collection is active. 
+
+-------------------------------
+FLOW
+-------------------------------
+Frontend UI (press "Start Recording")
+    ↓
+POST /recording/state  {recording_active: true, participant_name: "John"} = FastAPI route (event handler)
+    ↓
+recording_state stores it in memory
+    ↓
+Background monitoring thread (every 3s):
+    reads recording_state 
+    → sees recording_active=true
+    → runs detection 
+    → exports CSV with participant_name="John"
+
 """
 
 import threading
@@ -71,10 +89,10 @@ class RecordingState:
             else:
                 self._pending_gender = 0
 
-    def update_manual_truth(self, ground_truth: int):
-        """Update ground truth annotation"""
+    def update_manual_truth(self, manual_truth: int):
+        """Update manual truth annotation"""
         with self._state_lock:
-            self._pending_manual_truth = ground_truth
+            self._pending_manual_truth = manual_truth
 
     def get_current_state(self) -> dict:
         """Get current recording state"""
@@ -83,7 +101,7 @@ class RecordingState:
                 'recording_active': self._recording_active,
                 'participant_name': self._participant_name,
                 'participant_gender': self._participant_gender,
-                'ground_truth_fall': self._manual_truth_fall
+                'manual_truth_fall': self._manual_truth_fall
             }
 
     def get_active_values(self) -> tuple:

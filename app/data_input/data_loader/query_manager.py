@@ -4,7 +4,7 @@ Builds and executes Flux queries for sensor data retrieval.
 """
 
 import logging
-from app.data_fetcher import fetch_data
+from app.data_input.data_loader.data_fetcher import fetch_data
 from config import settings
 
 logger = logging.getLogger(__name__)

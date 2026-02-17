@@ -42,7 +42,7 @@ POST /trigger
 {
   "participant_name": "John Doe",
   "participant_gender": "male",
-  "ground_truth_fall": 0
+  "manual_truth_fall": 0
 }
 ```
 
@@ -50,7 +50,7 @@ POST /trigger
 |-------|------|----------|-------------|
 | `participant_name` | string | No | Name of the participant (default: "unknown") |
 | `participant_gender` | string | No | Gender: "male", "female", or "other" (default: "unknown") |
-| `ground_truth_fall` | integer | No | 1 if this is a known fall event, 0 otherwise (default: 0) |
+| `manual_truth_fall` | integer | No | 1 if this is a known fall event, 0 otherwise (default: 0) |
 
 #### Response
 
@@ -75,7 +75,7 @@ POST /trigger
   "baro_samples": 225,
   "participant_name": "John Doe",
   "participant_gender": "male",
-  "ground_truth_fall": 0
+  "manual_truth_fall": 0
 }
 ```
 
@@ -172,7 +172,7 @@ response = requests.post(
     json={
         "participant_name": "Test User",
         "participant_gender": "male",
-        "ground_truth_fall": 0
+        "manual_truth_fall": 0
     }
 )
 
@@ -204,7 +204,7 @@ async function detectFall() {
     {
       participant_name: 'Test User',
       participant_gender: 'male',
-      ground_truth_fall: 0
+      manual_truth_fall: 0
     },
     {
       headers: {

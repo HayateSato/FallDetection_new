@@ -2,7 +2,7 @@
 Continuous Monitoring Module for Fall Detection System.
 
 Periodically fetches sensor data from InfluxDB and runs fall detection
-using the UnifiedInference engine.
+using the PipelineSelector engine.
 """
 import threading
 import time
@@ -13,10 +13,10 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional, Callable
 import logging
 
-from app.data_fetcher import fetch_data
-from app.data_processor import preprocess_acc, preprocess_barometer
-from app.unified_inference import UnifiedInference
-from app.recording_state import recording_state
+from app.data_input.data_loader.data_fetcher import fetch_data
+from app.data_input.data_processor import preprocess_acc, preprocess_barometer
+from app.core.inference_engine import PipelineSelector
+from app.core.recording_state import recording_state
 
 from config.settings import (
     INFLUXDB_BUCKET,
@@ -39,8 +39,8 @@ from config.settings import (
     BAROMETER_ENABLED,
     SENSOR_CALIBRATION_ENABLED,
 )
-from app.resampler import AccelerometerResampler
-from app.sensor_calibration import transform_acc_array as calibrate_non_bosch_to_bosch
+from app.data_input.resampler import AccelerometerResampler
+from app.data_input.accelerometer_processor.nonbosch_calibration import transform_acc_array as calibrate_non_bosch_to_bosch
 
 logger = logging.getLogger(__name__)
 
@@ -49,12 +49,12 @@ class ContinuousMonitor:
     """
     Continuous monitoring class that periodically checks for falls.
 
-    Runs in a background thread and uses UnifiedInference for fall detection.
+    Runs in a background thread and uses PipelineSelector for fall detection.
     """
 
     def __init__(
         self,
-        inference_engine: UnifiedInference,
+        inference_engine: PipelineSelector,
         notification_queue: Optional[queue.Queue] = None,
         export_callback: Optional[Callable] = None,
         notification_callback: Optional[Callable] = None
@@ -63,7 +63,7 @@ class ContinuousMonitor:
         Initialize the continuous monitor.
 
         Args:
-            inference_engine: UnifiedInference instance for fall detection
+            inference_engine: PipelineSelector instance for fall detection
             notification_queue: Queue for sending fall notifications (SSE)
             export_callback: Optional callback for exporting detection data
             notification_callback: Optional callback called with fall data dict (for polling)
@@ -222,7 +222,7 @@ class ContinuousMonitor:
                     confidence=confidence,
                     participant_name=state.get('participant_name', 'unknown'),
                     participant_gender=state.get('participant_gender', 'unknown'),
-                    ground_truth_fall=state.get('ground_truth_fall', 0),
+                    manual_truth_fall=state.get('manual_truth_fall', 0),
                     timestamp_utc=timestamp
                 )
 
