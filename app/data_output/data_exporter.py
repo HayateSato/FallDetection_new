@@ -14,6 +14,7 @@ from config.settings import (
     COLLECT_ADDITIONAL_SENSORS,
     FALL_DATA_EXPORT_DIR,
     TIMEZONE_OFFSET_HOURS,
+    ACC_SENSOR_SENSITIVITY,
 )
 from app.utils import shared_state
 
@@ -21,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def convert_to_dataframe(acc_data: np.ndarray, acc_time: np.ndarray,
-                          acc_scale_factor: float = 1.0 / 16384.0) -> pd.DataFrame:
+                          acc_scale_factor: float = 1.0 / ACC_SENSOR_SENSITIVITY) -> pd.DataFrame:
     """Convert accelerometer arrays to DataFrame format."""
     return pd.DataFrame({
         'Device_Timestamp_[ms]': acc_time,

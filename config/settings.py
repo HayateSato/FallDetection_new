@@ -22,7 +22,7 @@ FLASK_PORT = os.getenv("FLASK_PORT", 8000)
 # =============================================================================
 
 # Model version to use (v0, v1, v2, v3, v4, v5, v1_tuned, v3_tuned)
-MODEL_VERSION = os.getenv('MODEL_VERSION', 'v3').lower()
+MODEL_VERSION = os.getenv('MODEL_VERSION', 'v0').lower()
 
 # Optional custom model path (overrides default for selected version)
 MODEL_PATH_OVERRIDE = os.getenv('MODEL_PATH', None)
@@ -69,6 +69,8 @@ else:
 # The transformation uses a pre-computed matrix from calibration data
 SENSOR_CALIBRATION_ENABLED = ACC_SENSOR_TYPE == 'non_bosch'
 
+ACC_SENSOR_SENSITIVITY = float(os.getenv('SENSOR_SENSITIVITY', '4096'))  # LSB/g for the accelerometer (default is 16384 for ±2g range)
+
 # =============================================================================
 # SAMPLING RATE CONFIGURATION
 # =============================================================================
@@ -112,7 +114,7 @@ SAMPLING_RATE = ACC_SAMPLE_RATE
 # For other models, barometer is enabled by default but can be manually disabled
 _BARO_MANUAL_OVERRIDE = os.getenv('BAROMETER_ENABLED', None)
 
-if MODEL_VERSION == 'v0':
+if MODEL_VERSION == 'v0' or MODEL_VERSION == 'v0_lsb_int':
     # V0 model doesn't use barometer - always disabled
     BAROMETER_ENABLED = False
     BARO_SAMPLE_RATE = 0
@@ -190,26 +192,19 @@ def get_model_path() -> str:
     """
     Get the model file path based on MODEL_VERSION setting.
 
+    If MODEL_PATH is set in .env, that override takes priority.
+    Otherwise, the path is looked up from the model registry (single source of truth).
+
     Returns:
         Path to the model file
     """
     if MODEL_PATH_OVERRIDE:
         return MODEL_PATH_OVERRIDE
 
-    # Default paths for each version
-    default_paths = {
-        'v0': 'model/model_v0/model_v0_xgboost.pkl',
-        # 'v1': 'model/model_v1/model_v1_xgboost.pkl',
-        # 'v2': 'model/model_v2/model_v2_xgboost.pkl',
-        'v3': 'model/model_v3/model_v3_xgboost.pkl',
-    #     'v4': 'model/model_v4/model_v4_xgboost.pkl',
-    #     'v5': 'model/model_v5/model_v5_xgboost.pkl',
-    #     'v1_tuned': 'model/model_v1_tuned/model_v1_tuned.pkl',
-    #     'v3_tuned': 'model/model_v3_tuned/model_v3_tuned.pkl',
-    }
-
-    version_lower = MODEL_VERSION.lower()
-    return default_paths.get(version_lower, default_paths['v3'])
+    # Fall back to registry's canonical path (avoids maintaining a duplicate dict here)
+    from app.core.model_registry import get_model_type, get_model_path as registry_get_model_path
+    model_type = get_model_type(MODEL_VERSION)
+    return registry_get_model_path(model_type)
 
 # Set MODEL_PATH for backward compatibility
 MODEL_PATH = get_model_path()

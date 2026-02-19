@@ -30,8 +30,10 @@ class ModelType(Enum):
     V3 = "v3"
     V4 = "v4"
     V5 = "v5"
+    V0_LSB_INT = "v0_lsb_int"
     V1_TUNED = "v1_tuned"
     V3_TUNED = "v3_tuned"
+    V5_LSB = "v5_LSB"
 
 
 @dataclass
@@ -56,6 +58,18 @@ MODEL_CONFIGS: Dict[ModelType, ModelConfig] = {
         name="V0",
         description="ACC only: Statistical features (no barometer, baseline)",
         model_path="model/model_v0/model_v0_xgboost.pkl",
+        inference_class="app.data_processing_registry.PipelineSelector",
+        uses_barometer=False,
+        acc_preprocessing="v1_features",
+        baro_preprocessing="none",
+        num_features=16,
+        acc_features=16,
+        baro_features=0,
+    ),
+        ModelType.V0_LSB_INT: ModelConfig(
+        name="V0_LSB_INT",
+        description="ACC only: Statistical features (no barometer, baseline)",
+        model_path="model/model_v0_int/model_v0_int_xgboost.pkl",
         inference_class="app.data_processing_registry.PipelineSelector",
         uses_barometer=False,
         acc_preprocessing="v1_features",
@@ -148,6 +162,18 @@ MODEL_CONFIGS: Dict[ModelType, ModelConfig] = {
         acc_features=16,
         baro_features=4,
     ),
+    ModelType.V5_LSB: ModelConfig(
+        name="V5_LSB",
+        description="Raw features with minimal preprocessing (LSB version)",
+        model_path="model/model_v5_lsb/model_v5_lsb_xgboost.pkl",
+        inference_class="app.data_processing_registry.PipelineSelector",
+        uses_barometer=True,
+        acc_preprocessing="raw",
+        baro_preprocessing="raw",
+        num_features=22,
+        acc_features=16,
+        baro_features=6,
+    ),
 }
 
 
@@ -169,11 +195,13 @@ def get_model_type(version_string: str) -> ModelType:
     # Handle various naming conventions
     version_map = {
         'v0': ModelType.V0,
+        'v0_lsb_int': ModelType.V0_LSB_INT,
         'v1': ModelType.V1,
         'v2': ModelType.V2,
         'v3': ModelType.V3,
         'v4': ModelType.V4,
         'v5': ModelType.V5,
+        'v5_lsb': ModelType.V5_LSB,
         'v1_tuned': ModelType.V1_TUNED,
         'v3_tuned': ModelType.V3_TUNED,
     }
@@ -194,27 +222,27 @@ def get_model_config(model_type: ModelType) -> ModelConfig:
     return MODEL_CONFIGS[model_type]
 
 
-# def load_inference_class(model_type: ModelType):
-#     """
-#     Dynamically load the inference class for a model type.
+def load_inference_class(model_type: ModelType):
+    """
+    Dynamically load the inference class for a model type.
 
-#     Args:
-#         model_type: The model type to load
+    Args:
+        model_type: The model type to load
 
-#     Returns:
-#         The inference class (not instantiated)
-#     """
-#     config = get_model_config(model_type)
+    Returns:
+        The inference class (not instantiated)
+    """
+    config = get_model_config(model_type)
 
-#     # Parse module path and class name
-#     module_path, class_name = config.inference_class.rsplit('.', 1)
+    # Parse module path and class name
+    module_path, class_name = config.inference_class.rsplit('.', 1)
 
-#     # Dynamic import
-#     import importlib
-#     module = importlib.import_module(module_path)
-#     inference_class = getattr(module, class_name)
+    # Dynamic import
+    import importlib
+    module = importlib.import_module(module_path)
+    inference_class = getattr(module, class_name)
 
-#     return inference_class
+    return inference_class
 
 
 def get_model_path(model_type: ModelType, custom_path: Optional[str] = None) -> str:

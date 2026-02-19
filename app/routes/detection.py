@@ -6,36 +6,21 @@ runs inference, and returns results.
 """
 import os
 import logging
-import numpy as np
 from datetime import datetime, timezone
 from flask import Blueprint, jsonify, request, current_app
 from typing import Tuple
 
-from app.data_input.data_loader.data_fetcher import fetch_data
-from app.data_input.data_processor import preprocess_acc, preprocess_barometer
 from app.utils.model_logger import model_logger
-from app.data_input.accelerometer_processor.resampler import AccelerometerResampler
-from app.data_input.accelerometer_processor.nonbosch_calibration import transform_acc_array as calibrate_non_bosch_to_bosch
 from app.data_input.data_loader.csv_dataloader import process_csv_file
+from app.data_input.sensor_data_reader import fetch_and_preprocess_sensor_data
 from app.middleware.api_security import require_api_key
 from app.data_output.data_exporter import convert_to_dataframe, extract_window, export_detection_data
 
 from config.settings import (
     MODEL_VERSION,
-    BAROMETER_FIELD,
     WINDOW_SIZE_SECONDS,
     ACC_SAMPLE_RATE,
-    INFLUXDB_BUCKET,
-    HARDWARE_ACC_SAMPLE_RATE,
-    MODEL_ACC_SAMPLE_RATE,
-    BAROMETER_ENABLED,
-    UPSAMPLING_ENABLED,
-    RESAMPLING_ENABLED,
-    RESAMPLING_METHOD,
-    ACC_FIELD_X,
-    ACC_FIELD_Y,
-    ACC_FIELD_Z,
-    SENSOR_CALIBRATION_ENABLED,
+    ACC_SENSOR_SENSITIVITY,
 )
 
 logger = logging.getLogger(__name__)
@@ -106,32 +91,16 @@ def trigger() -> Tuple:
     print("="*70)
 
     try:
-        # STEP 1: FETCH DATA FROM INFLUXDB
+        # STEP 1+2: FETCH AND PREPROCESS DATA FROM INFLUXDB
         query_start_time = datetime.now(timezone.utc)
         model_logger.log_data_fetch_start(query_start_time)
 
-        fields_filter = f'r["_field"] == "{ACC_FIELD_X}" or r["_field"] == "{ACC_FIELD_Y}" or r["_field"] == "{ACC_FIELD_Z}"'
+        acc_data, acc_time, pressure, pressure_time, flux_objects = fetch_and_preprocess_sensor_data(
+            uses_barometer=inference_engine.uses_barometer(),
+            lookback_seconds=30,
+        )
 
-        if BAROMETER_ENABLED and inference_engine.uses_barometer():
-            fields_filter += f' or r["_field"] == "{BAROMETER_FIELD}"'
-
-        fields_filter += ' or r["_field"] == "manual_truth_marker" or r["_field"] == "user_feedback"'
-
-        query = f'''from(bucket: "{INFLUXDB_BUCKET}")
-          |> range(start: -30s)
-          |> filter(fn: (r) => {fields_filter})
-        '''
-
-        tables = fetch_data(query)
-
-        flux_objects = []
-        for table in tables:
-            for record in table.records:
-                flux_objects.append(record)
-
-        model_logger.log_data_fetch_complete(len(tables), len(flux_objects))
-
-        if len(flux_objects) == 0:
+        if acc_data is None:
             error_msg = "No data found in InfluxDB for this time range"
             model_logger.log_error(error_msg)
             return jsonify({
@@ -139,60 +108,17 @@ def trigger() -> Tuple:
                 "error": "No sensor data available"
             }), 404
 
-        # STEP 2: PREPROCESS DATA
-        model_logger.log_preprocessing_start()
-
-        try:
-            acc_data, acc_time = preprocess_acc(
-                flux_objects,
-                acc_field_x=ACC_FIELD_X,
-                acc_field_y=ACC_FIELD_Y,
-                acc_field_z=ACC_FIELD_Z
-            )
-
-            original_acc_samples = acc_data.shape[1]
-            acc_duration = (acc_time[-1] - acc_time[0]) / 1000.0 if len(acc_time) > 1 else 0
-
-            if RESAMPLING_ENABLED:
-                resampler = AccelerometerResampler(
-                    source_rate=HARDWARE_ACC_SAMPLE_RATE,
-                    target_rate=MODEL_ACC_SAMPLE_RATE,
-                    method=RESAMPLING_METHOD
-                )
-                acc_data, acc_time = resampler.process(acc_data, acc_time)
-                resample_type = "Upsampled" if UPSAMPLING_ENABLED else "Downsampled"
-                print(f"  {resample_type}: {original_acc_samples} -> {acc_data.shape[1]} samples ({HARDWARE_ACC_SAMPLE_RATE}Hz -> {MODEL_ACC_SAMPLE_RATE}Hz)")
-
-            if SENSOR_CALIBRATION_ENABLED:
-                acc_data = calibrate_non_bosch_to_bosch(acc_data)
-                print(f"  Calibration: Applied non_bosch -> bosch transformation")
-
-            pressure = np.array([])
-            pressure_time = np.array([])
-
-            if BAROMETER_ENABLED and inference_engine.uses_barometer():
-                pressure, pressure_time = preprocess_barometer(flux_objects, BAROMETER_FIELD)
-
-            print(f"  ACC samples: {acc_data.shape[1]}, duration: {acc_duration:.1f}s")
-            print(f"  BARO samples: {len(pressure)}")
-
-            model_logger.log_preprocessing_complete(
-                acc_samples=acc_data.shape[1],
-                duration=acc_duration
-            )
-
-        except Exception as e:
-            model_logger.log_error("Error preprocessing data", e)
-            return jsonify({
-                "message": "Data preprocessing failed",
-                "error": str(e)
-            }), 500
+        acc_duration = (acc_time[-1] - acc_time[0]) / 1000.0 if len(acc_time) > 1 else 0
+        model_logger.log_data_fetch_complete(len(flux_objects), len(flux_objects))
+        model_logger.log_preprocessing_complete(acc_samples=acc_data.shape[1], duration=acc_duration)
+        print(f"  ACC samples: {acc_data.shape[1]}, duration: {acc_duration:.1f}s")
+        print(f"  BARO samples: {len(pressure)}")
 
         # STEP 3: CONVERT TO DATAFRAME
         model_logger.log_dataframe_conversion_start()
 
         try:
-            acc_scale_factor = 1.0 / 16384.0
+            acc_scale_factor = 1.0 / ACC_SENSOR_SENSITIVITY
             df = convert_to_dataframe(acc_data, acc_time, acc_scale_factor)
 
             time_diffs = df['Device_Timestamp_[ms]'].diff().dropna()

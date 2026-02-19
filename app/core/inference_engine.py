@@ -96,9 +96,9 @@ class PipelineSelector:
         # Initialize ACC preprocessor
         if self.config.acc_preprocessing == 'v2_paper':
             from app.data_input.accelerometer_processor.magnitude_based_acc_processor_paper import (
-                PaperMagnitudeAccelerometerProcessorConfig, PaperMagnitudeAccelerometerProcessor
+                PaperMagnitudeAccelerometerConfig, PaperMagnitudeAccelerometerProcessor
             )
-            acc_config = PaperMagnitudeAccelerometerProcessorConfig(
+            acc_config = PaperMagnitudeAccelerometerConfig(
                 impact_threshold_g=4.0,
                 crossing_threshold_g=1.0,
                 sample_rate=50.0,
@@ -303,6 +303,15 @@ class PipelineSelector:
                 ],
                 "baro_features": [],  # V0 has no barometer features
             },
+            ModelType.V0_LSB_INT: {
+                "acc_features": [
+                    "acc_x_min", "acc_x_max", "acc_x_mean", "acc_x_var",
+                    "acc_y_min", "acc_y_max", "acc_y_mean", "acc_y_var",
+                    "acc_z_min", "acc_z_max", "acc_z_mean", "acc_z_var",
+                    "acc_mag_min", "acc_mag_max", "acc_mag_mean", "acc_mag_var",
+                ],
+                "baro_features": [],  # V0_INT has no barometer features
+            },
             ModelType.V1: {
                 "acc_features": [
                     "acc_x_min", "acc_x_max", "acc_x_mean", "acc_x_var",
@@ -348,6 +357,18 @@ class PipelineSelector:
                 ],
             },
             ModelType.V5: {
+                "acc_features": [
+                    "raw_acc_x_min", "raw_acc_x_max", "raw_acc_x_mean", "raw_acc_x_var",
+                    "raw_acc_y_min", "raw_acc_y_max", "raw_acc_y_mean", "raw_acc_y_var",
+                    "raw_acc_z_min", "raw_acc_z_max", "raw_acc_z_mean", "raw_acc_z_var",
+                    "raw_acc_mag_min", "raw_acc_mag_max", "raw_acc_mag_mean", "raw_acc_mag_var",
+                ],
+                "baro_features": [
+                    "raw_pressure_min", "raw_pressure_max", "raw_pressure_mean", "raw_pressure_var",
+                    "raw_pressure_range", "raw_pressure_slope",
+                ],
+            },
+            ModelType.V5_LSB: {
                 "acc_features": [
                     "raw_acc_x_min", "raw_acc_x_max", "raw_acc_x_mean", "raw_acc_x_var",
                     "raw_acc_y_min", "raw_acc_y_max", "raw_acc_y_mean", "raw_acc_y_var",

@@ -12,6 +12,7 @@ from app.core.inference_engine import PipelineSelector
 # Import settings
 from config.settings import (
     WINDOW_SIZE_SECONDS,
+    ACC_SENSOR_SENSITIVITY,
 )
 CSV_WINDOW_INTERVAL_SECONDS = float(os.getenv('CSV_WINDOW_INTERVAL_SECONDS', '1.0'))
 
@@ -89,7 +90,7 @@ class CSVDataLoader:
             return None, None, None
 
         # Convert to expected format (with g conversion)
-        acc_scale_factor = 1.0 / 16384.0
+        acc_scale_factor = 1.0 / ACC_SENSOR_SENSITIVITY
 
         window_df = pd.DataFrame({
             'Device_Timestamp_[ms]': acc_window['timestamp'].values,

@@ -1,0 +1,49 @@
+{
+  "model_version": "v0",
+  "pipeline_type": "integer",
+  "description": "INT ACC only: Statistical features on raw sensor values, No barometer",
+  "acc_preprocessing": "v1_features_int",
+  "baro_preprocessing": "none",
+  "xgb_config": {
+    "n_estimators": 100,
+    "max_depth": 6,
+    "min_child_weight": 1,
+    "learning_rate": 0.1,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "reg_alpha": 0.0,
+    "reg_lambda": 1.0,
+    "objective": "binary:logistic",
+    "eval_metric": "logloss",
+    "random_state": 42,
+    "n_jobs": -1,
+    "use_label_encoder": false
+  },
+  "feature_names": [
+    "acc_x_min",
+    "acc_x_max",
+    "acc_x_mean",
+    "acc_x_var",
+    "acc_y_min",
+    "acc_y_max",
+    "acc_y_mean",
+    "acc_y_var",
+    "acc_z_min",
+    "acc_z_max",
+    "acc_z_mean",
+    "acc_z_var",
+    "acc_mag_min",
+    "acc_mag_max",
+    "acc_mag_mean",
+    "acc_mag_var"
+  ],
+  "integer_config": {
+    "acc_lsb_per_g": 4096,
+    "ema_pressure_scale": 100,
+    "ema_fast_alpha_num": 2427,
+    "ema_fast_alpha_shift": 15,
+    "ema_base_alpha_num": 1397,
+    "ema_base_alpha_shift": 20,
+    "slope_scale": 1000
+  }
+}
