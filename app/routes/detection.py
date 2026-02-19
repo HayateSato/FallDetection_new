@@ -14,7 +14,7 @@ from typing import Tuple
 from app.data_input.data_loader.data_fetcher import fetch_data
 from app.data_input.data_processor import preprocess_acc, preprocess_barometer
 from app.utils.model_logger import model_logger
-from app.data_input.resampler import AccelerometerResampler
+from app.data_input.accelerometer_processor.resampler import AccelerometerResampler
 from app.data_input.accelerometer_processor.nonbosch_calibration import transform_acc_array as calibrate_non_bosch_to_bosch
 from app.data_input.data_loader.csv_dataloader import process_csv_file
 from app.middleware.api_security import require_api_key

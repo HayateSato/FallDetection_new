@@ -51,8 +51,6 @@ Date: 2026-01-20
 """
 
 import numpy as np
-from typing import Tuple, Union
-
 
 # =============================================================================
 # CALIBRATION PARAMETERS
@@ -88,51 +86,6 @@ CALIBRATION_INFO = {
 # =============================================================================
 # TRANSFORMATION FUNCTIONS
 # =============================================================================
-
-def transform_non_bosch_to_bosch(
-    acc_x: Union[float, np.ndarray],
-    acc_y: Union[float, np.ndarray],
-    acc_z: Union[float, np.ndarray]
-) -> Tuple[Union[float, np.ndarray], Union[float, np.ndarray], Union[float, np.ndarray]]:
-    """
-    Transform non_bosch accelerometer values to bosch-equivalent values.
-
-    This applies a linear transformation (rotation + scaling + offset) that was
-    computed by aligning time-synced readings from both sensors.
-
-    Args:
-        acc_x: Non-bosch X-axis value(s) in raw sensor units
-        acc_y: Non-bosch Y-axis value(s) in raw sensor units
-        acc_z: Non-bosch Z-axis value(s) in raw sensor units
-
-    Returns:
-        Tuple of (bosch_x, bosch_y, bosch_z) in bosch-equivalent units
-
-    Example:
-        # Single value
-        bx, by, bz = transform_non_bosch_to_bosch(-500, 270, -180)
-
-        # Batch (numpy arrays)
-        bx, by, bz = transform_non_bosch_to_bosch(
-            np.array([-500, -510, -505]),
-            np.array([270, 275, 268]),
-            np.array([-180, -175, -182])
-        )
-    """
-    # Stack into matrix form
-    non_bosch = np.array([acc_x, acc_y, acc_z])
-
-    # Apply transformation: bosch = A @ non_bosch + offset
-    if non_bosch.ndim == 1:
-        # Single sample: (3,)
-        bosch = TRANSFORM_MATRIX @ non_bosch + TRANSFORM_OFFSET
-    else:
-        # Batch: (3, N)
-        bosch = TRANSFORM_MATRIX @ non_bosch + TRANSFORM_OFFSET.reshape(3, 1)
-
-    return bosch[0], bosch[1], bosch[2]
-
-
 def transform_acc_array(acc_data: np.ndarray) -> np.ndarray:
     """
     Transform accelerometer data array from non_bosch to bosch-equivalent values.
@@ -163,138 +116,45 @@ def transform_acc_array(acc_data: np.ndarray) -> np.ndarray:
     return transformed
 
 
-class SensorCalibrator:
-    """
-    Sensor calibration class for transforming non_bosch to bosch-equivalent values.
+# def transform_non_bosch_to_bosch(
+#     acc_x: Union[float, np.ndarray],
+#     acc_y: Union[float, np.ndarray],
+#     acc_z: Union[float, np.ndarray]
+# ) -> Tuple[Union[float, np.ndarray], Union[float, np.ndarray], Union[float, np.ndarray]]:
+#     """
+#     Transform non_bosch accelerometer values to bosch-equivalent values.
 
-    This class wraps the transformation functions and provides additional
-    functionality like calibration info and batch processing.
+#     This applies a linear transformation (rotation + scaling + offset) that was
+#     computed by aligning time-synced readings from both sensors.
 
-    Attributes:
-        transform_matrix: The 3x3 rotation/scaling matrix
-        transform_offset: The 3x1 bias offset vector
-        calibration_info: Dictionary with calibration metadata
+#     Args:
+#         acc_x: Non-bosch X-axis value(s) in raw sensor units
+#         acc_y: Non-bosch Y-axis value(s) in raw sensor units
+#         acc_z: Non-bosch Z-axis value(s) in raw sensor units
 
-    Example:
-        calibrator = SensorCalibrator()
+#     Returns:
+#         Tuple of (bosch_x, bosch_y, bosch_z) in bosch-equivalent units
 
-        # Transform single sample
-        bx, by, bz = calibrator.transform_single(-500, 270, -180)
+#     Example:
+#         # Single value
+#         bx, by, bz = transform_non_bosch_to_bosch(-500, 270, -180)
 
-        # Transform batch
-        acc_calibrated = calibrator.transform(acc_data)  # (3, N) -> (3, N)
+#         # Batch (numpy arrays)
+#         bx, by, bz = transform_non_bosch_to_bosch(
+#             np.array([-500, -510, -505]),
+#             np.array([270, 275, 268]),
+#             np.array([-180, -175, -182])
+#         )
+#     """
+#     # Stack into matrix form
+#     non_bosch = np.array([acc_x, acc_y, acc_z])
 
-        # Get calibration info
-        print(f"R² values: {calibrator.calibration_info}")
-    """
+#     # Apply transformation: bosch = A @ non_bosch + offset
+#     if non_bosch.ndim == 1:
+#         # Single sample: (3,)
+#         bosch = TRANSFORM_MATRIX @ non_bosch + TRANSFORM_OFFSET
+#     else:
+#         # Batch: (3, N)
+#         bosch = TRANSFORM_MATRIX @ non_bosch + TRANSFORM_OFFSET.reshape(3, 1)
 
-    def __init__(self):
-        """Initialize calibrator with pre-computed transformation parameters."""
-        self.transform_matrix = TRANSFORM_MATRIX.copy()
-        self.transform_offset = TRANSFORM_OFFSET.copy()
-        self.calibration_info = CALIBRATION_INFO.copy()
-
-    def transform(self, acc_data: np.ndarray) -> np.ndarray:
-        """
-        Transform accelerometer data array.
-
-        Args:
-            acc_data: Shape (3, N) array of [X, Y, Z] values
-
-        Returns:
-            Transformed array with same shape
-        """
-        return transform_acc_array(acc_data)
-
-    def transform_single(
-        self,
-        acc_x: float,
-        acc_y: float,
-        acc_z: float
-    ) -> Tuple[float, float, float]:
-        """
-        Transform a single accelerometer reading.
-
-        Args:
-            acc_x: X-axis value
-            acc_y: Y-axis value
-            acc_z: Z-axis value
-
-        Returns:
-            Tuple of (bosch_x, bosch_y, bosch_z)
-        """
-        return transform_non_bosch_to_bosch(acc_x, acc_y, acc_z)
-
-    def get_accuracy_report(self) -> str:
-        """Get a formatted string describing calibration accuracy."""
-        info = self.calibration_info
-        return f"""Sensor Calibration Accuracy Report
-===================================
-Method: {info['method']}
-Calibration samples: {info['num_samples']}
-Recording sessions: {info['num_sessions']}
-
-Axis-wise R² (coefficient of determination):
-  X-axis: {info['r2_x']:.4f} ({info['r2_x']*100:.1f}% variance explained)
-  Y-axis: {info['r2_y']:.4f} ({info['r2_y']*100:.1f}% variance explained)
-  Z-axis: {info['r2_z']:.4f} ({info['r2_z']*100:.1f}% variance explained)
-
-Axis-wise RMSE (root mean square error):
-  X-axis: {info['rmse_x']:.1f} raw units
-  Y-axis: {info['rmse_y']:.1f} raw units
-  Z-axis: {info['rmse_z']:.1f} raw units
-
-Magnitude correlation: {info['magnitude_correlation']:.4f}
-
-Note: R² values indicate moderate approximation quality.
-Results may not match bosch sensor performance exactly.
-"""
-
-
-# =============================================================================
-# UTILITY FUNCTIONS
-# =============================================================================
-
-def is_calibration_enabled() -> bool:
-    """Check if sensor calibration should be applied based on settings."""
-    try:
-        from config.settings import ACC_SENSOR_TYPE
-        return ACC_SENSOR_TYPE.lower() == 'non_bosch'
-    except ImportError:
-        return False
-
-
-def get_calibration_info() -> dict:
-    """Get calibration metadata dictionary."""
-    return CALIBRATION_INFO.copy()
-
-
-# =============================================================================
-# CLI TEST
-# =============================================================================
-
-if __name__ == "__main__":
-    # Test the calibration
-    print("Sensor Calibration Module Test")
-    print("=" * 50)
-
-    calibrator = SensorCalibrator()
-    print(calibrator.get_accuracy_report())
-
-    # Test single sample transform
-    test_x, test_y, test_z = -500, 270, -180
-    bx, by, bz = calibrator.transform_single(test_x, test_y, test_z)
-    print(f"\nTest transformation:")
-    print(f"  Input (non_bosch):  X={test_x}, Y={test_y}, Z={test_z}")
-    print(f"  Output (bosch-eq):  X={bx:.1f}, Y={by:.1f}, Z={bz:.1f}")
-
-    # Test batch transform
-    test_data = np.array([
-        [-500, -510, -505],
-        [270, 275, 268],
-        [-180, -175, -182]
-    ])
-    transformed = calibrator.transform(test_data)
-    print(f"\nBatch transformation:")
-    print(f"  Input shape: {test_data.shape}")
-    print(f"  Output shape: {transformed.shape}")
+#     return bosch[0], bosch[1], bosch[2]

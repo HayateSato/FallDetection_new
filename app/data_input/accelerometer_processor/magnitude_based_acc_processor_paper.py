@@ -21,7 +21,7 @@ from dataclasses import dataclass
 
 
 @dataclass
-class PaperMagnitudeAccelerometerProcessor:
+class PaperMagnitudeAccelerometerConfig:
     """
     Configuration for paper-based accelerometer processing.
 
@@ -127,7 +127,7 @@ class PaperMagnitudeAccelerometerProcessor:
     --------
     Basic usage:
 
-    >>> config = PaperMagnitudeAccelerometerProcessor(sample_rate=50.0)
+    >>> config = PaperMagnitudeAccelerometerConfig(sample_rate=50.0)
     >>> processor = PaperMagnitudeAccelerometerProcessor(config)
     >>> magnitude = processor.compute_magnitude(acc_x, acc_y, acc_z)
     >>> events = processor.detect_impact_events(magnitude, timestamps)
@@ -145,7 +145,7 @@ class PaperMagnitudeAccelerometerProcessor:
 
         Parameters
         ----------
-        config : PaperMagnitudeAccelerometerProcessor
+        config : PaperMagnitudeAccelerometerConfig
             Configuration object with processing parameters
         """
         self.config = config
@@ -384,7 +384,7 @@ class StreamingPaperMagnitudeAccelerometerProcessor:
     Maintains a buffer and detects events in real-time.
     """
 
-    def __init__(self, config: PaperMagnitudeAccelerometerProcessor):
+    def __init__(self, config: PaperMagnitudeAccelerometerConfig):
         """Initialize streaming processor."""
         self.config = config
         self.buffer_size = config.total_patch_samples

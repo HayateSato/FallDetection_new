@@ -39,7 +39,7 @@ from config.settings import (
     BAROMETER_ENABLED,
     SENSOR_CALIBRATION_ENABLED,
 )
-from app.data_input.resampler import AccelerometerResampler
+from app.data_input.accelerometer_processor.resampler import AccelerometerResampler
 from app.data_input.accelerometer_processor.nonbosch_calibration import transform_acc_array as calibrate_non_bosch_to_bosch
 
 logger = logging.getLogger(__name__)

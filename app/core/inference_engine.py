@@ -19,9 +19,7 @@ if str(_analysis_dir) not in sys.path:
 
 from .model_registry import (
     ModelType, 
-    # ModelConfig, 
     get_model_type, get_model_config,
-    # load_inference_class, 
     get_model_path
 )
 
@@ -30,6 +28,17 @@ class PipelineSelector:
     """
     Unified inference engine that automatically selects the correct
     preprocessing pipeline based on model version.
+
+    Version 1 - Dual-path EMA (Original):
+    - Median filter + dual-path EMA filtering
+    - Outputs: h_filtered, h_fast, h_base, delta_h
+    - Good for continuous monitoring with slow drift compensation
+
+    Version 2 - Slope-limit (Paper):
+    - Slope-limit filter + moving average
+    - Outputs: filtered_pressure, features (pressure_shift, middle_slope, post_fall_slope)
+    - Designed for event-triggered detection with robust spike removal
+
 
     Usage:
         >>> engine = PipelineSelector('v3')
@@ -87,9 +96,9 @@ class PipelineSelector:
         # Initialize ACC preprocessor
         if self.config.acc_preprocessing == 'v2_paper':
             from app.data_input.accelerometer_processor.magnitude_based_acc_processor_paper import (
-                PaperMagnitudeAccelerometerProcessor, PaperMagnitudeAccelerometerProcessor
+                PaperMagnitudeAccelerometerProcessorConfig, PaperMagnitudeAccelerometerProcessor
             )
-            acc_config = PaperMagnitudeAccelerometerProcessor(
+            acc_config = PaperMagnitudeAccelerometerProcessorConfig(
                 impact_threshold_g=4.0,
                 crossing_threshold_g=1.0,
                 sample_rate=50.0,
