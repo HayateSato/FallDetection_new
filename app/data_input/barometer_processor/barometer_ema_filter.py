@@ -42,10 +42,10 @@ class BarometerProcessor:
 
     Using with InfluxDB records:
     >>> from app.barometer_processing import BarometerProcessor, BarometerConfig
-    >>> from app.data_processor import preprocess_barometer  # Not yet implemented
+    >>> from app.data_processor import convert_barometer_influx_to_numpy  # Not yet implemented
     >>> config = BarometerConfig()
     >>> processor = BarometerProcessor(config)
-    >>> pressure, timestamps = preprocess_barometer(flux_records)
+    >>> pressure, timestamps = convert_barometer_influx_to_numpy(flux_records)
     >>> _, _, _, delta_h = processor.process(pressure, timestamps)
     """
 

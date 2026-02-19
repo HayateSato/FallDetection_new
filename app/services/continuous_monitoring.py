@@ -14,7 +14,7 @@ from typing import Optional, Callable
 import logging
 
 from app.data_input.data_loader.data_fetcher import fetch_data
-from app.data_input.data_processor import preprocess_acc, preprocess_barometer
+from app.data_input.influx_to_numpy_converter import convert_acc_influx_to_numpy, convert_barometer_influx_to_numpy
 from app.core.inference_engine import PipelineSelector
 from app.core.recording_state import recording_state
 
@@ -261,7 +261,7 @@ class ContinuousMonitor:
             return None, None, None, None, None
 
         # Preprocess using configurable field names
-        acc_data, acc_time = preprocess_acc(
+        acc_data, acc_time = convert_acc_influx_to_numpy(
             flux_records,
             acc_field_x=ACC_FIELD_X,
             acc_field_y=ACC_FIELD_Y,
@@ -286,7 +286,7 @@ class ContinuousMonitor:
         pressure_time = np.array([])
 
         if self.uses_barometer and BAROMETER_ENABLED:
-            pressure, pressure_time = preprocess_barometer(flux_records, BAROMETER_FIELD)
+            pressure, pressure_time = convert_barometer_influx_to_numpy(flux_records, BAROMETER_FIELD)
 
         return acc_data, acc_time, pressure, pressure_time, flux_records
 

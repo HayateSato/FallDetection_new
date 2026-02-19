@@ -12,7 +12,7 @@ from flask import Blueprint, jsonify, request, current_app
 from typing import Tuple
 
 from app.data_input.data_loader.data_fetcher import fetch_data
-from app.data_input.data_processor import preprocess_acc, preprocess_barometer
+from app.data_input.influx_to_numpy_converter import convert_acc_influx_to_numpy, convert_barometer_influx_to_numpy
 from app.utils.model_logger import model_logger
 from app.data_input.resampler import AccelerometerResampler
 from app.data_input.accelerometer_processor.nonbosch_calibration import transform_acc_array as calibrate_non_bosch_to_bosch
@@ -143,7 +143,7 @@ def trigger() -> Tuple:
         model_logger.log_preprocessing_start()
 
         try:
-            acc_data, acc_time = preprocess_acc(
+            acc_data, acc_time = convert_acc_influx_to_numpy(
                 flux_objects,
                 acc_field_x=ACC_FIELD_X,
                 acc_field_y=ACC_FIELD_Y,
@@ -171,7 +171,7 @@ def trigger() -> Tuple:
             pressure_time = np.array([])
 
             if BAROMETER_ENABLED and inference_engine.uses_barometer():
-                pressure, pressure_time = preprocess_barometer(flux_objects, BAROMETER_FIELD)
+                pressure, pressure_time = convert_barometer_influx_to_numpy(flux_objects, BAROMETER_FIELD)
 
             print(f"  ACC samples: {acc_data.shape[1]}, duration: {acc_duration:.1f}s")
             print(f"  BARO samples: {len(pressure)}")
