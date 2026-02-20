@@ -6,8 +6,8 @@ from typing import Tuple, List, Dict, Optional
 from pathlib import Path
 
 # Import app modules
+from app.core import model_config
 from app.core.inference_engine import PipelineSelector
-
 
 # Import settings
 from config.settings import (
@@ -89,14 +89,19 @@ class CSVDataLoader:
         if len(acc_window) == 0:
             return None, None, None
 
-        # Convert to expected format (with g conversion)
-        acc_scale_factor = 1.0 / ACC_SENSOR_SENSITIVITY
-
-        window_df = pd.DataFrame({
-            'Device_Timestamp_[ms]': acc_window['timestamp'].values,
-            'Acc_X[g]': acc_window['bosch_acc_x'].values * acc_scale_factor,
-            'Acc_Y[g]': acc_window['bosch_acc_y'].values * acc_scale_factor,
-            'Acc_Z[g]': acc_window['bosch_acc_z'].values * acc_scale_factor,
+        if model_config.acc_in_lsb:
+            window_df = pd.DataFrame({
+                'Device_Timestamp_[ms]': acc_window['timestamp'].values,
+                'Acc_X[lsb]': acc_window['bosch_acc_x'].values,
+                'Acc_Y[lsb]': acc_window['bosch_acc_y'].values,
+                'Acc_Z[lsb]': acc_window['bosch_acc_z'].values,
+            })
+        else:
+            window_df = pd.DataFrame({
+                'Device_Timestamp_[ms]': acc_window['timestamp'].values,
+                'Acc_X[g]': acc_window['bosch_acc_x'].values / ACC_SENSOR_SENSITIVITY,
+                'Acc_Y[g]': acc_window['bosch_acc_y'].values / ACC_SENSOR_SENSITIVITY,
+                'Acc_Z[g]': acc_window['bosch_acc_z'].values / ACC_SENSOR_SENSITIVITY,
         })
 
         # Extract BARO window

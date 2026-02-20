@@ -25,6 +25,7 @@ def convert_lsb_to_g(acc_data: np.ndarray,
                      sensitivity: int = ACC_SENSOR_SENSITIVITY
                      ) -> np.ndarray:
     """Convert raw LSB accelerometer data to g units."""
+    acc_data = np.asarray(acc_data)
     return acc_data / sensitivity
 
 def convert_to_dataframe(acc_data: np.ndarray, 

@@ -118,7 +118,7 @@ def trigger() -> Tuple:
 
         try:
             # convert LSB to g if model expects g input (acc_in_lsb=False means model wants g units)
-            acc_data = convert_lsb_to_g(acc_data) if not model_config.acc_in_lsb else acc_data
+            acc_data = convert_lsb_to_g(acc_data.to_numpy()) if not model_config.acc_in_lsb else acc_data
             # Convert to DataFrame and extract detection window
             df = convert_to_dataframe(acc_data, acc_time)
 
