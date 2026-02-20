@@ -1,230 +1,40 @@
-"""
-Model Registry - Maps model versions to their inference classes and configurations.
+from typing import Dict, Optional
+from app.core.model_config import (
+    ModelName,
+    ModelConfig,
+    MODEL_CONFIGS,
+)
 
-This module provides a unified interface for loading different model versions
-and their corresponding preprocessing pipelines.
-
-Supported Models:
-- v0: ACC only (statistical) - 16 features (no barometer, baseline for comparison)
-- v1: ACC (statistical) + BARO (dual-path EMA) - 22 features
-- v2: ACC (paper magnitude) + BARO (paper slope-limit) - 10 features
-- v3: ACC (statistical) + BARO (paper slope-limit) [BEST] - 20 features
-- v4: ACC (paper magnitude) + BARO (dual-path EMA) - 12 features
-- v5: Raw features (minimal preprocessing) - 22 features
-- v1_tuned: V1 with tuned hyperparameters (optimized for recall) - 22 features
-- v3_tuned: V3 with tuned hyperparameters (optimized for recall) - 20 features
-"""
-
-from dataclasses import dataclass
-from typing import Dict, Optional, Type, Callable, Any
-from enum import Enum
-# from pathlib import Path
-# import os
-
-
-class ModelType(Enum):
-    """Available model types."""
-    V0 = "v0"
-    V1 = "v1"
-    V2 = "v2"
-    V3 = "v3"
-    V4 = "v4"
-    V5 = "v5"
-    V0_LSB_INT = "v0_lsb_int"
-    V1_TUNED = "v1_tuned"
-    V3_TUNED = "v3_tuned"
-    V5_LSB = "v5_LSB"
-
-
-@dataclass
-class ModelConfig:
-    """Configuration for a model version."""
-    name: str
-    description: str
-    model_path: str
-    inference_class: str  # Module path to inference class
-    uses_barometer: bool
-    acc_preprocessing: str  # v1_features, v2_paper, or raw
-    baro_preprocessing: str  # v1_ema, v2_paper, raw, or none
-    num_features: int
-    acc_features: int
-    baro_features: int
-    threshold: float = 0.5
-    acc_in_lsb: bool = False  # If True, model expects raw LSB integers (no g conversion)
-
-
-# Model configurations
-MODEL_CONFIGS: Dict[ModelType, ModelConfig] = {
-    ModelType.V0: ModelConfig(
-        name="V0",
-        description="ACC only: Statistical features (no barometer, baseline)",
-        model_path="model/model_v0/model_v0_xgboost.pkl",
-        inference_class="app.data_processing_registry.PipelineSelector",
-        uses_barometer=False,
-        acc_preprocessing="v1_features",
-        baro_preprocessing="none",
-        num_features=16,
-        acc_features=16,
-        baro_features=0,
-    ),
-        ModelType.V0_LSB_INT: ModelConfig(
-        name="V0_LSB_INT",
-        description="ACC only: Statistical features (no barometer, baseline) - raw LSB integers",
-        model_path="model/model_v0_lsb_int/model_v0_lsb_int_xgboost.pkl",
-        inference_class="app.data_processing_registry.PipelineSelector",
-        uses_barometer=False,
-        acc_preprocessing="v1_features",
-        baro_preprocessing="none",
-        num_features=16,
-        acc_features=16,
-        baro_features=0,
-        acc_in_lsb=True,
-    ),
-    ModelType.V1: ModelConfig(
-        name="V1",
-        description="ACC: Statistical features, BARO: Dual-path EMA",
-        model_path="model/model_v1/model_v1_xgboost.pkl",
-        inference_class="app.models.v1_inference.ModelV1Inference",
-        uses_barometer=True,
-        acc_preprocessing="v1_features",
-        baro_preprocessing="v1_ema",
-        num_features=22,
-        acc_features=16,
-        baro_features=6,
-    ),
-    ModelType.V2: ModelConfig(
-        name="V2",
-        description="ACC: Paper magnitude + events, BARO: Paper slope-limit",
-        model_path="model/model_v2/model_v2_xgboost.pkl",
-        inference_class="app.models.v2_inference.ModelV2Inference",
-        uses_barometer=True,
-        acc_preprocessing="v2_paper",
-        baro_preprocessing="v2_paper",
-        num_features=10,
-        acc_features=6,
-        baro_features=4,
-    ),
-    ModelType.V3: ModelConfig(
-        name="V3",
-        description="ACC: Statistical features, BARO: Paper slope-limit (BEST)",
-        model_path="model/model_v3/model_v3_xgboost.pkl",
-        inference_class="app.model_v3.inference.ModelV3Inference",
-        uses_barometer=True,
-        acc_preprocessing="v1_features",
-        baro_preprocessing="v2_paper",
-        num_features=20,
-        acc_features=16,
-        baro_features=4,
-    ),
-    ModelType.V4: ModelConfig(
-        name="V4",
-        description="ACC: Paper magnitude, BARO: Dual-path EMA",
-        model_path="model/model_v4/model_v4_xgboost.pkl",
-        inference_class="app.models.v4_inference.ModelV4Inference",
-        uses_barometer=True,
-        acc_preprocessing="v2_paper",
-        baro_preprocessing="v1_ema",
-        num_features=12,
-        acc_features=6,
-        baro_features=6,
-    ),
-    ModelType.V5: ModelConfig(
-        name="V5",
-        description="Raw features with minimal preprocessing",
-        model_path="model/model_v5/model_v5_xgboost.pkl",
-        inference_class="app.data_processing_registry.PipelineSelector",
-        uses_barometer=True,
-        acc_preprocessing="raw",
-        baro_preprocessing="raw",
-        num_features=22,
-        acc_features=16,
-        baro_features=6,
-    ),
-    ModelType.V1_TUNED: ModelConfig(
-        name="V1_TUNED",
-        description="V1 with tuned hyperparameters (optimized for recall)",
-        model_path="model/model_v1_tuned/model_v1_tuned.pkl",
-        inference_class="app.data_processing_registry.PipelineSelector",
-        uses_barometer=True,
-        acc_preprocessing="v1_features",
-        baro_preprocessing="v1_ema",
-        num_features=22,
-        acc_features=16,
-        baro_features=6,
-    ),
-    ModelType.V3_TUNED: ModelConfig(
-        name="V3_TUNED",
-        description="V3 with tuned hyperparameters (optimized for recall)",
-        model_path="model/model_v3_tuned/model_v3_tuned.pkl",
-        inference_class="app.data_processing_registry.PipelineSelector",
-        uses_barometer=True,
-        acc_preprocessing="v1_features",
-        baro_preprocessing="v2_paper",
-        num_features=20,
-        acc_features=16,
-        baro_features=4,
-    ),
-    ModelType.V5_LSB: ModelConfig(
-        name="V5_LSB",
-        description="Raw features with minimal preprocessing (LSB version)",
-        model_path="model/model_v5_lsb/model_v5_lsb_xgboost.pkl",
-        inference_class="app.data_processing_registry.PipelineSelector",
-        uses_barometer=True,
-        acc_preprocessing="raw",
-        baro_preprocessing="raw",
-        num_features=22,
-        acc_features=16,
-        baro_features=6,
-    ),
-}
-
-
-def get_model_type(version_string: str) -> ModelType:
+def get_model_name(version_string: str) -> ModelName:
     """
-    Convert version string to ModelType enum.
+    Convert version string to ModelName enum.
 
     Args:
-        version_string: Version string (e.g., 'v3', 'V3', 'model_c')
+        version_string: Version string (e.g., 'v3', 'V3')
 
     Returns:
-        ModelType enum value
+        ModelName enum value
 
     Raises:
         ValueError: If version string is not recognized
     """
-    version_lower = version_string.lower().strip()
+    try:
+        return ModelName(version_string.lower().strip())
+    except ValueError:
+        valid = [m.value for m in ModelName]
+        raise ValueError(
+            f"Unknown model version: '{version_string}'. "
+            f"Valid options: {valid}"
+        )
 
-    # Handle various naming conventions
-    version_map = {
-        'v0': ModelType.V0,
-        'v0_lsb_int': ModelType.V0_LSB_INT,
-        'v1': ModelType.V1,
-        'v2': ModelType.V2,
-        'v3': ModelType.V3,
-        'v4': ModelType.V4,
-        'v5': ModelType.V5,
-        'v5_lsb': ModelType.V5_LSB,
-        'v1_tuned': ModelType.V1_TUNED,
-        'v3_tuned': ModelType.V3_TUNED,
-    }
-
-    if version_lower in version_map:
-        return version_map[version_lower]
-
-    raise ValueError(
-        f"Unknown model version: '{version_string}'. "
-        f"Valid options: {list(version_map.keys())}"
-    )
-
-
-def get_model_config(model_type: ModelType) -> ModelConfig:
+def get_model_config(model_type: ModelName) -> ModelConfig:
     """Get configuration for a model type."""
     if model_type not in MODEL_CONFIGS:
         raise ValueError(f"No configuration found for {model_type}")
     return MODEL_CONFIGS[model_type]
 
 
-def load_inference_class(model_type: ModelType):
+def load_inference_class(model_type: ModelName):
     """
     Dynamically load the inference class for a model type.
 
@@ -247,7 +57,7 @@ def load_inference_class(model_type: ModelType):
     return inference_class
 
 
-def get_model_path(model_type: ModelType, custom_path: Optional[str] = None) -> str:
+def get_model_path(model_type: ModelName, custom_path: Optional[str] = None) -> str:
     """
     Get the model file path.
 
@@ -273,7 +83,7 @@ def list_available_models() -> Dict[str, str]:
     }
 
 
-def get_influxdb_query_fields(model_type: ModelType, barometer_field: str = "bmp_pressure") -> list:
+def get_influxdb_query_fields(model_type: ModelName, barometer_field: str = "bmp_pressure") -> list:
     """
     Get the InfluxDB fields needed for a model.
 
@@ -311,12 +121,12 @@ class ModelRegistry:
         Args:
             default_model: Default model version to use
         """
-        self._current_model_type = get_model_type(default_model)
+        self._current_model_type = get_model_name(default_model)
         self._model_instance = None
         self._custom_model_path = None
 
     @property
-    def current_model(self) -> ModelType:
+    def current_model(self) -> ModelName:
         """Get the current model type."""
         return self._current_model_type
 
@@ -333,7 +143,7 @@ class ModelRegistry:
             version: Model version string
             custom_path: Optional custom model file path
         """
-        self._current_model_type = get_model_type(version)
+        self._current_model_type = get_model_name(version)
         self._custom_model_path = custom_path
         self._model_instance = None  # Clear cached instance
 

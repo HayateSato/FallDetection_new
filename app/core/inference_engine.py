@@ -18,8 +18,7 @@ if str(_analysis_dir) not in sys.path:
     sys.path.insert(0, str(_analysis_dir))
 
 from .model_registry import (
-    ModelType, 
-    get_model_type, get_model_config,
+    get_model_name, get_model_config,
     get_model_path
 )
 
@@ -53,7 +52,7 @@ class PipelineSelector:
             model_version: Model version string (v1, v2, v3, v4, v5)
             model_path: Optional custom model file path
         """
-        self.model_type = get_model_type(model_version)
+        self.model_type = get_model_name(model_version)
         self.config = get_model_config(self.model_type)
         self.model_path = model_path or get_model_path(self.model_type)
 
@@ -292,125 +291,7 @@ class PipelineSelector:
 
     def _get_feature_names(self) -> list:
         """Get ordered feature names for current model."""
-        # Define feature names directly here to avoid import conflicts
-        feature_definitions = {
-            ModelType.V0: {
-                "acc_features": [
-                    "acc_x_min", "acc_x_max", "acc_x_mean", "acc_x_var",
-                    "acc_y_min", "acc_y_max", "acc_y_mean", "acc_y_var",
-                    "acc_z_min", "acc_z_max", "acc_z_mean", "acc_z_var",
-                    "acc_mag_min", "acc_mag_max", "acc_mag_mean", "acc_mag_var",
-                ],
-                "baro_features": [],  # V0 has no barometer features
-            },
-            ModelType.V0_LSB_INT: {
-                "acc_features": [
-                    "acc_x_min", "acc_x_max", "acc_x_mean", "acc_x_var",
-                    "acc_y_min", "acc_y_max", "acc_y_mean", "acc_y_var",
-                    "acc_z_min", "acc_z_max", "acc_z_mean", "acc_z_var",
-                    "acc_mag_min", "acc_mag_max", "acc_mag_mean", "acc_mag_var",
-                ],
-                "baro_features": [],  # V0_INT has no barometer features
-            },
-            ModelType.V1: {
-                "acc_features": [
-                    "acc_x_min", "acc_x_max", "acc_x_mean", "acc_x_var",
-                    "acc_y_min", "acc_y_max", "acc_y_mean", "acc_y_var",
-                    "acc_z_min", "acc_z_max", "acc_z_mean", "acc_z_var",
-                    "acc_mag_min", "acc_mag_max", "acc_mag_mean", "acc_mag_var",
-                ],
-                "baro_features": [
-                    "delta_h_min", "delta_h_max", "delta_h_mean", "delta_h_var",
-                    "delta_h_range", "delta_h_slope",
-                ],
-            },
-            ModelType.V2: {
-                "acc_features": [
-                    "acc_mag_max", "acc_mag_mean", "acc_mag_var",
-                    "impact_count", "max_impact_g", "has_high_impact",
-                ],
-                "baro_features": [
-                    "pressure_shift", "middle_slope", "post_fall_slope",
-                    "filtered_pressure_var",
-                ],
-            },
-            ModelType.V3: {
-                "acc_features": [
-                    "acc_x_min", "acc_x_max", "acc_x_mean", "acc_x_var",
-                    "acc_y_min", "acc_y_max", "acc_y_mean", "acc_y_var",
-                    "acc_z_min", "acc_z_max", "acc_z_mean", "acc_z_var",
-                    "acc_mag_min", "acc_mag_max", "acc_mag_mean", "acc_mag_var",
-                ],
-                "baro_features": [
-                    "pressure_shift", "middle_slope", "post_fall_slope",
-                    "filtered_pressure_var",
-                ],
-            },
-            ModelType.V4: {
-                "acc_features": [
-                    "acc_mag_max", "acc_mag_mean", "acc_mag_var",
-                    "impact_count", "max_impact_g", "has_high_impact",
-                ],
-                "baro_features": [
-                    "delta_h_min", "delta_h_max", "delta_h_mean", "delta_h_var",
-                    "delta_h_range", "delta_h_slope",
-                ],
-            },
-            ModelType.V5: {
-                "acc_features": [
-                    "raw_acc_x_min", "raw_acc_x_max", "raw_acc_x_mean", "raw_acc_x_var",
-                    "raw_acc_y_min", "raw_acc_y_max", "raw_acc_y_mean", "raw_acc_y_var",
-                    "raw_acc_z_min", "raw_acc_z_max", "raw_acc_z_mean", "raw_acc_z_var",
-                    "raw_acc_mag_min", "raw_acc_mag_max", "raw_acc_mag_mean", "raw_acc_mag_var",
-                ],
-                "baro_features": [
-                    "raw_pressure_min", "raw_pressure_max", "raw_pressure_mean", "raw_pressure_var",
-                    "raw_pressure_range", "raw_pressure_slope",
-                ],
-            },
-            ModelType.V5_LSB: {
-                "acc_features": [
-                    "raw_acc_x_min", "raw_acc_x_max", "raw_acc_x_mean", "raw_acc_x_var",
-                    "raw_acc_y_min", "raw_acc_y_max", "raw_acc_y_mean", "raw_acc_y_var",
-                    "raw_acc_z_min", "raw_acc_z_max", "raw_acc_z_mean", "raw_acc_z_var",
-                    "raw_acc_mag_min", "raw_acc_mag_max", "raw_acc_mag_mean", "raw_acc_mag_var",
-                ],
-                "baro_features": [
-                    "raw_pressure_min", "raw_pressure_max", "raw_pressure_mean", "raw_pressure_var",
-                    "raw_pressure_range", "raw_pressure_slope",
-                ],
-            },
-            ModelType.V1_TUNED: {
-                "acc_features": [
-                    "acc_x_min", "acc_x_max", "acc_x_mean", "acc_x_var",
-                    "acc_y_min", "acc_y_max", "acc_y_mean", "acc_y_var",
-                    "acc_z_min", "acc_z_max", "acc_z_mean", "acc_z_var",
-                    "acc_mag_min", "acc_mag_max", "acc_mag_mean", "acc_mag_var",
-                ],
-                "baro_features": [
-                    "delta_h_min", "delta_h_max", "delta_h_mean", "delta_h_var",
-                    "delta_h_range", "delta_h_slope",
-                ],
-            },
-            ModelType.V3_TUNED: {
-                "acc_features": [
-                    "acc_x_min", "acc_x_max", "acc_x_mean", "acc_x_var",
-                    "acc_y_min", "acc_y_max", "acc_y_mean", "acc_y_var",
-                    "acc_z_min", "acc_z_max", "acc_z_mean", "acc_z_var",
-                    "acc_mag_min", "acc_mag_max", "acc_mag_mean", "acc_mag_var",
-                ],
-                "baro_features": [
-                    "pressure_shift", "middle_slope", "post_fall_slope",
-                    "filtered_pressure_var",
-                ],
-            },
-        }
-
-        if self.model_type in feature_definitions:
-            fd = feature_definitions[self.model_type]
-            return fd['acc_features'] + fd['baro_features']
-
-        raise ValueError(f"Unknown model type: {self.model_type}")
+        return self.config.acc_feature_names + self.config.baro_feature_names
 
     def predict(
         self,

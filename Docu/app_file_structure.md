@@ -28,7 +28,7 @@ app/
 
 ### Layer Descriptions
 
-- **`core/`** - Core business logic that is framework-agnostic. Contains the inference engine (`PreprocessMethodSelecter`), model configuration registry (`ModelType`, `ModelConfig`), and session state management (`RecordingState` singleton). These modules define *what* the system does.
+- **`core/`** - Core business logic that is framework-agnostic. Contains the inference engine (`PreprocessMethodSelecter`), model configuration registry (`ModelName`, `ModelConfig`), and session state management (`RecordingState` singleton). These modules define *what* the system does.
 
 - **`services/`** - Long-running background workers. Currently holds `ContinuousMonitor`, which runs in a daemon thread and periodically fetches sensor data + runs inference. Services consume `core/` modules but are not directly tied to HTTP requests.
 

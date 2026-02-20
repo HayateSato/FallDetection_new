@@ -202,8 +202,8 @@ def get_model_path() -> str:
         return MODEL_PATH_OVERRIDE
 
     # Fall back to registry's canonical path (avoids maintaining a duplicate dict here)
-    from app.core.model_registry import get_model_type, get_model_path as registry_get_model_path
-    model_type = get_model_type(MODEL_VERSION)
+    from app.core.model_registry import get_model_name, get_model_path as registry_get_model_path
+    model_type = get_model_name(MODEL_VERSION)
     return registry_get_model_path(model_type)
 
 # Set MODEL_PATH for backward compatibility
