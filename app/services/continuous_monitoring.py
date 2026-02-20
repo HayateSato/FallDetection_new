@@ -13,8 +13,7 @@ import logging
 from app.core.inference_engine import PipelineSelector
 from app.core.recording_state import recording_state
 from app.data_input.data_loader.influx_data_fetcher import fetch_and_preprocess_sensor_data
-from app.data_output.data_exporter import  compose_detection_window
-from app.data_input.data_converter import convert_lsb_to_g, convert_acc_nparray_to_df
+from app.data_input.data_converter import convert_lsb_to_g, convert_acc_nparray_to_df, compose_detection_window
 
 from config.settings import (
     MONITORING_INTERVAL_SECONDS,
