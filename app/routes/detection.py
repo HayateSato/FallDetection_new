@@ -20,7 +20,6 @@ from config.settings import (
     MODEL_VERSION,
     WINDOW_SIZE_SECONDS,
     ACC_SAMPLE_RATE,
-    ACC_SENSOR_SENSITIVITY,
 )
 
 logger = logging.getLogger(__name__)
@@ -118,7 +117,8 @@ def trigger() -> Tuple:
         model_logger.log_dataframe_conversion_start()
 
         try:
-            acc_scale_factor = 1.0 / ACC_SENSOR_SENSITIVITY
+            # Use model-aware scale factor: LSB models (v0_lsb_int) pass 1.0, g models pass 1/sensitivity
+            acc_scale_factor = inference_engine.get_acc_scale_factor()
             df = convert_to_dataframe(acc_data, acc_time, acc_scale_factor)
 
             time_diffs = df['Device_Timestamp_[ms]'].diff().dropna()

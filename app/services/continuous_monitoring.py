@@ -139,7 +139,8 @@ class ContinuousMonitor:
             )
 
             # Convert to DataFrame and extract detection window
-            full_df = convert_to_dataframe(acc_data, acc_time)
+            # Use model-aware scale factor: LSB models (v0_lsb_int) pass 1.0, g models pass 1/sensitivity
+            full_df = convert_to_dataframe(acc_data, acc_time, self.inference_engine.get_acc_scale_factor())
             window_df, window_pressure, window_pressure_time = extract_window(
                 full_df, self.required_acc_samples, pressure, pressure_time
             )

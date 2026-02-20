@@ -50,6 +50,8 @@ from config.settings import (
     RATE_LIMIT_PER_MINUTE,
     FLASK_DEBUG,
 )
+# ACC sample hardawre setting  - sensitivity level
+SENSOR_SENSITIVITY = os.getenv('SENSOR_SENSITIVITY', '16384')  # Default to 16,384 LSB/g for Bosch BHI260 in ±8g range
 
 # Data source settings
 DATA_SOURCE = os.getenv('DATA_SOURCE', 'influx').lower()
@@ -145,7 +147,7 @@ if __name__ == '__main__':
     logger.info(f"="*70)
     logger.info(f"Starting Fall Detection System")
     logger.info(f"  Data Source:     {DATA_SOURCE}")
-    logger.info(f"  Monitoring Interval: {MONITORING_INTERVAL_SECONDS} seconds")
+    logger.info(f"  Monitrng Intrvl: {MONITORING_INTERVAL_SECONDS} seconds")
     if DATA_SOURCE == 'csv':
         logger.info(f"  CSV Path:        {CSV_FILE_PATH}")
         logger.info(f"  Window Interval: {CSV_WINDOW_INTERVAL_SECONDS} seconds")
@@ -153,14 +155,19 @@ if __name__ == '__main__':
     logger.info(f"  Model Path:      {MODEL_PATH}")
     logger.info(f"  ACC Sensor Type: {ACC_SENSOR_TYPE}")
     logger.info(f"  ACC Fields:      {ACC_FIELD_X}, {ACC_FIELD_Y}, {ACC_FIELD_Z}")
-    logger.info(f"  Hardware Rate:   {HARDWARE_ACC_SAMPLE_RATE} Hz")
-    logger.info(f"  Model Rate:      {MODEL_ACC_SAMPLE_RATE} Hz")
+    logger.info(f"  ACC SR Hardware: {HARDWARE_ACC_SAMPLE_RATE} Hz")
+    logger.info(f"  ACC Model SR:    {MODEL_ACC_SAMPLE_RATE} Hz")
     if UPSAMPLING_ENABLED:
         logger.info(f"  Resampling:      Upsampling ({HARDWARE_ACC_SAMPLE_RATE}Hz -> {MODEL_ACC_SAMPLE_RATE}Hz, method={RESAMPLING_METHOD})")
     elif DOWNSAMPLING_ENABLED:
         logger.info(f"  Resampling:      Downsampling ({HARDWARE_ACC_SAMPLE_RATE}Hz -> {MODEL_ACC_SAMPLE_RATE}Hz, method={RESAMPLING_METHOD})")
     else:
         logger.info(f"  Resampling:      Disabled (no conversion needed)")
+    if SENSOR_SENSITIVITY == 16384:
+        # logger.info(f"  Sensor Sensitivity: 16,384 LSB/g (e.g. Bosch BHI260 in ±8g range)")
+        logger.info(f"  ACC Value:       Converted to g")
+    else:
+        logger.info(f"  ACC Value:       Raw LSB units (no conversion)")
     logger.info(f"  Window Size:     {WINDOW_SIZE_SECONDS}s ({HARDWARE_WINDOW_SAMPLES} HW -> {WINDOW_SAMPLES} model samples)")
     logger.info(f"  Barometer:       {'Enabled' if BAROMETER_ENABLED else 'Disabled'}")
     logger.info(f"  Uses Barometer:  {model_info['uses_barometer'] and BAROMETER_ENABLED}")

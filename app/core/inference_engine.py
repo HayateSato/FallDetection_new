@@ -475,6 +475,18 @@ class PipelineSelector:
         """Check if current model uses barometer data."""
         return self.config.uses_barometer
 
+    def get_acc_scale_factor(self) -> float:
+        """
+        Return the accelerometer scale factor for convert_to_dataframe.
+
+        - LSB models (acc_in_lsb=True): returns 1.0 (no conversion — model expects raw integers)
+        - g models (acc_in_lsb=False): returns 1.0 / ACC_SENSOR_SENSITIVITY (convert to g)
+        """
+        if self.config.acc_in_lsb:
+            return 1.0
+        from config.settings import ACC_SENSOR_SENSITIVITY
+        return 1.0 / ACC_SENSOR_SENSITIVITY
+
     def get_model_info(self) -> Dict[str, Any]:
         """Get information about current model."""
         return {

@@ -18,8 +18,8 @@ Supported Models:
 from dataclasses import dataclass
 from typing import Dict, Optional, Type, Callable, Any
 from enum import Enum
-from pathlib import Path
-import os
+# from pathlib import Path
+# import os
 
 
 class ModelType(Enum):
@@ -50,6 +50,7 @@ class ModelConfig:
     acc_features: int
     baro_features: int
     threshold: float = 0.5
+    acc_in_lsb: bool = False  # If True, model expects raw LSB integers (no g conversion)
 
 
 # Model configurations
@@ -68,8 +69,8 @@ MODEL_CONFIGS: Dict[ModelType, ModelConfig] = {
     ),
         ModelType.V0_LSB_INT: ModelConfig(
         name="V0_LSB_INT",
-        description="ACC only: Statistical features (no barometer, baseline)",
-        model_path="model/model_v0_int/model_v0_int_xgboost.pkl",
+        description="ACC only: Statistical features (no barometer, baseline) - raw LSB integers",
+        model_path="model/model_v0_lsb_int/model_v0_lsb_int_xgboost.pkl",
         inference_class="app.data_processing_registry.PipelineSelector",
         uses_barometer=False,
         acc_preprocessing="v1_features",
@@ -77,6 +78,7 @@ MODEL_CONFIGS: Dict[ModelType, ModelConfig] = {
         num_features=16,
         acc_features=16,
         baro_features=0,
+        acc_in_lsb=True,
     ),
     ModelType.V1: ModelConfig(
         name="V1",
