@@ -14,32 +14,14 @@ from config.settings import (
     COLLECT_ADDITIONAL_SENSORS,
     FALL_DATA_EXPORT_DIR,
     TIMEZONE_OFFSET_HOURS,
-    ACC_SENSOR_SENSITIVITY,
 )
+# from config.hardware_config import ACC_SENSOR_SENSITIVITY
 from app.utils import shared_state
 
 logger = logging.getLogger(__name__)
 
 
-def convert_lsb_to_g(acc_data: np.ndarray, 
-                     sensitivity: int = ACC_SENSOR_SENSITIVITY
-                     ) -> np.ndarray:
-    """Convert raw LSB accelerometer data to g units."""
-    acc_data = np.asarray(acc_data)
-    return acc_data / sensitivity
-
-def convert_to_dataframe(acc_data: np.ndarray, 
-                         acc_time: np.ndarray,
-                         ) -> pd.DataFrame:
-    """Convert accelerometer arrays to DataFrame format."""
-    return pd.DataFrame({
-        'Device_Timestamp_[ms]': acc_time,
-        'Acc_X[g]': acc_data[0],
-        'Acc_Y[g]': acc_data[1],
-        'Acc_Z[g]': acc_data[2]
-    })
-
-def extract_window(df: pd.DataFrame, required_samples: int,
+def compose_detection_window(df: pd.DataFrame, required_samples: int,
                    pressure: np.ndarray = None,
                    pressure_time: np.ndarray = None):
     """Extract detection window from data."""
@@ -61,7 +43,7 @@ def extract_window(df: pd.DataFrame, required_samples: int,
     return window_df, windowed_pressure, windowed_pressure_time
 
 
-def export_detection_data(flux_records, is_fall: bool, confidence: float,
+def save_detection_window_to_csv(flux_records, is_fall: bool, confidence: float,
                           participant_name: str, participant_gender: str,
                           manual_truth_fall: int, timestamp_utc):
     """Export detection data to CSV."""

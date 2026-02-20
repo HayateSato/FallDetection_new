@@ -9,11 +9,11 @@ Traces the full transformation of sensor data from InfluxDB query to model infer
 ```
 InfluxDB
   └─► List[FluxRecord]        (data_fetcher)
-        └─► numpy (3, N)       (data_processor → preprocess_acc)
+        └─► numpy (3, N)       (data_processor → convert_acc_from_flux_to_numpy_array)
               └─► numpy (3, N) (acc_resampler   → optional resample)
                     └─► numpy (3, N) (nonbosch_calibration → optional calibrate)
                           └─► pandas DataFrame (N, 4)  (data_exporter → convert_to_dataframe)
-                                └─► pandas DataFrame (450, 4) (data_exporter → extract_window)
+                                └─► pandas DataFrame (450, 4) (data_exporter → compose_detection_window)
                                       └─► dict[str, float]  (inference_engine → extract_features)
                                             └─► numpy (1, 16) → XGBoost → result dict
                                                                               │
@@ -27,7 +27,7 @@ InfluxDB
 
 **File:** `data_loader/data_fetcher.py`
 
-A Flux query is built in `sensor_data_reader.fetch_and_preprocess_sensor_data()` and executed
+A Flux query is built in `influx_data_fetcher.fetch_and_preprocess_sensor_data()` and executed
 against InfluxDB. The response is a list of `FluxTable` objects, each containing a list of
 `FluxRecord` objects. These are flattened into a single Python list.
 
@@ -51,7 +51,7 @@ in the **same flat list** — one record per measurement per timestamp.
 
 ## Stage 2 — `List[FluxRecord]` → numpy arrays
 
-**File:** `data_processor.py` — `preprocess_acc()`, `preprocess_barometer()`
+**File:** `data_processor.py` — `convert_acc_from_flux_to_numpy_array()`, `convert_baro_from_flux_to_numpy_array()`
 
 Records are separated by field name and converted to numpy arrays.
 
@@ -134,7 +134,7 @@ DataFrame shape:   (N, 4)
 
 ## Stage 6 — Full DataFrame → windowed DataFrame
 
-**File:** `../data_output/data_exporter.py` — `extract_window(df, required_samples)`
+**File:** `../data_output/data_exporter.py` — `compose_detection_window(df, required_samples)`
 
 Takes the **last 450 rows** (`WINDOW_SIZE_SECONDS × MODEL_ACC_SAMPLE_RATE = 9 s × 50 Hz`)
 and slices the barometer arrays to the matching timestamp range.
@@ -196,7 +196,7 @@ result = {
 
 ## Stage 9 — CSV export
 
-**File:** `../data_output/data_exporter.py` — `export_detection_data(flux_records, ...)`
+**File:** `../data_output/data_exporter.py` — `save_detection_window_to_csv(flux_records, ...)`
 
 The **original unmodified `flux_records` list from Stage 1** is used here.
 Each FluxRecord becomes one row in a long-format sensor data block:
@@ -227,4 +227,4 @@ The CSV therefore contains the **full raw lookback window** (e.g. 30 s), not jus
   it is passed separately into feature extraction.
 - **Two entry points, one pipeline** — both `continuous_monitoring.py` (background thread)
   and `detection.py` (`/trigger` route) call the same `fetch_and_preprocess_sensor_data()`
-  function from `sensor_data_reader.py`.
+  function from `influx_data_fetcher.py`.

@@ -10,7 +10,7 @@
 ## user_feedback marker system (0/1/3)
 
 - New function `write_user_feedback_marker()` — writes `user_feedback` field to InfluxDB
-- CSV export `export_detection_data()` — adds `user_feedback: -1 (pending)` to metadata, tracks the filepath - in `_last_exported_csv_path`
+- CSV export `save_detection_window_to_csv()` — adds `user_feedback: -1 (pending)` to metadata, tracks the filepath - in `_last_exported_csv_path`
 - Updated /fall_feedback endpoint — now:
   1. Writes `user_feedback` marker to InfluxDB
   2. Retroactively updates the last exported CSV (replaces -1 with actual value)

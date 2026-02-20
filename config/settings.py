@@ -69,8 +69,6 @@ else:
 # The transformation uses a pre-computed matrix from calibration data
 SENSOR_CALIBRATION_ENABLED = ACC_SENSOR_TYPE == 'non_bosch'
 
-ACC_SENSOR_SENSITIVITY = float(os.getenv('SENSOR_SENSITIVITY', '4096'))  # LSB/g for the accelerometer (default is 16384 for ±2g range)
-
 # =============================================================================
 # SAMPLING RATE CONFIGURATION
 # =============================================================================

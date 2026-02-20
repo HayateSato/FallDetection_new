@@ -21,7 +21,7 @@ from app.data_input.data_loader.csv_dataloader import process_csv_file
 # Import shared state and helpers
 from app.utils import shared_state
 from app.middleware.api_security import setup_cors
-from app.data_output.data_exporter import export_detection_data
+from app.data_output.data_exporter import save_detection_window_to_csv
 
 # Import settings
 from config.settings import (
@@ -50,8 +50,6 @@ from config.settings import (
     RATE_LIMIT_PER_MINUTE,
     FLASK_DEBUG,
 )
-# ACC sample hardawre setting  - sensitivity level
-SENSOR_SENSITIVITY = os.getenv('SENSOR_SENSITIVITY', '16384')  # Default to 16,384 LSB/g for Bosch BHI260 in ±8g range
 
 # Data source settings
 DATA_SOURCE = os.getenv('DATA_SOURCE', 'influx').lower()
@@ -195,7 +193,7 @@ if __name__ == '__main__':
             shared_state.continuous_monitor = ContinuousMonitor(
                 inference_engine=inference_engine,
                 notification_queue=shared_state.fall_notification_queue,
-                export_callback=export_detection_data,
+                export_callback=save_detection_window_to_csv,
                 notification_callback=shared_state.add_poll_notification
             )
 

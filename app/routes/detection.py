@@ -12,9 +12,10 @@ from typing import Tuple
 
 from app.utils.model_logger import model_logger
 from app.data_input.data_loader.csv_dataloader import process_csv_file
-from app.data_input.sensor_data_reader import fetch_and_preprocess_sensor_data
+from app.data_input.data_loader.influx_data_fetcher import fetch_and_preprocess_sensor_data
 from app.middleware.api_security import require_api_key
-from app.data_output.data_exporter import convert_lsb_to_g, convert_to_dataframe, extract_window, export_detection_data
+from app.data_input.data_converter import convert_lsb_to_g, convert_acc_nparray_to_df
+from app.data_output.data_exporter import compose_detection_window, save_detection_window_to_csv
 
 from config.settings import (
     MODEL_VERSION,
@@ -118,9 +119,9 @@ def trigger() -> Tuple:
 
         try:
             # convert LSB to g if model expects g input (acc_in_lsb=False means model wants g units)
-            acc_data = convert_lsb_to_g(acc_data.to_numpy()) if not model_config.acc_in_lsb else acc_data
+            acc_data = convert_lsb_to_g(acc_data) if not model_config.acc_in_lsb else acc_data
             # Convert to DataFrame and extract detection window
-            df = convert_to_dataframe(acc_data, acc_time)
+            df = convert_acc_nparray_to_df(acc_data, acc_time)
 
             time_diffs = df['Device_Timestamp_[ms]'].diff().dropna()
             actual_acc_rate = 1000 / time_diffs.median()
@@ -142,7 +143,7 @@ def trigger() -> Tuple:
         try:
             required_samples = int(WINDOW_SIZE_SECONDS * ACC_SAMPLE_RATE)
 
-            window_df, window_pressure, window_pressure_time = extract_window(
+            window_df, window_pressure, window_pressure_time = compose_detection_window(
                 df, required_samples, pressure, pressure_time
             )
 
@@ -197,7 +198,7 @@ def trigger() -> Tuple:
             confidence=confidence
         )
 
-        export_detection_data(
+        save_detection_window_to_csv(
             flux_records=flux_objects,
             is_fall=is_fall,
             confidence=confidence,
