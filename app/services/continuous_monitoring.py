@@ -13,7 +13,7 @@ import logging
 from app.core.inference_engine import PipelineSelector
 from app.core.recording_state import recording_state
 from app.data_input.sensor_data_reader import fetch_and_preprocess_sensor_data
-from app.data_output.data_exporter import convert_to_dataframe, extract_window
+from app.data_output.data_exporter import convert_lsb_to_g, convert_to_dataframe, extract_window
 
 from config.settings import (
     MONITORING_INTERVAL_SECONDS,
@@ -138,9 +138,11 @@ class ContinuousMonitor:
                 f"  Z: [{acc_data[2].min():.0f}, {acc_data[2].max():.0f}]"
             )
 
+            # convert LSB to g if model expects g input (acc_in_lsb=False means model wants g units)
+            acc_data = convert_lsb_to_g(acc_data) if not self.inference_engine.config.acc_in_lsb else acc_data
             # Convert to DataFrame and extract detection window
-            # Use model-aware scale factor: LSB models (v0_lsb_int) pass 1.0, g models pass 1/sensitivity
-            full_df = convert_to_dataframe(acc_data, acc_time, self.inference_engine.get_acc_scale_factor())
+            full_df = convert_to_dataframe(acc_data, acc_time)
+            # full_df = convert_to_dataframe(acc_data, acc_time, self.inference_engine.get_acc_scale_factor())
             window_df, window_pressure, window_pressure_time = extract_window(
                 full_df, self.required_acc_samples, pressure, pressure_time
             )

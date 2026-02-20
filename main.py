@@ -14,7 +14,7 @@ from datetime import datetime
 
 # Import app modules
 from app.core.inference_engine import PipelineSelector
-from app.core.model_registry import get_model_type, get_model_config
+from app.core.model_registry import get_model_name, get_model_config
 from app.services.continuous_monitoring import ContinuousMonitor
 from app.data_input.data_loader.csv_dataloader import process_csv_file
 
@@ -103,7 +103,7 @@ logger.info(f"Logs will be saved to: {log_filename}")
 # MODEL INITIALIZATION
 # ------------------------------------------------------------------------
 
-model_type = get_model_type(MODEL_VERSION)
+model_type = get_model_name(MODEL_VERSION)
 model_config = get_model_config(model_type)
 inference_engine = PipelineSelector(MODEL_VERSION, MODEL_PATH)
 model_info = inference_engine.get_model_info()
@@ -163,11 +163,13 @@ if __name__ == '__main__':
         logger.info(f"  Resampling:      Downsampling ({HARDWARE_ACC_SAMPLE_RATE}Hz -> {MODEL_ACC_SAMPLE_RATE}Hz, method={RESAMPLING_METHOD})")
     else:
         logger.info(f"  Resampling:      Disabled (no conversion needed)")
-    if SENSOR_SENSITIVITY == 16384:
-        # logger.info(f"  Sensor Sensitivity: 16,384 LSB/g (e.g. Bosch BHI260 in ±8g range)")
-        logger.info(f"  ACC Value:       Converted to g")
+    if model_config.acc_in_lsb:
+        # Model is trained on raw LSB values before converted to g
+        logger.info(f"  ACC Value:       Raw LSB ((+/-)16,384) - no conversion (model expects raw integers)")
     else:
-        logger.info(f"  ACC Value:       Raw LSB units (no conversion)")
+        # Model is trained on g values, converted from LSB to g using sensitivity
+        # Sensor Sensitivity: 16,384 LSB/g (e.g. Bosch BHI260 in ±8g range)
+        logger.info(f"  ACC Value:       Converted to g ((+/-) 8.0) ")
     logger.info(f"  Window Size:     {WINDOW_SIZE_SECONDS}s ({HARDWARE_WINDOW_SAMPLES} HW -> {WINDOW_SAMPLES} model samples)")
     logger.info(f"  Barometer:       {'Enabled' if BAROMETER_ENABLED else 'Disabled'}")
     logger.info(f"  Uses Barometer:  {model_info['uses_barometer'] and BAROMETER_ENABLED}")

@@ -14,7 +14,7 @@ from app.utils.model_logger import model_logger
 from app.data_input.data_loader.csv_dataloader import process_csv_file
 from app.data_input.sensor_data_reader import fetch_and_preprocess_sensor_data
 from app.middleware.api_security import require_api_key
-from app.data_output.data_exporter import convert_to_dataframe, extract_window, export_detection_data
+from app.data_output.data_exporter import convert_lsb_to_g, convert_to_dataframe, extract_window, export_detection_data
 
 from config.settings import (
     MODEL_VERSION,
@@ -117,9 +117,10 @@ def trigger() -> Tuple:
         model_logger.log_dataframe_conversion_start()
 
         try:
-            # Use model-aware scale factor: LSB models (v0_lsb_int) pass 1.0, g models pass 1/sensitivity
-            acc_scale_factor = inference_engine.get_acc_scale_factor()
-            df = convert_to_dataframe(acc_data, acc_time, acc_scale_factor)
+            # convert LSB to g if model expects g input (acc_in_lsb=False means model wants g units)
+            acc_data = convert_lsb_to_g(acc_data) if not model_config.acc_in_lsb else acc_data
+            # Convert to DataFrame and extract detection window
+            df = convert_to_dataframe(acc_data, acc_time)
 
             time_diffs = df['Device_Timestamp_[ms]'].diff().dropna()
             actual_acc_rate = 1000 / time_diffs.median()

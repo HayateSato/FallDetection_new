@@ -21,16 +21,22 @@ from app.utils import shared_state
 logger = logging.getLogger(__name__)
 
 
-def convert_to_dataframe(acc_data: np.ndarray, acc_time: np.ndarray,
-                          acc_scale_factor: float = 1.0 / ACC_SENSOR_SENSITIVITY) -> pd.DataFrame:
+def convert_lsb_to_g(acc_data: np.ndarray, 
+                     sensitivity: int = ACC_SENSOR_SENSITIVITY
+                     ) -> np.ndarray:
+    """Convert raw LSB accelerometer data to g units."""
+    return acc_data / sensitivity
+
+def convert_to_dataframe(acc_data: np.ndarray, 
+                         acc_time: np.ndarray,
+                         ) -> pd.DataFrame:
     """Convert accelerometer arrays to DataFrame format."""
     return pd.DataFrame({
         'Device_Timestamp_[ms]': acc_time,
-        'Acc_X[g]': acc_data[0] * acc_scale_factor,
-        'Acc_Y[g]': acc_data[1] * acc_scale_factor,
-        'Acc_Z[g]': acc_data[2] * acc_scale_factor
+        'Acc_X[g]': acc_data[0],
+        'Acc_Y[g]': acc_data[1],
+        'Acc_Z[g]': acc_data[2]
     })
-
 
 def extract_window(df: pd.DataFrame, required_samples: int,
                    pressure: np.ndarray = None,
