@@ -208,6 +208,21 @@ def get_model_path() -> str:
 MODEL_PATH = get_model_path()
 
 # =============================================================================
+# INFERENCE MODE (local vs remote)
+# =============================================================================
+
+# 'local' = run model locally (default, current behavior)
+# 'remote' = send sensor data to a remote FastAPI server for inference
+INFERENCE_MODE = os.getenv('INFERENCE_MODE', 'local').lower()
+
+# Remote server URL (only used when INFERENCE_MODE=remote)
+# e.g. https://abc123.ngrok-free.app  or  http://192.168.1.50:8000
+REMOTE_SERVER_URL = os.getenv('REMOTE_SERVER_URL', '')
+
+# API key for the remote server (only used when INFERENCE_MODE=remote)
+REMOTE_API_KEY = os.getenv('REMOTE_API_KEY', '')
+
+# =============================================================================
 # PUBLIC ENDPOINT / API SECURITY SETTINGS
 # =============================================================================
 

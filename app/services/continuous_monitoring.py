@@ -2,7 +2,7 @@
 Continuous Monitoring Module for Fall Detection System.
 
 Periodically fetches sensor data from InfluxDB and runs fall detection
-using the PipelineSelector engine.
+using the PipelineSelector engine (local) or RemoteInferenceClient (remote).
 """
 import threading
 import queue
@@ -21,6 +21,7 @@ from config.settings import (
     ACC_SAMPLE_RATE,
     WINDOW_SIZE_SECONDS,
     MODEL_VERSION,
+    INFERENCE_MODE,
 )
 
 logger = logging.getLogger(__name__)
@@ -38,7 +39,8 @@ class ContinuousMonitor:
         inference_engine: PipelineSelector,
         notification_queue: Optional[queue.Queue] = None,
         export_callback: Optional[Callable] = None,
-        notification_callback: Optional[Callable] = None
+        notification_callback: Optional[Callable] = None,
+        remote_client=None,
     ):
         """
         Initialize the continuous monitor.
@@ -48,8 +50,10 @@ class ContinuousMonitor:
             notification_queue: Queue for sending fall notifications (SSE)
             export_callback: Optional callback for exporting detection data
             notification_callback: Optional callback called with fall data dict (for polling)
+            remote_client: Optional RemoteInferenceClient for remote inference mode
         """
         self.inference_engine = inference_engine
+        self.remote_client = remote_client
         self.notification_queue = notification_queue
         self.export_callback = export_callback
         self.notification_callback = notification_callback
@@ -64,8 +68,17 @@ class ContinuousMonitor:
         self.required_acc_samples = int(WINDOW_SIZE_SECONDS * ACC_SAMPLE_RATE)
 
         # Model info
-        self.model_info = inference_engine.get_model_info()
-        self.uses_barometer = inference_engine.uses_barometer()
+        if INFERENCE_MODE == 'remote' and self.remote_client is not None:
+            try:
+                self.model_info = self.remote_client.get_model_info()
+                self.uses_barometer = self.model_info.get('uses_barometer', True)
+            except Exception as e:
+                logger.warning(f"Could not fetch remote model info: {e}, defaulting to local")
+                self.model_info = inference_engine.get_model_info()
+                self.uses_barometer = inference_engine.uses_barometer()
+        else:
+            self.model_info = inference_engine.get_model_info()
+            self.uses_barometer = inference_engine.uses_barometer()
 
     def start(self) -> bool:
         """Start continuous monitoring in background thread."""
@@ -138,30 +151,43 @@ class ContinuousMonitor:
                 f"  Z: [{acc_data[2].min():.0f}, {acc_data[2].max():.0f}]"
             )
 
-            # convert LSB to g if model expects g input (acc_in_lsb=False means model wants g units)
-            acc_data = convert_lsb_to_g(acc_data) if not self.inference_engine.config.acc_in_lsb else acc_data
-            # Convert to DataFrame and extract detection window
-            full_df = convert_acc_nparray_to_df(acc_data, acc_time)
-        
-            window_df, window_pressure, window_pressure_time = compose_detection_window(
-                full_df, self.required_acc_samples, pressure, pressure_time
-            )
+            # --- Remote inference: send raw data to server ---
+            if INFERENCE_MODE == 'remote' and self.remote_client is not None:
+                server_result = self.remote_client.predict(
+                    acc_data=acc_data,
+                    acc_time=acc_time,
+                    pressure=pressure,
+                    pressure_time=pressure_time,
+                )
+                is_fall = server_result['fall_detected']
+                confidence = server_result['confidence']
 
-            baro_samples = len(window_pressure) if window_pressure is not None else 0
-            if self.uses_barometer and window_pressure is not None and len(window_pressure) > 0:
-                logger.info(f"  BARO: {baro_samples} samples, range [{window_pressure.min():.0f}, {window_pressure.max():.0f}] Pa")
+            # --- Local inference: run model locally ---
             else:
-                logger.info(f"  BARO: {baro_samples} samples")
+                # convert LSB to g if model expects g input (acc_in_lsb=False means model wants g units)
+                acc_data = convert_lsb_to_g(acc_data) if not self.inference_engine.config.acc_in_lsb else acc_data
+                # Convert to DataFrame and extract detection window
+                full_df = convert_acc_nparray_to_df(acc_data, acc_time)
 
-            # Run inference
-            result = self.inference_engine.predict(
-                window_df,
-                pressure=window_pressure,
-                pressure_timestamps=window_pressure_time,
-            )
+                window_df, window_pressure, window_pressure_time = compose_detection_window(
+                    full_df, self.required_acc_samples, pressure, pressure_time
+                )
 
-            is_fall = result['is_fall']
-            confidence = result['confidence']
+                baro_samples = len(window_pressure) if window_pressure is not None else 0
+                if self.uses_barometer and window_pressure is not None and len(window_pressure) > 0:
+                    logger.info(f"  BARO: {baro_samples} samples, range [{window_pressure.min():.0f}, {window_pressure.max():.0f}] Pa")
+                else:
+                    logger.info(f"  BARO: {baro_samples} samples")
+
+                # Run inference
+                result = self.inference_engine.predict(
+                    window_df,
+                    pressure=window_pressure,
+                    pressure_timestamps=window_pressure_time,
+                )
+
+                is_fall = result['is_fall']
+                confidence = result['confidence']
 
             if is_fall:
                 logger.info(f"\n\n\n\n                     >>> [FALL DETECTED] Confidence: {confidence:.2%}\n\n")

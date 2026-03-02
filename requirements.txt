@@ -13,3 +13,4 @@ scipy
 optuna
 fastapi
 uvicorn
+requests
