@@ -14,8 +14,8 @@ from app.utils.model_logger import model_logger
 from app.data_input.data_loader.csv_dataloader import process_csv_file
 from app.data_input.data_loader.influx_data_fetcher import fetch_and_preprocess_sensor_data
 from app.middleware.api_security import require_api_key
-from app.data_input.data_converter import convert_lsb_to_g, convert_acc_nparray_to_df
-from app.data_output.data_exporter import compose_detection_window, save_detection_window_to_csv
+from app.data_input.data_converter import convert_lsb_to_g, convert_acc_nparray_to_df, compose_detection_window
+from app.data_output.data_exporter import save_detection_window_to_csv
 
 from config.settings import (
     MODEL_VERSION,

@@ -112,3 +112,25 @@ def convert_acc_nparray_to_df(acc_data: np.ndarray,
         'Acc_Y[g]': acc_data[1],
         'Acc_Z[g]': acc_data[2]
     })
+
+def compose_detection_window(df: pd.DataFrame, required_samples: int,
+                   pressure: np.ndarray = None,
+                   pressure_time: np.ndarray = None):
+    """Extract detection window from data."""
+    if len(df) < required_samples:
+        raise ValueError(f"Insufficient ACC data: need {required_samples}, got {len(df)}")
+
+    window_df = df.tail(required_samples).copy().reset_index(drop=True)
+
+    windowed_pressure = None
+    windowed_pressure_time = None
+
+    if pressure is not None and len(pressure) > 0:
+        window_start_ms = window_df['Device_Timestamp_[ms]'].iloc[0]
+        window_end_ms = window_df['Device_Timestamp_[ms]'].iloc[-1]
+        mask = (pressure_time >= window_start_ms) & (pressure_time <= window_end_ms)
+        windowed_pressure = pressure[mask]
+        windowed_pressure_time = pressure_time[mask]
+
+    return window_df, windowed_pressure, windowed_pressure_time
+
