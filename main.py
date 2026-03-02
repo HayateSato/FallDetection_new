@@ -14,14 +14,14 @@ from datetime import datetime
 
 # Import app modules
 from app.core.inference_engine import PipelineSelector
-from app.core.model_registry import get_model_type, get_model_config
+from app.core.model_registry import get_model_name, get_model_config
 from app.services.continuous_monitoring import ContinuousMonitor
 from app.data_input.data_loader.csv_dataloader import process_csv_file
 
 # Import shared state and helpers
 from app.utils import shared_state
 from app.middleware.api_security import setup_cors
-from app.data_output.data_exporter import export_detection_data
+from app.data_output.data_exporter import save_detection_window_to_csv
 
 # Import settings
 from config.settings import (
@@ -101,7 +101,7 @@ logger.info(f"Logs will be saved to: {log_filename}")
 # MODEL INITIALIZATION
 # ------------------------------------------------------------------------
 
-model_type = get_model_type(MODEL_VERSION)
+model_type = get_model_name(MODEL_VERSION)
 model_config = get_model_config(model_type)
 inference_engine = PipelineSelector(MODEL_VERSION, MODEL_PATH)
 model_info = inference_engine.get_model_info()
@@ -145,7 +145,7 @@ if __name__ == '__main__':
     logger.info(f"="*70)
     logger.info(f"Starting Fall Detection System")
     logger.info(f"  Data Source:     {DATA_SOURCE}")
-    logger.info(f"  Monitoring Interval: {MONITORING_INTERVAL_SECONDS} seconds")
+    logger.info(f"  Monitrng Intrvl: {MONITORING_INTERVAL_SECONDS} seconds")
     if DATA_SOURCE == 'csv':
         logger.info(f"  CSV Path:        {CSV_FILE_PATH}")
         logger.info(f"  Window Interval: {CSV_WINDOW_INTERVAL_SECONDS} seconds")
@@ -153,14 +153,21 @@ if __name__ == '__main__':
     logger.info(f"  Model Path:      {MODEL_PATH}")
     logger.info(f"  ACC Sensor Type: {ACC_SENSOR_TYPE}")
     logger.info(f"  ACC Fields:      {ACC_FIELD_X}, {ACC_FIELD_Y}, {ACC_FIELD_Z}")
-    logger.info(f"  Hardware Rate:   {HARDWARE_ACC_SAMPLE_RATE} Hz")
-    logger.info(f"  Model Rate:      {MODEL_ACC_SAMPLE_RATE} Hz")
+    logger.info(f"  ACC SR Hardware: {HARDWARE_ACC_SAMPLE_RATE} Hz")
+    logger.info(f"  ACC Model SR:    {MODEL_ACC_SAMPLE_RATE} Hz")
     if UPSAMPLING_ENABLED:
         logger.info(f"  Resampling:      Upsampling ({HARDWARE_ACC_SAMPLE_RATE}Hz -> {MODEL_ACC_SAMPLE_RATE}Hz, method={RESAMPLING_METHOD})")
     elif DOWNSAMPLING_ENABLED:
         logger.info(f"  Resampling:      Downsampling ({HARDWARE_ACC_SAMPLE_RATE}Hz -> {MODEL_ACC_SAMPLE_RATE}Hz, method={RESAMPLING_METHOD})")
     else:
         logger.info(f"  Resampling:      Disabled (no conversion needed)")
+    if model_config.acc_in_lsb:
+        # Model is trained on raw LSB values before converted to g
+        logger.info(f"  ACC Value:       Raw LSB ((+/-)16,384) - no conversion (model expects raw integers)")
+    else:
+        # Model is trained on g values, converted from LSB to g using sensitivity
+        # Sensor Sensitivity: 16,384 LSB/g (e.g. Bosch BHI260 in ±8g range)
+        logger.info(f"  ACC Value:       Converted to g ((+/-) 8.0) ")
     logger.info(f"  Window Size:     {WINDOW_SIZE_SECONDS}s ({HARDWARE_WINDOW_SAMPLES} HW -> {WINDOW_SAMPLES} model samples)")
     logger.info(f"  Barometer:       {'Enabled' if BAROMETER_ENABLED else 'Disabled'}")
     logger.info(f"  Uses Barometer:  {model_info['uses_barometer'] and BAROMETER_ENABLED}")
@@ -186,7 +193,7 @@ if __name__ == '__main__':
             shared_state.continuous_monitor = ContinuousMonitor(
                 inference_engine=inference_engine,
                 notification_queue=shared_state.fall_notification_queue,
-                export_callback=export_detection_data,
+                export_callback=save_detection_window_to_csv,
                 notification_callback=shared_state.add_poll_notification
             )
 

@@ -1,0 +1,18 @@
+[
+  "acc_x_min",
+  "acc_x_max",
+  "acc_x_mean",
+  "acc_x_var",
+  "acc_y_min",
+  "acc_y_max",
+  "acc_y_mean",
+  "acc_y_var",
+  "acc_z_min",
+  "acc_z_max",
+  "acc_z_mean",
+  "acc_z_var",
+  "acc_mag_min",
+  "acc_mag_max",
+  "acc_mag_mean",
+  "acc_mag_var"
+]

@@ -10,6 +10,124 @@ import pandas as pd
 from typing import Tuple
 from scipy import interpolate
 
+class AccelerometerResampler:
+    """
+    Unified resampler for converting accelerometer data to model's expected rate.
+
+    Handles both upsampling (25Hz -> 50Hz) and downsampling (100Hz -> 50Hz).
+
+    Example:
+        >>> resampler = AccelerometerResampler(source_rate=25, target_rate=50)
+        >>> resampled_data, resampled_time = resampler.process(acc_data, acc_time)
+
+        >>> resampler = AccelerometerResampler(source_rate=100, target_rate=50)
+        >>> resampled_data, resampled_time = resampler.process(acc_data, acc_time)
+    """
+
+    def __init__(
+        self,
+        source_rate: float = 50.0,
+        target_rate: float = 50.0,
+        method: str = 'linear'
+    ):
+        """
+        Initialize resampler.
+
+        Args:
+            source_rate: Hardware sampling rate in Hz (25, 50, or 100)
+            target_rate: Model's expected sampling rate in Hz (typically 50)
+            method: Resampling method:
+                - For upsampling (25->50): 'linear', 'cubic', 'nearest'
+                - For downsampling (100->50): 'decimate', 'average'
+        """
+        self.source_rate = source_rate
+        self.target_rate = target_rate
+        self.method = method
+
+        self.upsampling = source_rate < target_rate
+        self.downsampling = source_rate > target_rate
+        self.enabled = self.upsampling or self.downsampling
+
+    @property
+    def resampling_factor(self) -> float:
+        """Get the resampling factor."""
+        if not self.enabled:
+            return 1.0
+        return self.target_rate / self.source_rate
+
+    @property
+    def resampling_type(self) -> str:
+        """Get the resampling type."""
+        if self.upsampling:
+            return 'upsample'
+        elif self.downsampling:
+            return 'downsample'
+        return 'none'
+
+    def process(
+        self,
+        acc_data: np.ndarray,
+        acc_time: np.ndarray
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """
+        Process accelerometer data through resampler.
+
+        Args:
+            acc_data: shape (3, N) accelerometer data
+            acc_time: shape (N,) timestamps in ms
+
+        Returns:
+            Tuple of (resampled_data, resampled_time)
+        """
+        if not self.enabled:
+            return acc_data, acc_time
+
+        return resample_accelerometer(
+            acc_data, acc_time,
+            source_rate=self.source_rate,
+            target_rate=self.target_rate,
+            method=self.method
+        )
+
+    def process_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Process DataFrame through resampler.
+
+        Args:
+            df: DataFrame with accelerometer data
+
+        Returns:
+            Resampled DataFrame
+        """
+        if not self.enabled:
+            return df
+
+        if self.upsampling:
+            return upsample_acc_dataframe(
+                df,
+                source_rate=self.source_rate,
+                target_rate=self.target_rate,
+                method=self.method
+            )
+        else:
+            return downsample_acc_dataframe(
+                df,
+                source_rate=self.source_rate,
+                target_rate=self.target_rate,
+                method=self.method
+            )
+
+    def get_info(self) -> dict:
+        """Get resampler configuration info."""
+        return {
+            'enabled': self.enabled,
+            'source_rate': self.source_rate,
+            'target_rate': self.target_rate,
+            'resampling_type': self.resampling_type,
+            'resampling_factor': self.resampling_factor,
+            'method': self.method
+        }
+
 
 def upsample_accelerometer(
     acc_data: np.ndarray,
@@ -175,7 +293,7 @@ def resample_accelerometer(
         return acc_data, acc_time
 
 
-def upsample_dataframe(
+def upsample_acc_dataframe(
     df: pd.DataFrame,
     source_rate: float = 25.0,
     target_rate: float = 50.0,
@@ -221,7 +339,7 @@ def upsample_dataframe(
     })
 
 
-def downsample_dataframe(
+def downsample_acc_dataframe(
     df: pd.DataFrame,
     source_rate: float = 100.0,
     target_rate: float = 50.0,
@@ -269,126 +387,3 @@ def downsample_dataframe(
 
     else:
         raise ValueError(f"Unknown downsampling method: {method}")
-
-
-class AccelerometerResampler:
-    """
-    Unified resampler for converting accelerometer data to model's expected rate.
-
-    Handles both upsampling (25Hz -> 50Hz) and downsampling (100Hz -> 50Hz).
-
-    Example:
-        >>> resampler = AccelerometerResampler(source_rate=25, target_rate=50)
-        >>> resampled_data, resampled_time = resampler.process(acc_data, acc_time)
-
-        >>> resampler = AccelerometerResampler(source_rate=100, target_rate=50)
-        >>> resampled_data, resampled_time = resampler.process(acc_data, acc_time)
-    """
-
-    def __init__(
-        self,
-        source_rate: float = 50.0,
-        target_rate: float = 50.0,
-        method: str = 'linear'
-    ):
-        """
-        Initialize resampler.
-
-        Args:
-            source_rate: Hardware sampling rate in Hz (25, 50, or 100)
-            target_rate: Model's expected sampling rate in Hz (typically 50)
-            method: Resampling method:
-                - For upsampling (25->50): 'linear', 'cubic', 'nearest'
-                - For downsampling (100->50): 'decimate', 'average'
-        """
-        self.source_rate = source_rate
-        self.target_rate = target_rate
-        self.method = method
-
-        self.upsampling = source_rate < target_rate
-        self.downsampling = source_rate > target_rate
-        self.enabled = self.upsampling or self.downsampling
-
-    @property
-    def resampling_factor(self) -> float:
-        """Get the resampling factor."""
-        if not self.enabled:
-            return 1.0
-        return self.target_rate / self.source_rate
-
-    @property
-    def resampling_type(self) -> str:
-        """Get the resampling type."""
-        if self.upsampling:
-            return 'upsample'
-        elif self.downsampling:
-            return 'downsample'
-        return 'none'
-
-    def process(
-        self,
-        acc_data: np.ndarray,
-        acc_time: np.ndarray
-    ) -> Tuple[np.ndarray, np.ndarray]:
-        """
-        Process accelerometer data through resampler.
-
-        Args:
-            acc_data: shape (3, N) accelerometer data
-            acc_time: shape (N,) timestamps in ms
-
-        Returns:
-            Tuple of (resampled_data, resampled_time)
-        """
-        if not self.enabled:
-            return acc_data, acc_time
-
-        return resample_accelerometer(
-            acc_data, acc_time,
-            source_rate=self.source_rate,
-            target_rate=self.target_rate,
-            method=self.method
-        )
-
-    def process_dataframe(self, df: pd.DataFrame) -> pd.DataFrame:
-        """
-        Process DataFrame through resampler.
-
-        Args:
-            df: DataFrame with accelerometer data
-
-        Returns:
-            Resampled DataFrame
-        """
-        if not self.enabled:
-            return df
-
-        if self.upsampling:
-            return upsample_dataframe(
-                df,
-                source_rate=self.source_rate,
-                target_rate=self.target_rate,
-                method=self.method
-            )
-        else:
-            return downsample_dataframe(
-                df,
-                source_rate=self.source_rate,
-                target_rate=self.target_rate,
-                method=self.method
-            )
-
-    def get_info(self) -> dict:
-        """Get resampler configuration info."""
-        return {
-            'enabled': self.enabled,
-            'source_rate': self.source_rate,
-            'target_rate': self.target_rate,
-            'resampling_type': self.resampling_type,
-            'resampling_factor': self.resampling_factor,
-            'method': self.method
-        }
-
-
-# Backward compatibility aliases
-AccelerometerDownsampler = AccelerometerResampler

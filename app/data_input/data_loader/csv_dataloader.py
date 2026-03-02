@@ -7,8 +7,7 @@ from pathlib import Path
 
 # Import app modules
 from app.core.inference_engine import PipelineSelector
-
-
+from config.hardware_config import ACC_SENSOR_SENSITIVITY
 # Import settings
 from config.settings import (
     WINDOW_SIZE_SECONDS,
@@ -32,8 +31,9 @@ class CSVDataLoader:
     - pressure_in_pa: pressure value in Pascals
     """
 
-    def __init__(self, csv_path: str):
+    def __init__(self, csv_path: str, acc_in_lsb: bool = False):
         self.csv_path = Path(csv_path)
+        self.acc_in_lsb = acc_in_lsb
         self.df = None
         self.acc_df = None
         self.baro_df = None
@@ -87,16 +87,23 @@ class CSVDataLoader:
 
         if len(acc_window) == 0:
             return None, None, None
-
-        # Convert to expected format (with g conversion)
-        acc_scale_factor = 1.0 / 16384.0
-
-        window_df = pd.DataFrame({
-            'Device_Timestamp_[ms]': acc_window['timestamp'].values,
-            'Acc_X[g]': acc_window['bosch_acc_x'].values * acc_scale_factor,
-            'Acc_Y[g]': acc_window['bosch_acc_y'].values * acc_scale_factor,
-            'Acc_Z[g]': acc_window['bosch_acc_z'].values * acc_scale_factor,
-        })
+        
+        if self.acc_in_lsb:
+            # Model expects raw LSB integers — keep values as-is, no g conversion
+            window_df = pd.DataFrame({
+                'Device_Timestamp_[ms]': acc_window['timestamp'].values,
+                'Acc_X[lsb]': acc_window['bosch_acc_x'].values,
+                'Acc_Y[lsb]': acc_window['bosch_acc_y'].values,
+                'Acc_Z[lsb]': acc_window['bosch_acc_z'].values,
+            })
+        else:
+            # Model expects g units — divide by sensor sensitivity
+            window_df = pd.DataFrame({
+                'Device_Timestamp_[ms]': acc_window['timestamp'].values,
+                'Acc_X[g]': acc_window['bosch_acc_x'].values / ACC_SENSOR_SENSITIVITY,
+                'Acc_Y[g]': acc_window['bosch_acc_y'].values / ACC_SENSOR_SENSITIVITY,
+                'Acc_Z[g]': acc_window['bosch_acc_z'].values / ACC_SENSOR_SENSITIVITY,
+            })
 
         # Extract BARO window
         baro_window = self.baro_df[
@@ -198,7 +205,7 @@ def process_csv_file(csv_path: str, interval_seconds: float, inference_engine: P
     print("=" * 70)
 
     # Load CSV
-    loader = CSVDataLoader(csv_path)
+    loader = CSVDataLoader(csv_path, acc_in_lsb=inference_engine.config.acc_in_lsb)
     if not loader.load():
         return {
             'success': False,

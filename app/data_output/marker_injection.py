@@ -9,7 +9,7 @@ import logging
 from datetime import datetime, timezone
 from influxdb_client import Point
 from influxdb_client.client.write_api import SYNCHRONOUS
-from app.data_input.data_loader.data_fetcher import _get_influxdb_client
+from app.data_input.data_loader.influx_data_fetcher import _get_influxdb_client
 
 logger = logging.getLogger(__name__)
 
