@@ -1,16 +1,14 @@
 import numpy as np
 from typing import Optional, Tuple, List
-from influxdb_client.client.flux_table import FluxRecord
 
 import logging
 import pandas as pd
 
-from config.settings import (
-    MODEL_VERSION,
-    COLLECT_ADDITIONAL_SENSORS,
-    FALL_DATA_EXPORT_DIR,
-    TIMEZONE_OFFSET_HOURS,
-)
+try:
+    from influxdb_client.client.flux_table import FluxRecord
+except ImportError:
+    FluxRecord = None  # Server mode: influxdb-client not installed
+
 from config.hardware_config import ACC_SENSOR_SENSITIVITY
 
 def convert_acc_from_flux_to_numpy_array(
