@@ -20,29 +20,6 @@ from app.utils import shared_state
 
 logger = logging.getLogger(__name__)
 
-
-def compose_detection_window(df: pd.DataFrame, required_samples: int,
-                   pressure: np.ndarray = None,
-                   pressure_time: np.ndarray = None):
-    """Extract detection window from data."""
-    if len(df) < required_samples:
-        raise ValueError(f"Insufficient ACC data: need {required_samples}, got {len(df)}")
-
-    window_df = df.tail(required_samples).copy().reset_index(drop=True)
-
-    windowed_pressure = None
-    windowed_pressure_time = None
-
-    if pressure is not None and len(pressure) > 0:
-        window_start_ms = window_df['Device_Timestamp_[ms]'].iloc[0]
-        window_end_ms = window_df['Device_Timestamp_[ms]'].iloc[-1]
-        mask = (pressure_time >= window_start_ms) & (pressure_time <= window_end_ms)
-        windowed_pressure = pressure[mask]
-        windowed_pressure_time = pressure_time[mask]
-
-    return window_df, windowed_pressure, windowed_pressure_time
-
-
 def save_detection_window_to_csv(flux_records, is_fall: bool, confidence: float,
                           participant_name: str, participant_gender: str,
                           manual_truth_fall: int, timestamp_utc):
