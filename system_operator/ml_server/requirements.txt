@@ -1,20 +1,29 @@
-# ML Server requirements (extends root requirements.server.txt)
+# ML Server requirements
 # Install from project root: pip install -r system_operator/ml_server/requirements.txt
 
--r ../../requirements.server.txt
+# --- Core ML pipeline ---
+numpy
+pandas
+scikit-learn
+xgboost
+joblib
+scipy
+python-dotenv
+fastapi
+uvicorn[standard]
 
-# Phase 1: PostgreSQL
+# --- PostgreSQL ---
 sqlalchemy>=2.0
 psycopg2-binary
 alembic
 
-# Phase 2: Prometheus
+# --- Prometheus metrics ---
 prometheus-client
 prometheus-fastapi-instrumentator
 
-# Phase 3: Redis
+# --- Redis pub/sub ---
 redis
 
-# Phase 5: JWT for operator auth
+# --- JWT auth ---
 python-jose[cryptography]
 passlib[bcrypt]

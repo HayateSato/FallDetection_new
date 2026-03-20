@@ -62,21 +62,19 @@ def verify_token(token: str) -> dict:
 def hash_password(plain: str) -> str:
     """Hash a password with bcrypt. Store the result, never the plain text."""
     try:
-        from passlib.context import CryptContext
-        ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
-        return ctx.hash(plain)
+        import bcrypt
+        return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
     except ImportError:
-        raise RuntimeError("passlib not installed. Run: pip install passlib[bcrypt]")
+        raise RuntimeError("bcrypt not installed. Run: pip install bcrypt")
 
 
 def verify_password(plain: str, hashed: str) -> bool:
     """Check a plain-text password against a bcrypt hash."""
     try:
-        from passlib.context import CryptContext
-        ctx = CryptContext(schemes=["bcrypt"], deprecated="auto")
-        return ctx.verify(plain, hashed)
+        import bcrypt
+        return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
     except ImportError:
-        raise RuntimeError("passlib not installed")
+        raise RuntimeError("bcrypt not installed. Run: pip install bcrypt")
 
 
 def require_role(role: str):
