@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Care-Giver Dashboard — Fall Detection</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Login Screen -->
+  <div id="login-screen">
+    <div class="login-box">
+      <h1>Care-Giver Login</h1>
+      <input id="username" type="text" placeholder="Username" />
+      <input id="password" type="password" placeholder="Password" />
+      <button onclick="login()">Sign In</button>
+      <p id="login-error" class="error" hidden></p>
+    </div>
+  </div>
+
+  <!-- Dashboard (shown after login) -->
+  <div id="dashboard" hidden>
+
+    <!-- Fall Alert Banner (full-width, shown when live fall detected) -->
+    <div id="alert-banner" class="alert-banner" hidden>
+      <span id="alert-text">FALL DETECTED</span>
+      <button onclick="dismissAlert()">Dismiss</button>
+    </div>
+
+    <!-- Header -->
+    <header>
+      <h1>Care-Giver Dashboard</h1>
+      <div id="header-stats">
+        <span id="stat-falls">— falls today</span>
+        <span id="stat-predictions">— predictions today</span>
+        <span id="stat-confidence">avg confidence: —</span>
+      </div>
+      <button onclick="logout()" class="btn-secondary">Logout</button>
+    </header>
+
+    <!-- Patient List -->
+    <main>
+      <h2>Patients</h2>
+      <div id="patient-list">
+        <p class="loading">Loading patients...</p>
+      </div>
+
+      <!-- Patient Detail Panel (shown when patient row clicked) -->
+      <div id="patient-detail" hidden>
+        <h2>Fall History — <span id="detail-name"></span></h2>
+        <button onclick="closeDetail()" class="btn-secondary">Back to list</button>
+        <table id="fall-table">
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Confidence</th>
+              <th>Model</th>
+              <th>Latency (ms)</th>
+            </tr>
+          </thead>
+          <tbody id="fall-tbody"></tbody>
+        </table>
+        <p id="detail-empty" hidden>No falls recorded for this patient.</p>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

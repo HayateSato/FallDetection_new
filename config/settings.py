@@ -208,6 +208,22 @@ def get_model_path() -> str:
 MODEL_PATH = get_model_path()
 
 # =============================================================================
+# DATABASE & MESSAGING (Phase 1 / Phase 3 additions)
+# =============================================================================
+
+# PostgreSQL connection string — used by ml_server for inference logging
+# Format: postgresql://user:password@host:5432/dbname
+DATABASE_URL = os.getenv('DATABASE_URL', '')
+
+# Redis connection string — used for fall event pub/sub
+# Format: redis://host:6379/0
+REDIS_URL = os.getenv('REDIS_URL', '')
+
+# JWT secret key — used by operator and caregiver dashboards
+# Generate: python -c "import secrets; print(secrets.token_urlsafe(32))"
+JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', '')
+
+# =============================================================================
 # INFERENCE MODE (local vs remote)
 # =============================================================================
 

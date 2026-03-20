@@ -2,9 +2,51 @@
 
 Project reference for AI-assisted development. Describes architecture, data flows, key files, and planned next steps.
 
+> **Current state (2026-03-20):** Full multi-user system implemented.
+> New folder structure: `patient/`, `caregiver/`, `system_operator/`, `emergency/`, `shared/`, `infrastructure/`.
+> Root `server.py` and `main.py` still work as-is (backward-compatible wrappers).
+
 ---
 
-## System Architecture
+## Multi-User System Architecture
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│  patient/            Wearable (SmarKo) → BT → Smartphone App → InfluxDB             │
+│                      (no code here — see patient/README.md)                         │
+└──────────────────────────────────────────┬──────────────────────────────────────────┘
+                                           │ InfluxDB query
+                                           ▼
+┌─────────────────────────────────────────────────────────────────────────────────────┐
+│  system_operator/                                                                   │
+│    client/           Flask :8000 — queries InfluxDB, sends to ml_server             │
+│    ml_server/        FastAPI :8001 — XGBoost inference + Prometheus /metrics        │
+│                        → writes to PostgreSQL (inference_log, feature_snapshot)      │
+│                        → publishes to Redis 'fall_events' channel                   │
+│    operator_dashboard/ Vanilla HTML/JS — model switcher, Grafana links, health      │
+└──────┬────────────────────────────────────────────────────┬───────────────────────┬─┘
+       │ Redis pub/sub                                       │ Redis pub/sub         │
+       ▼                                                     ▼                      │
+┌──────────────────────────┐              ┌──────────────────────────┐              │
+│  caregiver/              │              │  emergency/              │              │
+│    api/  FastAPI :8002   │              │    notification_service/ │              │
+│    dashboard/ HTML/JS    │              │    FastAPI :8003 (SSE)   │              │
+│    (patient list, falls) │              │    tablet_ui/ HTML/JS    │              │
+└──────────────────────────┘              └──────────────────────────┘              │
+                                                                                    │
+┌───────────────────────────────────────────────────────────────────────────────────┘
+│  infrastructure/                                                                    │
+│    docker-compose.yml  — all 10 services (postgres, redis, influxdb, nginx, ...    │
+│    prometheus/         — scrape config + alert rules                                │
+│    grafana/            — 3 dashboards: server overview, model perf, fall timeline  │
+│    alertmanager/       — alert routing (email, webhook)                             │
+│    nginx/              — reverse proxy, SSE support, static dashboard files        │
+└─────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Original System Architecture (still applies to core ML pipeline)
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────┐
@@ -276,7 +318,71 @@ threshold (0.5)  →  {is_fall: bool, confidence: float}
 
 ---
 
-## Next Steps
+## New Key Files (multi-user expansion)
+
+| File | Role |
+|------|------|
+| `system_operator/ml_server/server.py` | FastAPI ML server with Prometheus, Postgres write, Redis publish, model hot-swap |
+| `system_operator/ml_server/services/db_writer.py` | Background-task Postgres writer (never blocks inference) |
+| `system_operator/ml_server/services/metrics_collector.py` | Prometheus metrics: fall_detections_total, inference_latency_seconds, model_confidence |
+| `system_operator/operator_dashboard/` | Operator HTML/JS — model switcher, health, Grafana links |
+| `caregiver/api/server.py` | FastAPI REST API for care-givers — reads Postgres, SSE from Redis |
+| `caregiver/dashboard/` | Care-giver HTML/JS — patient list, live fall alert banner |
+| `emergency/notification_service/server.py` | SSE fan-out service — Redis → tablets + optional webhook |
+| `emergency/tablet_ui/` | Emergency tablet HTML/JS — large-text fall alert, auto-reconnect |
+| `shared/db/models.py` | SQLAlchemy ORM: inference_log, feature_snapshot, participant_session, api_request_log |
+| `shared/db/migrations/` | Alembic migrations. Run: `alembic upgrade head` |
+| `shared/redis_client.py` | Async/sync Redis helpers, subscribe_fall_events() generator |
+| `shared/auth/jwt_utils.py` | JWT create/verify, bcrypt password hashing, require_role() FastAPI dependency |
+| `infrastructure/docker-compose.yml` | Full 10-service stack |
+| `infrastructure/prometheus/` | Prometheus config + alert rules (latency, drift, downtime) |
+| `infrastructure/grafana/dashboards/` | 3 pre-built dashboards: server overview, model performance, fall timeline |
+| `infrastructure/alertmanager/` | Alert routing to email/webhook |
+| `infrastructure/nginx/nginx.conf` | Reverse proxy with SSE support (proxy_buffering off) |
+| `alembic.ini` | Alembic config (project root) |
+
+## How to Run (full stack)
+
+```bash
+# 1. Configure environment
+cp system_operator/ml_server/.env.example .env    # fill in API_KEYS, JWT_SECRET_KEY, etc.
+
+# 2. Start all services
+docker-compose -f infrastructure/docker-compose.yml up -d
+
+# 3. Run Alembic migrations (first time only)
+DATABASE_URL=postgresql://falldetect:falldetect@localhost:5432/falldetect alembic upgrade head
+
+# 4. Access services
+#   Operator dashboard:   http://localhost/operator/
+#   Care-giver dashboard: http://localhost/caregiver/
+#   Emergency tablet:     http://localhost/emergency/
+#   Grafana:              http://localhost/grafana/  (admin / see GRAFANA_ADMIN_PASSWORD)
+#   ML Server API docs:   http://localhost/api/ml/docs
+```
+
+## How to Run (development, no Docker)
+
+```bash
+# Terminal 1 — ML Server
+DATABASE_URL=postgresql://... REDIS_URL=redis://localhost:6379/0 \
+python system_operator/ml_server/server.py
+
+# Terminal 2 — Caregiver API
+DATABASE_URL=postgresql://... REDIS_URL=redis://localhost:6379/0 \
+JWT_SECRET_KEY=mysecret python -m uvicorn caregiver.api.server:app --port 8002
+
+# Terminal 3 — Emergency Service
+REDIS_URL=redis://localhost:6379/0 \
+python -m uvicorn emergency.notification_service.server:app --port 8003
+
+# Terminal 4 — Flask Client (unchanged)
+python main.py
+```
+
+---
+
+## Next Steps (remaining)
 
 ### 1. PostgreSQL — Inference History & Audit Log
 
@@ -350,5 +456,5 @@ Use PostgreSQL `feature_snapshot` table as training data source. Add a `retrain.
 ## Branch / Git Info
 
 - Main branch: `main`
-- Current work branch: `restAPI`
+- Current work branch: `complete_system`
 - Recent commits: REST API client-server split, file cleaning

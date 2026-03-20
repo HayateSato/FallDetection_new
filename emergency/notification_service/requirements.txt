@@ -1,0 +1,6 @@
+# Emergency Notification Service requirements
+fastapi
+uvicorn[standard]
+redis
+httpx
+prometheus-fastapi-instrumentator

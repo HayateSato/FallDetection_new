@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Operator Dashboard — Fall Detection System</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header>
+    <h1>System Operator Dashboard</h1>
+    <span id="server-status" class="badge badge-grey">Checking...</span>
+    <span id="uptime" class="meta"></span>
+  </header>
+
+  <main>
+
+    <!-- Panel 1: Model Switcher -->
+    <section class="panel" id="panel-model">
+      <h2>Model Management</h2>
+      <div class="model-info">
+        <div>
+          <div class="label">Active Model</div>
+          <div id="active-model" class="value-large">—</div>
+        </div>
+        <div>
+          <div class="label">Features</div>
+          <div id="model-features" class="value-large">—</div>
+        </div>
+        <div>
+          <div class="label">Uses Barometer</div>
+          <div id="model-baro" class="value-large">—</div>
+        </div>
+      </div>
+
+      <div class="model-switch-row">
+        <label for="model-select">Switch to:</label>
+        <select id="model-select">
+          <option value="">Loading models...</option>
+        </select>
+        <button onclick="switchModel()">Switch Model</button>
+        <span id="switch-status" class="meta"></span>
+      </div>
+    </section>
+
+    <!-- Panel 2: Live Metrics (polls ml_server) -->
+    <section class="panel" id="panel-metrics">
+      <h2>Live Server Metrics</h2>
+      <div class="metrics-grid">
+        <div class="metric-box">
+          <div class="label">Status</div>
+          <div id="metric-status" class="value">—</div>
+        </div>
+        <div class="metric-box">
+          <div class="label">Uptime</div>
+          <div id="metric-uptime" class="value">—</div>
+        </div>
+        <div class="metric-box">
+          <div class="label">Model Version</div>
+          <div id="metric-version" class="value">—</div>
+        </div>
+      </div>
+      <p class="meta" style="margin-top:0.5rem">Auto-refreshes every 15s</p>
+    </section>
+
+    <!-- Panel 3: Grafana Embed -->
+    <section class="panel" id="panel-grafana">
+      <h2>ML Monitoring (Grafana)</h2>
+      <p class="meta">
+        Grafana dashboards are available at
+        <a href="/grafana" target="_blank">/grafana</a>.
+        Embed below (requires Grafana anonymous access or same-session auth):
+      </p>
+      <div class="grafana-links">
+        <a href="/grafana/d/fall-ml-overview" target="_blank" class="grafana-card">
+          <div class="grafana-title">ML Server Overview</div>
+          <div class="grafana-desc">Request rate, latency, error rate, uptime</div>
+        </a>
+        <a href="/grafana/d/fall-model-perf" target="_blank" class="grafana-card">
+          <div class="grafana-title">Model Performance</div>
+          <div class="grafana-desc">Confidence distribution, drift detection, fall rate</div>
+        </a>
+        <a href="/grafana/d/fall-events-timeline" target="_blank" class="grafana-card">
+          <div class="grafana-title">Fall Events Timeline</div>
+          <div class="grafana-desc">Patient fall history, confidence scatter, sessions</div>
+        </a>
+      </div>
+    </section>
+
+    <!-- Panel 4: Recent Inference Log -->
+    <section class="panel" id="panel-log">
+      <h2>Recent Inferences</h2>
+      <p class="meta">Reads from PostgreSQL via caregiver API. Shows last 20 predictions.</p>
+      <table id="log-table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Patient</th>
+            <th>Fall?</th>
+            <th>Confidence</th>
+            <th>Model</th>
+            <th>Latency</th>
+          </tr>
+        </thead>
+        <tbody id="log-tbody">
+          <tr><td colspan="6" class="loading">Loading...</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

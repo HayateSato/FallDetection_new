@@ -1,0 +1,20 @@
+# ML Server requirements (extends root requirements.server.txt)
+# Install from project root: pip install -r system_operator/ml_server/requirements.txt
+
+-r ../../requirements.server.txt
+
+# Phase 1: PostgreSQL
+sqlalchemy>=2.0
+psycopg2-binary
+alembic
+
+# Phase 2: Prometheus
+prometheus-client
+prometheus-fastapi-instrumentator
+
+# Phase 3: Redis
+redis
+
+# Phase 5: JWT for operator auth
+python-jose[cryptography]
+passlib[bcrypt]

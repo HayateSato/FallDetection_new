@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Emergency Alert — Fall Detection</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="standby">
+
+  <!-- Standby Screen (no active alert) -->
+  <div id="standby-screen">
+    <div class="standby-icon">🏥</div>
+    <h1>Emergency Monitor</h1>
+    <p>Monitoring for fall events...</p>
+    <div id="connection-status" class="status-badge connecting">Connecting...</div>
+    <div id="last-event" class="last-event"></div>
+  </div>
+
+  <!-- Alert Screen (shown when fall detected) -->
+  <div id="alert-screen" hidden>
+    <div class="alert-header">FALL DETECTED</div>
+    <div class="alert-patient" id="alert-patient"></div>
+    <div class="alert-detail" id="alert-detail"></div>
+    <div class="alert-time" id="alert-time"></div>
+    <button class="acknowledge-btn" onclick="acknowledge()">Acknowledge</button>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

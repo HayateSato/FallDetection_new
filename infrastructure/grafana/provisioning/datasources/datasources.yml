@@ -1,0 +1,29 @@
+apiVersion: 1
+
+datasources:
+  # Prometheus — for HTTP/ML metrics
+  - name: Prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    jsonData:
+      timeInterval: "15s"
+
+  # PostgreSQL — for inference history and patient data
+  # Read-only user: create with:
+  #   CREATE USER grafana_ro WITH PASSWORD 'grafana_ro';
+  #   GRANT SELECT ON inference_log, participant_session TO grafana_ro;
+  - name: PostgreSQL
+    type: postgres
+    url: postgres:5432
+    user: grafana_ro
+    secureJsonData:
+      password: grafana_ro
+    jsonData:
+      database: falldetect
+      sslmode: disable
+      maxOpenConns: 10
+      connMaxLifetime: 14400
+      postgresVersion: 1600
+      timescaledb: false

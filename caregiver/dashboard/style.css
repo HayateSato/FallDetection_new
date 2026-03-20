@@ -1,0 +1,90 @@
+/* ---- Reset & Base ---- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: system-ui, sans-serif; background: #f0f2f5; color: #222; }
+
+/* ---- Login ---- */
+#login-screen {
+  display: flex; align-items: center; justify-content: center;
+  min-height: 100vh; background: #1a1a2e;
+}
+.login-box {
+  background: white; border-radius: 12px; padding: 2rem; width: 320px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+  display: flex; flex-direction: column; gap: 1rem;
+}
+.login-box h1 { font-size: 1.4rem; text-align: center; color: #1a1a2e; }
+.login-box input {
+  padding: 0.7rem 1rem; border: 1px solid #ccc; border-radius: 6px; font-size: 1rem;
+}
+.login-box button {
+  padding: 0.8rem; background: #4a90d9; color: white;
+  border: none; border-radius: 6px; font-size: 1rem; cursor: pointer;
+}
+.login-box button:hover { background: #357ab8; }
+.error { color: #e53935; font-size: 0.9rem; text-align: center; }
+
+/* ---- Alert Banner ---- */
+.alert-banner {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 1000;
+  background: #e53935; color: white;
+  padding: 1rem 2rem;
+  display: flex; align-items: center; justify-content: space-between;
+  font-size: 1.3rem; font-weight: bold;
+  animation: pulse 1s ease-in-out infinite alternate;
+}
+.alert-banner button {
+  background: rgba(255,255,255,0.2); border: 2px solid white;
+  color: white; padding: 0.4rem 1rem; border-radius: 4px; cursor: pointer;
+}
+@keyframes pulse { from { background: #e53935; } to { background: #b71c1c; } }
+
+/* ---- Header ---- */
+header {
+  background: #1a1a2e; color: white;
+  padding: 1rem 2rem;
+  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+}
+header h1 { font-size: 1.4rem; flex: 1; }
+#header-stats { display: flex; gap: 1.5rem; font-size: 0.9rem; opacity: 0.85; }
+.btn-secondary {
+  padding: 0.5rem 1rem; border: 1px solid #ccc; background: transparent;
+  color: white; border-radius: 4px; cursor: pointer;
+}
+
+/* ---- Main ---- */
+main { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
+h2 { font-size: 1.2rem; margin-bottom: 1rem; color: #333; }
+
+/* ---- Patient List ---- */
+#patient-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 1rem;
+}
+.patient-card {
+  background: white; border-radius: 10px; padding: 1.2rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.07);
+  cursor: pointer; transition: transform 0.15s, box-shadow 0.15s;
+  border-left: 5px solid #4a90d9;
+}
+.patient-card:hover { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(0,0,0,0.12); }
+.patient-card.has-fall { border-left-color: #e53935; }
+.patient-card .name { font-size: 1.1rem; font-weight: 600; }
+.patient-card .meta { font-size: 0.85rem; color: #666; margin-top: 0.3rem; }
+.badge {
+  display: inline-block; padding: 0.2rem 0.6rem; border-radius: 12px;
+  font-size: 0.75rem; font-weight: 600; margin-top: 0.5rem;
+}
+.badge-green { background: #e8f5e9; color: #2e7d32; }
+.badge-red   { background: #ffebee; color: #c62828; }
+.badge-grey  { background: #f5f5f5; color: #666; }
+
+/* ---- Fall Table ---- */
+#fall-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
+#fall-table th, #fall-table td {
+  text-align: left; padding: 0.7rem 1rem;
+  border-bottom: 1px solid #eee;
+}
+#fall-table th { background: #f5f5f5; font-weight: 600; font-size: 0.85rem; }
+#fall-table tr:hover { background: #fafafa; }
+.loading { color: #888; font-style: italic; }
