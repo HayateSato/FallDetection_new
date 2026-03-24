@@ -1,7 +1,7 @@
 # Project Status — Multi-User System Refactoring
 
 Summary of what was implemented in the refactoring and what still needs to be built.
-Last updated: 2026-03-20
+Last updated: 2026-03-23
 
 ---
 
@@ -34,7 +34,7 @@ Root `main.py` and `server.py` are unchanged and still work as before.
 | `shared/db/session.py` | Done | SessionLocal factory + get_db() FastAPI dependency |
 | `shared/db/migrations/` | Done | Alembic setup + initial migration `0001_initial_schema.py`. Run: `alembic upgrade head` |
 | `shared/schemas/` | Done | Pydantic schemas for inference, patient, fall events |
-| `shared/auth/jwt_utils.py` | Done | JWT create/verify (HS256), bcrypt password hashing, `require_role()` FastAPI dependency |
+| `shared/auth/jwt_utils.py` | Done | JWT create/verify (HS256), bcrypt password hashing, `require_role()` FastAPI dependency. Fixed 2026-03-23: uses `import bcrypt` directly (passlib 4.x incompatibility removed) |
 | `shared/auth/api_key_utils.py` | Done | SHA-256 hashing for API key audit logs |
 | `shared/redis_client.py` | Done | Sync + async Redis helpers, `subscribe_fall_events()` async generator |
 | `alembic.ini` | Done | Migration config at project root |
@@ -133,10 +133,12 @@ The `participant_session` table was designed but nothing in the codebase creates
 
 **Fix:** When the Flask client starts a recording (`POST /recording/state`), write a row to `participant_session`. When recording stops, set `end_time`. When a fall is logged in `db_writer.py`, increment `fall_count`.
 
-#### 4. Environment files not filled in
-The `.env.example` files are templates only. **No `.env` file is filled in** yet. Nothing runs until you create real `.env` files.
-
-See `HOW_TO_RUN.md` → Step 2 for instructions.
+#### 4. ~~Environment files not filled in~~ — **DONE** (2026-03-23)
+Root `.env` is filled in with real values (DATABASE_URL, REDIS_URL, API_KEYS, JWT_SECRET_KEY, InfluxDB credentials). Only `CAREGIVER_USERS` remains empty — generate with:
+```
+python -c "from shared.auth.jwt_utils import hash_password; print(hash_password('mypassword'))"
+```
+Then set: `CAREGIVER_USERS=alice:<hash>` in `.env`.
 
 ---
 
@@ -169,17 +171,8 @@ The client folder has no `index.html`. The operator client's dashboard is still 
 
 **Fix:** Either symlink or copy `app/static/index.html` to `system_operator/client/static/`.
 
-#### 8. Missing `__init__.py` files
-These import paths will fail without `__init__.py`:
-
-| Missing file | Effect |
-|-------------|--------|
-| `system_operator/__init__.py` | Import of `system_operator.ml_server.server` will fail |
-| `system_operator/client/__init__.py` | Same |
-| `emergency/notification_service/channels/__init__.py` | `from .sse import manager` will fail |
-| `caregiver/api/__init__.py` | Import path in Docker will fail |
-
-**Fix:** Create empty `__init__.py` in each directory above.
+#### 8. ~~Missing `__init__.py` files~~ — **DONE** (2026-03-23)
+All `__init__.py` files are present: `system_operator/`, `system_operator/client/`, `emergency/notification_service/channels/`, `caregiver/api/`.
 
 ---
 
@@ -225,10 +218,12 @@ No unit or integration tests exist for the new components (`shared/`, `caregiver
 
 Before running for the first time, check these off:
 
-- [ ] Create `.env` files (see `HOW_TO_RUN.md` Step 2)
+- [x] Create `.env` files — root `.env` filled in
+- [x] `__init__.py` in all service directories
+- [x] bcrypt password hashing fixed (direct `import bcrypt`)
+- [ ] Set `CAREGIVER_USERS=alice:<bcrypt_hash>` in `.env`
 - [ ] Start Postgres + Redis (Docker or local)
 - [ ] Run `alembic upgrade head`
 - [ ] Create `grafana_ro` Postgres user (for Grafana dashboards)
-- [ ] Add `__init__.py` to missing directories (see item 8 above)
 - [ ] Apply auth to caregiver GET endpoints (item 1 above)
 - [ ] Wire `participant_session` writes from recording endpoints (item 3 above)

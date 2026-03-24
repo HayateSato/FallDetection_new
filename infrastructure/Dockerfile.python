@@ -10,8 +10,8 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copy and install requirements first (cached layer)
-COPY requirements.txt requirements.server.txt* ./
-RUN pip install --no-cache-dir -r requirements.server.txt
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
 
 # Install additional packages for new services
 RUN pip install --no-cache-dir \
@@ -19,6 +19,7 @@ RUN pip install --no-cache-dir \
     psycopg2-binary \
     alembic \
     redis \
+    httpx \
     prometheus-client \
     prometheus-fastapi-instrumentator \
     python-jose[cryptography] \

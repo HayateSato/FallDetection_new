@@ -135,9 +135,9 @@ docker run -d --name fall_redis \
 
 From the project root (with `DATABASE_URL` set in environment or in `.env`):
 
-```bash
+```powershell
 # Load .env so alembic picks up DATABASE_URL
-set DATABASE_URL=postgresql://falldetect:falldetect@localhost:5432/falldetect   # Windows
+$env:DATABASE_URL = "postgresql://falldetect:falldetect@localhost:5432/falldetect"  # Windows
 export DATABASE_URL=postgresql://falldetect:falldetect@localhost:5432/falldetect  # Linux/Mac
 
 alembic upgrade head

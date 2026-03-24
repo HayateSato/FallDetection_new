@@ -348,7 +348,14 @@ threshold (0.5)  →  {is_fall: bool, confidence: float}
 cp system_operator/ml_server/.env.example .env    # fill in API_KEYS, JWT_SECRET_KEY, etc.
 
 # 2. Start all services
-docker-compose -f infrastructure/docker-compose.yml up -d
+# IMPORTANT: always pass --env-file so Docker Compose reads the root .env
+# (compose file lives in infrastructure/ so it won't find .env automatically)
+docker-compose -f infrastructure/docker-compose.yml --env-file .env up -d
+
+# Alternative: copy .env into infrastructure/ so the flag is not needed every time
+#   Copy-Item .env infrastructure/.env   (PowerShell)
+#   cp .env infrastructure/.env          (bash)
+# Downside: you must keep both files in sync when you change a value.
 
 # 3. Run Alembic migrations (first time only)
 DATABASE_URL=postgresql://falldetect:falldetect@localhost:5432/falldetect alembic upgrade head
