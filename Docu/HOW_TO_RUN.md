@@ -1,6 +1,9 @@
-# How to Run — Fall Detection System
+# How to Run — Fall Detection System (Windows)
 
-Complete guide for running the full multi-user system.
+Complete guide for running the full multi-user system on Windows.
+
+> **Shell note:** All commands below are for **PowerShell**. Do not use `set VAR=value` (that is CMD syntax).
+> Use `$env:VAR = "value"` to set environment variables in PowerShell.
 
 ---
 
@@ -9,7 +12,7 @@ Complete guide for running the full multi-user system.
 1. [Prerequisites](#1-prerequisites)
 2. [First-Time Setup](#2-first-time-setup)
 3. [Option A — Full Stack with Docker Compose](#3-option-a--full-stack-with-docker-compose)
-4. [Option B — Development Mode (no Docker)](#4-option-b--development-mode-no-docker)
+4. [Option B — Development Mode (no Docker for Python services)](#4-option-b--development-mode-no-docker-for-python-services)
 5. [Running the Original Client (main.py)](#5-running-the-original-client-mainpy)
 6. [Verifying Everything Works](#6-verifying-everything-works)
 7. [Accessing Dashboards](#7-accessing-dashboards)
@@ -28,22 +31,32 @@ Complete guide for running the full multi-user system.
 | Docker Desktop | latest | docker.com |
 | Git | any | git-scm.com |
 
-### Required Python packages (new for multi-user system)
+### Python packages
 
-Install these once from the project root:
+Install from the project root (activate your venv first):
 
-```bash
-pip install sqlalchemy psycopg2-binary alembic redis \
-            prometheus-client prometheus-fastapi-instrumentator \
-            python-jose[cryptography] passlib[bcrypt] httpx
+```powershell
+pip install -r requirements.txt
+pip install sqlalchemy psycopg2-binary alembic redis httpx `
+            prometheus-client prometheus-fastapi-instrumentator `
+            python-jose[cryptography] passlib[bcrypt]
 ```
 
-Or install per-service (from the project root):
+### Windows curl note
 
-```bash
-pip install -r system_operator/ml_server/requirements.txt
-pip install -r caregiver/api/requirements.txt
-pip install -r emergency/notification_service/requirements.txt
+PowerShell has a `curl` alias that maps to `Invoke-WebRequest` and does **not** accept `-H` flags.
+Always use `curl.exe` for HTTP testing:
+
+```powershell
+curl.exe http://localhost:8001/health        # correct
+curl http://localhost:8001/health            # wrong — triggers PS alias
+```
+
+For requests with a JSON body, write the body to a file first:
+
+```powershell
+'{"key":"value"}' | Out-File -Encoding utf8 body.json
+curl.exe -X POST http://localhost:8001/endpoint -H "Content-Type: application/json" -d "@body.json"
 ```
 
 ---
@@ -52,94 +65,109 @@ pip install -r emergency/notification_service/requirements.txt
 
 ### Step 1 — Generate secrets
 
-```bash
-# Generate API key (for ml_server ↔ client auth)
+```powershell
+# Generate API key (ml_server ↔ client auth)
 python -c "import secrets; print(secrets.token_urlsafe(32))"
 
-# Generate JWT secret (shared by ml_server and caregiver_api)
+# Generate JWT secret (shared by ml_server and caregiver_api — run again for a different value)
 python -c "import secrets; print(secrets.token_urlsafe(32))"
 ```
 
-Save these — you'll use them in the `.env` files below.
+Save both values — you will use them in `.env` below.
 
-### Step 2 — Create .env files
+### Step 2 — Configure root .env
 
-**ML Server** (`system_operator/ml_server/.env`):
+The project uses a single root `.env` file for all services. Edit it at the project root:
+
 ```env
+# Inference
 MODEL_VERSION=v0
-HARDWARE_ACC_SAMPLE_RATE=25
-ACC_SENSOR_TYPE=bosch
-PUBLIC_ENDPOINT_ENABLED=true
-API_KEYS=<your-api-key-from-step-1>
-DATABASE_URL=postgresql://falldetect:falldetect@localhost:5432/falldetect
-REDIS_URL=redis://localhost:6379/0
-JWT_SECRET_KEY=<your-jwt-secret-from-step-1>
-SERVER_PORT=8001
-```
-
-**Caregiver API** (`caregiver/api/.env`):
-```env
-DATABASE_URL=postgresql://falldetect:falldetect@localhost:5432/falldetect
-REDIS_URL=redis://localhost:6379/0
-JWT_SECRET_KEY=<same-jwt-secret-as-ml-server>
-CAREGIVER_PORT=8002
-```
-
-> To add caregiver users, generate bcrypt hashes:
-> ```bash
-> python -c "from shared.auth.jwt_utils import hash_password; print(hash_password('mypassword'))"
-> ```
-> Then add to `.env`:
-> ```env
-> CAREGIVER_USERS=alice:$2b$12$...,bob:$2b$12$...
-> ```
-
-**Emergency Service** (`emergency/notification_service/.env`):
-```env
-REDIS_URL=redis://localhost:6379/0
-EMERGENCY_PORT=8003
-# WEBHOOK_URL=https://your-pager-service.example.com/alert  # optional
-```
-
-**Root `.env`** (for Flask client / `main.py`):
-```env
 INFERENCE_MODE=remote
 REMOTE_SERVER_URL=http://localhost:8001
-REMOTE_API_KEY=<same-api-key-as-ml-server>
-INFLUXDB_URL=http://localhost:8086
-INFLUXDB_TOKEN=local-dev-token-fall-detection-2024
-INFLUXDB_ORG=fall-detection
-INFLUXDB_BUCKET=fd_test
+REMOTE_API_KEY=<your-api-key-from-step-1>
+
+# ML server
+API_KEYS=<same-api-key>
+JWT_SECRET_KEY=<your-jwt-secret-from-step-1>
+PUBLIC_ENDPOINT_ENABLED=true
+SERVER_PORT=8001
+
+# Hardware / sensor
 ACC_SENSOR_TYPE=bosch
 HARDWARE_ACC_SAMPLE_RATE=25
+
+# InfluxDB
+INFLUXDB_URL=https://your-influxdb-url
+INFLUXDB_TOKEN=your-token
+INFLUXDB_ORG=your-org
+INFLUXDB_BUCKET=fd_test
+
+# PostgreSQL
+DATABASE_URL=postgresql://falldetect:falldetect@localhost:5432/falldetect
+
+# Redis
+REDIS_URL=redis://localhost:6379/0
+
+# Grafana
+GRAFANA_ADMIN_PASSWORD=choose_a_password
+
+# Caregiver users (for dev mode / python-dotenv reading)
+# Format: username:bcrypt_hash  — generate hash with step below
+CAREGIVER_USERS=test_user:$2b$12$...
 ```
 
-### Step 3 — Start PostgreSQL and Redis (Docker only for these two)
-
-If you don't want to run the full stack, you can start just the databases:
-
-```bash
-docker run -d --name fall_postgres \
-  -e POSTGRES_USER=falldetect \
-  -e POSTGRES_PASSWORD=falldetect \
-  -e POSTGRES_DB=falldetect \
-  -p 5432:5432 \
-  postgres:16-alpine
-
-docker run -d --name fall_redis \
-  -p 6379:6379 \
-  redis:7-alpine
-```
-
-### Step 4 — Run database migrations
-
-From the project root (with `DATABASE_URL` set in environment or in `.env`):
+### Step 3 — Generate a caregiver password hash
 
 ```powershell
-# Load .env so alembic picks up DATABASE_URL
-$env:DATABASE_URL = "postgresql://falldetect:falldetect@localhost:5432/falldetect"  # Windows
-export DATABASE_URL=postgresql://falldetect:falldetect@localhost:5432/falldetect  # Linux/Mac
+python -c "import bcrypt; h=bcrypt.hashpw(b'yourpassword', bcrypt.gensalt()).decode(); print(h)"
+```
 
+Paste the output (the full `$2b$12$...` string) as the hash in `caregiver/api/.env`:
+
+```env
+CAREGIVER_USERS=test_user:$2b$12$<hash>
+```
+
+**Docker Compose bcrypt note:** Docker Compose interpolates `$` signs in env values.
+Bcrypt hashes contain `$` and will be truncated if passed through Docker Compose variable substitution.
+The project handles this via `infrastructure/caregiver_secrets.env`, which stores the same hash
+with every `$` doubled to `$$` (Docker's escape sequence for a literal `$`):
+
+```env
+# infrastructure/caregiver_secrets.env  — Docker only, NOT read by python-dotenv
+CAREGIVER_USERS=test_user:$$2b$$12$$<same-hash-with-all-$-doubled>
+```
+
+When you change a password, update **both** files:
+- `caregiver/api/.env` — `$` as-is (for dev mode)
+- `infrastructure/caregiver_secrets.env` — every `$` doubled to `$$` (for Docker)
+
+### Step 4 — Start PostgreSQL and Redis
+
+Use Docker Compose to start only the databases (preferred over standalone `docker run`):
+
+```powershell
+docker-compose -f infrastructure/docker-compose.yml --env-file .env up -d postgres redis
+```
+
+Verify they are healthy:
+
+```powershell
+docker-compose -f infrastructure/docker-compose.yml ps
+```
+
+Both should show `Up (healthy)`.
+
+### Step 5 — Run database migrations
+
+```powershell
+# Set DATABASE_URL for the current PowerShell session
+$env:DATABASE_URL = "postgresql://falldetect:falldetect@localhost:5432/falldetect"
+
+# Verify it is set (should print the URL, not blank)
+echo $env:DATABASE_URL
+
+# Run migrations
 alembic upgrade head
 ```
 
@@ -149,19 +177,17 @@ INFO  [alembic.runtime.migration] Running upgrade  -> 0001, Initial schema
 ```
 
 Verify tables were created:
-```bash
+
+```powershell
 docker exec fall_postgres psql -U falldetect -d falldetect -c "\dt"
 ```
 
 Should show: `inference_log`, `feature_snapshot`, `participant_session`, `api_request_log`.
 
-### Step 5 — Create Grafana read-only Postgres user (for Grafana dashboards)
+### Step 6 — Create Grafana read-only PostgreSQL user (first time only)
 
-```bash
-docker exec fall_postgres psql -U falldetect -d falldetect -c "
-  CREATE USER grafana_ro WITH PASSWORD 'grafana_ro';
-  GRANT SELECT ON inference_log, participant_session TO grafana_ro;
-"
+```powershell
+docker exec fall_postgres psql -U falldetect -d falldetect -c "CREATE USER grafana_ro WITH PASSWORD 'grafana_ro'; GRANT CONNECT ON DATABASE falldetect TO grafana_ro; GRANT USAGE ON SCHEMA public TO grafana_ro; GRANT SELECT ON inference_log, participant_session, feature_snapshot TO grafana_ro;"
 ```
 
 ---
@@ -170,119 +196,134 @@ docker exec fall_postgres psql -U falldetect -d falldetect -c "
 
 Starts all 10 services: postgres, redis, influxdb, ml_server, caregiver_api, emergency_svc, prometheus, grafana, alertmanager, nginx.
 
-### Build and start
+### Important: always pass --env-file
 
-```bash
+The compose file lives in `infrastructure/`, so Docker Compose will not find the root `.env` automatically.
+Always use `--env-file .env` from the project root:
+
+```powershell
 # From project root
-docker-compose -f infrastructure/docker-compose.yml up --build
+docker-compose -f infrastructure/docker-compose.yml --env-file .env up --build -d
 ```
 
-For background (detached):
-```bash
-docker-compose -f infrastructure/docker-compose.yml up --build -d
-```
+### First-time: run migrations inside the stack
 
-### First-time only: run migrations inside the container
-
-```bash
-docker-compose -f infrastructure/docker-compose.yml exec ml_server \
-  alembic upgrade head
+```powershell
+docker-compose -f infrastructure/docker-compose.yml exec ml_server alembic upgrade head
 ```
 
 ### Check all containers are healthy
 
-```bash
+```powershell
 docker-compose -f infrastructure/docker-compose.yml ps
 ```
 
-All services should show `Up` or `healthy`.
+Expected — all services show `Up` or `Up (healthy)`:
 
-### Stop
+| Container | Port published |
+|-----------|---------------|
+| fall_postgres | internal only (5432) |
+| fall_redis | internal only (6379) |
+| fall_influxdb | 8086 |
+| fall_ml_server | **8001** (published for main.py) |
+| fall_caregiver_api | **8002** (published for health checks) |
+| fall_emergency_svc | internal (via nginx) |
+| fall_prometheus | 9090 |
+| fall_grafana | internal (via nginx at /grafana/) |
+| fall_alertmanager | internal |
+| fall_nginx | **80**, 443 |
 
-```bash
+> **Why 8001 and 8002 are published:** `main.py` runs on Windows (outside Docker) and talks directly
+> to `ml_server`. In production you would remove these and route everything through nginx.
+
+### Stop the stack
+
+```powershell
 docker-compose -f infrastructure/docker-compose.yml down
-# To also delete volumes (wipes Postgres + InfluxDB data):
+
+# To also delete all data volumes (wipes Postgres, InfluxDB, Grafana):
 docker-compose -f infrastructure/docker-compose.yml down -v
+```
+
+### Restart a single service after a config change
+
+```powershell
+docker-compose -f infrastructure/docker-compose.yml --env-file .env up -d ml_server
 ```
 
 ---
 
-## 4. Option B — Development Mode (no Docker)
+## 4. Option B — Development Mode (no Docker for Python services)
 
-Run each service in a separate terminal. Requires Postgres and Redis already running (see Step 3 above).
+Run each Python service in a separate terminal. Requires Postgres and Redis running from Docker (Step 4 above).
 
 ### Terminal 1 — ML Server
 
-```bash
-cd c:\Users\hayat\Documents\6G\FallDetection_new
-
-set DATABASE_URL=postgresql://falldetect:falldetect@localhost:5432/falldetect
-set REDIS_URL=redis://localhost:6379/0
-
+```powershell
+cd C:\Users\hayat\Documents\6G\FallDetection_new
+$env:DATABASE_URL = "postgresql://falldetect:falldetect@localhost:5432/falldetect"
+$env:REDIS_URL    = "redis://localhost:6379/0"
 python system_operator/ml_server/server.py
-# Starts on http://localhost:8001
-# API docs: http://localhost:8001/docs
+# http://localhost:8001  |  Docs: http://localhost:8001/docs
 ```
 
 ### Terminal 2 — Caregiver API
 
-```bash
-cd c:\Users\hayat\Documents\6G\FallDetection_new
-
-set DATABASE_URL=postgresql://falldetect:falldetect@localhost:5432/falldetect
-set REDIS_URL=redis://localhost:6379/0
-set JWT_SECRET_KEY=<your-secret>
-
+```powershell
+cd C:\Users\hayat\Documents\6G\FallDetection_new
+$env:DATABASE_URL    = "postgresql://falldetect:falldetect@localhost:5432/falldetect"
+$env:REDIS_URL       = "redis://localhost:6379/0"
+$env:JWT_SECRET_KEY  = "your-jwt-secret"
 python -m uvicorn caregiver.api.server:app --host 0.0.0.0 --port 8002 --reload
-# Starts on http://localhost:8002
-# API docs: http://localhost:8002/docs
+# http://localhost:8002  |  Docs: http://localhost:8002/docs
 ```
+
+> The caregiver server reads `CAREGIVER_USERS` from the environment. For dev mode, set it or
+> rely on `caregiver/api/.env` being loaded by python-dotenv if configured.
 
 ### Terminal 3 — Emergency Notification Service
 
-```bash
-cd c:\Users\hayat\Documents\6G\FallDetection_new
-
-set REDIS_URL=redis://localhost:6379/0
-
+```powershell
+cd C:\Users\hayat\Documents\6G\FallDetection_new
+$env:REDIS_URL = "redis://localhost:6379/0"
 python -m uvicorn emergency.notification_service.server:app --host 0.0.0.0 --port 8003 --reload
-# Starts on http://localhost:8003
+# http://localhost:8003
 ```
 
-### Terminal 4 — Flask Client (existing behaviour, unchanged)
+### Terminal 4 — Flask Client (main.py)
 
-```bash
-cd c:\Users\hayat\Documents\6G\FallDetection_new
+```powershell
+cd C:\Users\hayat\Documents\6G\FallDetection_new
 python main.py
-# Starts on http://localhost:8000
-# Dashboard: http://localhost:8000
+# http://localhost:8000
 ```
 
-> In development mode, nginx is not running. Access each service directly on its port.
-> The dashboards in `caregiver/dashboard/`, `system_operator/operator_dashboard/`, and
-> `emergency/tablet_ui/` can be opened directly as HTML files in a browser,
-> but the API calls will fail unless you update `API_BASE` constants in the JS files
-> to point to the direct service ports (e.g. `http://localhost:8002`).
+> In dev mode, nginx is not running. Access each service on its port directly.
+> Dashboard HTML files can be opened with `python -m http.server 3000` in the dashboard folder
+> to avoid CORS errors.
 
 ---
 
 ## 5. Running the Original Client (main.py)
 
-The root `main.py` is unchanged and still works exactly as before.
+The root `main.py` is unchanged and backward-compatible.
 
-```bash
-# Local inference (no server needed)
-set INFERENCE_MODE=local
+```powershell
+# Local inference (no ml_server needed)
+$env:INFERENCE_MODE = "local"
 python main.py
 
-# Remote inference (ml_server must be running)
-set INFERENCE_MODE=remote
-set REMOTE_SERVER_URL=http://localhost:8001
-set REMOTE_API_KEY=<your-api-key>
+# Remote inference (ml_server must be running on port 8001)
+$env:INFERENCE_MODE      = "remote"
+$env:REMOTE_SERVER_URL   = "http://localhost:8001"
+$env:REMOTE_API_KEY      = "your-api-key"
 python main.py
 ```
 
-The Flask dashboard is at `http://localhost:8000`.
+Flask dashboard: `http://localhost:8000`
+
+> If `.env` is configured at the project root, these variables are loaded automatically
+> and you don't need to set them manually.
 
 ---
 
@@ -290,69 +331,75 @@ The Flask dashboard is at `http://localhost:8000`.
 
 ### Check ML server health
 
-```bash
-curl http://localhost:8001/health
-# Expected: {"status":"ok","model_loaded":true,"model_version":"v0","uptime_seconds":...}
+```powershell
+curl.exe http://localhost:8001/health
+# Expected: {"status":"ok","model_loaded":true,"model_version":"v0",...}
 ```
 
-### Check ML server metrics (Prometheus endpoint)
+### Check ML server Prometheus metrics
 
-```bash
-curl http://localhost:8001/metrics
-# Expected: Prometheus text format with http_requests_total, inference_latency_seconds, etc.
+```powershell
+curl.exe http://localhost:8001/metrics
+# Expected: Prometheus text format — fall_detections_total, inference_latency_seconds, etc.
 ```
 
 ### Send a test prediction
 
-```bash
-curl -X POST http://localhost:8001/predict \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: <your-api-key>" \
-  -d '{
-    "acc_x": [100,102,98,105,99,101,103,97,100,102],
-    "acc_y": [200,201,199,200,202,198,200,201,199,200],
-    "acc_z": [16384,16400,16370,16390,16380,16400,16370,16390,16380,16400],
-    "timestamps_ms": [0,40,80,120,160,200,240,280,320,360],
-    "participant": "test_patient"
-  }'
-# Expected: {"fall_detected":false,"confidence":...,"model_version":"v0",...}
+Write the body to a file first (avoids PowerShell quoting issues):
+
+```powershell
+'{"acc_x":[100,102,98,105,99,101,103,97,100,102],"acc_y":[200,201,199,200,202,198,200,201,199,200],"acc_z":[16384,16400,16370,16390,16380,16400,16370,16390,16380,16400],"timestamps_ms":[0,40,80,120,160,200,240,280,320,360],"participant":"test_patient"}' | Out-File -Encoding utf8 test.json
+
+curl.exe -X POST http://localhost:8001/predict -H "Content-Type: application/json" -H "X-API-Key: your-api-key" -d "@test.json"
+# Expected: {"fall_detected":false,"confidence":...,"model_version":"v0"}
 ```
 
 ### Verify PostgreSQL write
 
-```bash
-docker exec fall_postgres psql -U falldetect -d falldetect \
-  -c "SELECT id, participant, fall_detected, confidence, latency_ms FROM inference_log ORDER BY id DESC LIMIT 3;"
+```powershell
+docker exec fall_postgres psql -U falldetect -d falldetect -c "SELECT id, participant, fall_detected, confidence, latency_ms FROM inference_log ORDER BY id DESC LIMIT 3;"
 ```
 
-### Check Caregiver API
+### Check Caregiver API health
 
-```bash
-curl http://localhost:8002/health
+```powershell
+curl.exe http://localhost:8002/health
 # Expected: {"status":"ok","service":"caregiver_api"}
+```
 
-# Login (replace with your configured user)
-curl -X POST http://localhost:8002/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"alice","password":"mypassword"}'
+### Login to Caregiver API
+
+```powershell
+'{"username":"test_user","password":"mypassword123"}' | Out-File -Encoding utf8 login.json
+curl.exe -X POST http://localhost:8002/auth/login -H "Content-Type: application/json" -d "@login.json"
 # Expected: {"access_token":"eyJ...","token_type":"bearer","role":"caregiver"}
 ```
 
-### Verify Redis fall event published
+### Verify Redis pub/sub
 
-```bash
-# In one terminal: subscribe to channel
+```powershell
+# Terminal 1 — subscribe
 docker exec fall_redis redis-cli subscribe fall_events
 
-# In another terminal: trigger a prediction with a fall-like pattern
-# The subscriber terminal should show the published event
+# Terminal 2 — trigger a prediction (use the test.json from above)
+curl.exe -X POST http://localhost:8001/predict -H "Content-Type: application/json" -H "X-API-Key: your-api-key" -d "@test.json"
+
+# Terminal 1 should show the published fall event JSON
+```
+
+### Check container environment variables (debug)
+
+```powershell
+# PowerShell — use Select-String or findstr, NOT grep
+docker exec fall_ml_server env | Select-String "API_KEYS"
+docker exec fall_ml_server env | findstr "API_KEYS"
 ```
 
 ---
 
 ## 7. Accessing Dashboards
 
-### With Docker Compose (nginx running on port 80)
+### With Docker Compose (nginx on port 80)
 
 | Dashboard | URL |
 |-----------|-----|
@@ -362,83 +409,150 @@ docker exec fall_redis redis-cli subscribe fall_events
 | Grafana | http://localhost/grafana/ |
 | ML Server API docs | http://localhost/api/ml/docs |
 | Caregiver API docs | http://localhost/api/caregiver/docs |
-| Prometheus | http://localhost:9090 (direct, not through nginx) |
+| Prometheus | http://localhost:9090 (direct, not via nginx) |
 
 ### Without Docker (development mode)
 
-Open these HTML files directly in a browser:
-- `system_operator/operator_dashboard/index.html`
-- `caregiver/dashboard/index.html`
-- `emergency/tablet_ui/index.html`
-
-> Note: when opened as `file://`, API calls will fail due to CORS.
-> Use a simple file server: `python -m http.server 3000` in the dashboard folder.
+```powershell
+# Serve caregiver dashboard on port 3000
+cd caregiver/dashboard
+python -m http.server 3000
+# Open: http://localhost:3000
+```
 
 ---
 
 ## 8. Grafana Setup (first time)
 
-1. Open Grafana: http://localhost/grafana/ (or http://localhost:3000 direct)
-2. Login: admin / `falldetect` (or whatever `GRAFANA_ADMIN_PASSWORD` is set to)
-3. Datasources are auto-provisioned from `infrastructure/grafana/provisioning/datasources/datasources.yml`
-4. Dashboards are auto-provisioned from `infrastructure/grafana/dashboards/`
-5. You should see three dashboards under the "Fall Detection" folder:
-   - **ML Server Overview** — request rate, latency, error rate
-   - **Model Performance** — confidence distribution, drift detection
-   - **Fall Events Timeline** — patient fall history (reads from PostgreSQL)
+1. Open Grafana: `http://localhost/grafana/`
+2. Login: `admin` / value of `GRAFANA_ADMIN_PASSWORD` in `.env` (default: `admin`)
+3. Datasources auto-provisioned from `infrastructure/grafana/provisioning/datasources/datasources.yml`
+4. Dashboards auto-provisioned from `infrastructure/grafana/dashboards/`
+5. Three dashboards under **Fall Detection** folder:
+   - **ML Server Overview** — request rate, p95 latency, error rate, falls/hour
+   - **Model Performance** — confidence distribution, drift detection, low-confidence ratio
+   - **Fall Events Timeline** — patient fall history from PostgreSQL
 
-If dashboards don't appear, trigger a refresh:
-```bash
-curl -X POST http://admin:falldetect@localhost:3000/api/admin/provisioning/dashboards/reload
+If dashboards are empty, send a few test predictions first (Prometheus scrapes every 15s).
+
+If dashboards don't appear after restart:
+
+```powershell
+curl.exe -X POST "http://admin:your-grafana-password@localhost:3000/api/admin/provisioning/dashboards/reload"
 ```
 
 ---
 
 ## 9. Troubleshooting
 
-### "DATABASE_URL not configured" in db_writer logs
+### PowerShell "grep is not recognized"
 
-The `DATABASE_URL` env var is not set or not loaded. Check:
-```bash
-python -c "import os; print(os.environ.get('DATABASE_URL'))"
+```powershell
+# Use these instead:
+docker exec fall_ml_server env | Select-String "API_KEYS"
+docker exec fall_ml_server env | findstr "API_KEYS"
 ```
-Make sure `.env` is in the project root and `python-dotenv` is installed.
 
-### Alembic error: "target database is not up to date"
+### 403 Forbidden on /predict
 
-```bash
-alembic current     # shows current migration head
-alembic upgrade head  # applies all pending migrations
+The API key sent by the client doesn't match `API_KEYS` in the container. Check what the container actually has:
+
+```powershell
+docker exec fall_ml_server env | findstr "API_KEYS"
 ```
+
+If it shows `changeme` instead of your real key, the `.env` wasn't loaded. Always use `--env-file`:
+
+```powershell
+docker-compose -f infrastructure/docker-compose.yml --env-file .env up -d ml_server
+```
+
+### CAREGIVER_USERS truncated in container (login always fails)
+
+Docker Compose interpolates `$` in env values. Bcrypt hashes like `$2b$12$...` get truncated at the first `$<letter>` pattern.
+
+The fix is already in place via `infrastructure/caregiver_secrets.env` (uses `$$` escaping).
+If you regenerate the hash, update **both**:
+- `caregiver/api/.env` — with literal `$` (dev mode)
+- `infrastructure/caregiver_secrets.env` — with `$$` (Docker)
+
+### Container name conflict on docker-compose up
+
+```
+Error: The container name "/fall_redis" is already in use
+```
+
+A standalone `docker run` container with the same name exists. Remove it first:
+
+```powershell
+docker rm -f fall_redis fall_postgres
+docker-compose -f infrastructure/docker-compose.yml --env-file .env up -d
+```
+
+### Alembic: "password authentication failed for user 'user'"
+
+The `DATABASE_URL` env var was not set. In PowerShell, `set` (CMD syntax) does nothing.
+Use `$env:` syntax:
+
+```powershell
+$env:DATABASE_URL = "postgresql://falldetect:falldetect@localhost:5432/falldetect"
+echo $env:DATABASE_URL    # verify it is set before running alembic
+alembic upgrade head
+```
+
+### Port already in use
+
+```powershell
+netstat -ano | findstr :8001
+# Find the PID in the last column, then:
+Stop-Process -Id <PID> -Force
+```
+
+### Service keeps restarting in docker-compose ps
+
+Check the logs:
+
+```powershell
+docker logs fall_emergency_svc --tail 30
+docker logs fall_alertmanager --tail 30
+```
+
+Common causes:
+- Missing Python package → add to `infrastructure/Dockerfile.python` and rebuild with `--build`
+- Wrong YAML field in alertmanager config → check `infrastructure/alertmanager/alertmanager.yml`
+- Missing env var → check container env with `docker exec <name> env | findstr <VAR>`
 
 ### Redis connection refused
 
-Make sure Redis is running:
-```bash
-docker exec fall_redis redis-cli ping  # should return PONG
+```powershell
+docker exec fall_redis redis-cli ping    # should return PONG
 ```
 
-### SSE stream disconnects immediately in browser
+If the container is not running:
 
-nginx is buffering the response. Verify `proxy_buffering off` is set in
-`infrastructure/nginx/nginx.conf` for the `/stream` location block.
+```powershell
+docker-compose -f infrastructure/docker-compose.yml --env-file .env up -d redis
+```
+
+### Caregiver dashboard: "Internal Server Error" on login
+
+The bcrypt hash in the container is malformed (truncated `$`). See the CAREGIVER_USERS section above.
 
 ### ml_server: "Model not found" on startup
 
-Set `MODEL_VERSION` to one of the models that have `.pkl` files on disk:
-```bash
+Set `MODEL_VERSION` to a model that has `.pkl` files on disk:
+
+```powershell
 ls model/
 ```
-Valid options with files: `v0`, `v0_lsb_int`, `v3`, `v5_lsb`.
+
+Valid options: `v0`, `v0_lsb_int`, `v3`, `v5_lsb`.
 
 ### Caregiver dashboard: API calls return 401
 
-The JWT token in `localStorage` has expired (8h default). Click Logout and log in again.
+JWT token in `localStorage` has expired (8h default). Click Logout and log in again.
 
-### Port conflicts (Windows)
+### SSE stream disconnects immediately
 
-If port 8001/8002/8003 is in use:
-```bash
-netstat -ano | findstr :8001
-```
-Kill the process or change `SERVER_PORT` / `CAREGIVER_API_PORT` in the `.env` files.
+nginx is buffering. Verify `proxy_buffering off` is set in
+`infrastructure/nginx/nginx.conf` for the `/stream` location block.

@@ -144,6 +144,10 @@ services:
     command: >
       uvicorn caregiver.api.server:app
       --host 0.0.0.0 --port 8002
+    ports:
+      - "8002:8002"    # exposed for direct health checks and dev access
+    env_file:
+      - ./caregiver_secrets.env   # $$ escaped bcrypt hashes — Docker interpolates $$ → $
     environment:
       - DATABASE_URL=postgresql://falldetect:falldetect@postgres:5432/falldetect
       - REDIS_URL=redis://redis:6379/0
@@ -191,6 +195,8 @@ services:
       - "--storage.tsdb.path=/prometheus"
       - "--storage.tsdb.retention.time=30d"
       - "--web.enable-lifecycle"
+    ports:
+      - "9090:9090"    # direct host access for querying and debugging
     volumes:
       - ./prometheus:/etc/prometheus
       - prometheus_data:/prometheus
