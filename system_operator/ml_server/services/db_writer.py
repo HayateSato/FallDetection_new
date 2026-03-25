@@ -76,3 +76,55 @@ def write_inference_log(
     except Exception as e:
         logger.error(f"DB write failed (non-fatal): {e}")
         return None
+
+
+def write_inference_batch(rows: list) -> int:
+    """
+    Write multiple inference results to Postgres in a single transaction.
+
+    Each item in `rows` must be a dict with the same keys as write_inference_log():
+      model_version, fall_detected, confidence, window_size,
+      inference_mode, latency_ms, participant, timestamp (datetime, optional)
+
+    Returns the number of rows successfully written.
+    Never raises — errors are logged only.
+    """
+    if not rows:
+        return 0
+    try:
+        from shared.db.session import SessionLocal
+        from shared.db.models import InferenceLog
+
+        if SessionLocal is None:
+            logger.debug("DATABASE_URL not set — skipping batch DB write")
+            return 0
+
+        db = SessionLocal()
+        try:
+            db.bulk_insert_mappings(InferenceLog, [
+                {
+                    "timestamp":      r.get("timestamp"),
+                    "model_version":  r["model_version"],
+                    "fall_detected":  r["fall_detected"],
+                    "confidence":     r["confidence"],
+                    "window_size":    r["window_size"],
+                    "inference_mode": r["inference_mode"],
+                    "latency_ms":     r.get("latency_ms"),
+                    "participant":    r.get("participant", "unknown"),
+                }
+                for r in rows
+                if r.get("fall_detected") is not None   # skip error windows
+            ])
+            db.commit()
+            written = sum(1 for r in rows if r.get("fall_detected") is not None)
+            logger.info(f"Batch DB write OK — {written} rows inserted")
+            return written
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+    except Exception as e:
+        logger.error(f"Batch DB write failed (non-fatal): {e}")
+        return 0

@@ -254,7 +254,7 @@ async function runReplay() {
     window_seconds: window_s,
     step_seconds:   step_s,
   });
-  const res = await mlFetchRaw(`/datalake/replay?${params}`);
+  const res = await mlFetchRaw(`/datalake/replay?${params}`, { method: "POST" });
   document.getElementById("btn-replay").disabled = false;
 
   if (!res) { statusEl.textContent = "Cannot reach ml_server."; return; }
@@ -299,28 +299,34 @@ async function loadRecentLog() {
   try {
     const res = await fetch(`${ML_API}/inferences?limit=20`);
     if (!res.ok) {
-      tbody.innerHTML = `<tr><td colspan="7" class="loading">ML server unavailable (${res.status}). Is it running?</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" class="loading">ML server unavailable (${res.status}). Is it running?</td></tr>`;
       return;
     }
     const data = await res.json();
     const rows = data.inferences || [];
     if (rows.length === 0) {
-      tbody.innerHTML = `<tr><td colspan="7" class="loading">No inferences yet. Send a prediction to see data here.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="8" class="loading">No inferences yet. Send a prediction to see data here.</td></tr>`;
       return;
     }
-    tbody.innerHTML = rows.map(r => `
+    tbody.innerHTML = rows.map(r => {
+      const modeLabel = r.inference_mode === "replay"  ? `<span style="color:#f0a500">replay</span>`
+                      : r.inference_mode === "remote"  ? `<span style="color:#4caf9a">live</span>`
+                      : r.inference_mode === "local"   ? `<span style="color:#888">local</span>`
+                      :                                  `<span style="color:#888">—</span>`;
+      return `
       <tr>
         <td>${new Date(r.timestamp).toLocaleTimeString()}</td>
-        <td>${r.participant || "—"}</td>
+        <td style="max-width:140px;overflow:hidden;text-overflow:ellipsis" title="${r.participant || ""}">${r.participant || "—"}</td>
+        <td>${modeLabel}</td>
         <td class="${r.fall_detected ? "fall-yes" : "fall-no"}">${r.fall_detected ? "FALL" : "No"}</td>
         <td>${r.confidence != null ? (r.confidence * 100).toFixed(1) + "%" : "—"}</td>
         <td>${r.model_version?.toUpperCase() || "—"}</td>
         <td>${r.latency_ms != null ? r.latency_ms + "ms" : "—"}</td>
         <td>${r.window_size != null ? r.window_size + " smp" : "—"}</td>
-      </tr>
-    `).join("");
+      </tr>`;
+    }).join("");
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="7" class="loading">Cannot reach caregiver API. Is Docker running?</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="loading">Cannot reach ml_server. Is Docker running?</td></tr>`;
   }
 }
 

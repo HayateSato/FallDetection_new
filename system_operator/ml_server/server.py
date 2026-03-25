@@ -334,14 +334,15 @@ async def recent_inferences(limit: int = 20):
         return {
             "inferences": [
                 {
-                    "id": r.id,
-                    "timestamp": r.timestamp.isoformat(),
-                    "participant": r.participant,
-                    "fall_detected": r.fall_detected,
-                    "confidence": round(r.confidence, 3) if r.confidence is not None else None,
-                    "model_version": r.model_version,
-                    "latency_ms": r.latency_ms,
-                    "window_size": r.window_size,
+                    "id":             r.id,
+                    "timestamp":      r.timestamp.isoformat(),
+                    "participant":    r.participant,
+                    "fall_detected":  r.fall_detected,
+                    "confidence":     round(r.confidence, 3) if r.confidence is not None else None,
+                    "model_version":  r.model_version,
+                    "latency_ms":     r.latency_ms,
+                    "window_size":    r.window_size,
+                    "inference_mode": r.inference_mode,   # 'remote', 'local', or 'replay'
                 }
                 for r in rows
             ]
@@ -680,6 +681,27 @@ async def datalake_replay(
             })
 
     logger.info(f"Replay complete: {len(predictions)} windows, {falls_detected} falls")
+
+    # Write all predictions to Postgres in one transaction (inference_mode='replay')
+    from system_operator.ml_server.services.db_writer import write_inference_batch
+    from datetime import datetime, timezone as _tz
+    db_rows = [
+        {
+            "timestamp":      datetime.fromtimestamp(p["window_start_ms"] / 1000, tz=_tz.utc)
+                              if p.get("window_start_ms") else datetime.now(_tz.utc),
+            "model_version":  mv,
+            "fall_detected":  p["fall_detected"],
+            "confidence":     p["confidence"],
+            "window_size":    int(win_s * ACC_SAMPLE_RATE),
+            "inference_mode": "replay",
+            "latency_ms":     p.get("latency_ms"),
+            "participant":    filename,    # source CSV filename as participant label
+        }
+        for p in predictions
+    ]
+    written = write_inference_batch(db_rows)
+    logger.info(f"Saved {written} replay rows to inference_log")
+
     return {
         "filename":       filename,
         "participant":    participant,
@@ -688,6 +710,7 @@ async def datalake_replay(
         "falls_detected": falls_detected,
         "window_seconds": win_s,
         "step_seconds":   step_seconds,
+        "db_rows_saved":  written,
         "predictions":    predictions,
     }
 

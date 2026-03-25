@@ -29,7 +29,7 @@ class InferenceLog(Base):
     fall_detected  = Column(Boolean)
     confidence     = Column(Float)
     window_size    = Column(Integer)          # number of ACC samples used
-    inference_mode = Column(String(10))       # 'local' or 'remote'
+    inference_mode = Column(String(10))       # 'local', 'remote', or 'replay'
     latency_ms     = Column(Integer)          # end-to-end inference pipeline latency
     participant    = Column(String(100))      # participant/patient name from recording session
 
