@@ -34,51 +34,90 @@ first-time setup, migrations, credentials, and troubleshooting.
 
 ## Services & Ports
 
-### Python services
+### Current setup (development)
 
-| Container | Service | Internal port | Exposed to host | Exposed via nginx |
-|-----------|---------|:---:|:---:|:---:|
-| `fall_ml_server` | XGBoost inference (FastAPI) | 8001 | `localhost:8001` | `localhost/api/ml/` |
-| `fall_caregiver_api` | Caregiver REST API (FastAPI) | 8002 | `localhost:8002` | `localhost/api/caregiver/` |
-| `fall_emergency_svc` | Emergency SSE fan-out (FastAPI) | 8003 | — | `localhost/api/emergency/` |
+All 10 containers and how they are currently reachable:
 
-> `fall_ml_server` and `fall_caregiver_api` are published directly to the host so that
-> `main.py` (running on Windows, outside Docker) and health-check scripts can reach them
-> without going through nginx. In a production deployment these ports would be closed
-> and all traffic routed through nginx only.
+| Container (`docker ps` name) | Service | Internal port | Host port | Via nginx |
+|------------------------------|---------|:---:|:---:|:---:|
+| `fall_nginx` | Reverse proxy | 80, 443 | **:80, :443** | — (is nginx) |
+| `fall_ml_server` | XGBoost inference (FastAPI) | 8001 | **:8001** ⚠️ | `/api/ml/` |
+| `fall_caregiver_api` | Caregiver REST API (FastAPI) | 8002 | **:8002** ⚠️ | `/api/caregiver/` |
+| `fall_emergency_svc` | Emergency SSE fan-out (FastAPI) | 8003 | — | `/api/emergency/` |
+| `fall_prometheus` | Prometheus metrics store | 9090 | **:9090** ⚠️ | — |
+| `fall_grafana` | Grafana dashboards | 3000 | — | `/grafana/` |
+| `fall_influxdb` | InfluxDB time-series (sensor data) | 8086 | **:8086** | — |
+| `fall_postgres` | PostgreSQL (inference history) | 5432 | — | — |
+| `fall_redis` | Redis pub/sub (fall events) | 6379 | — | — |
+| `fall_alertmanager` | AlertManager (alert routing) | 9093 | — | — |
 
-### Infrastructure
+⚠️ = port published for **development/testing only** — see production table below.
 
-| Container | Service | Internal port | Exposed to host |
-|-----------|---------|:---:|:---:|
-| `fall_postgres` | PostgreSQL 16 | 5432 | — (internal only) |
-| `fall_redis` | Redis 7 | 6379 | — (internal only) |
-| `fall_influxdb` | InfluxDB 2.7 | 8086 | `localhost:8086` |
-| `fall_nginx` | Reverse proxy | 80, 443 | `localhost:80` / `localhost:443` |
+---
 
-### Observability
+### How each service is accessed
 
-| Container | Service | Internal port | Exposed to host |
-|-----------|---------|:---:|:---:|
-| `fall_prometheus` | Prometheus | 9090 | `localhost:9090` (direct, not via nginx) |
-| `fall_grafana` | Grafana | 3000 | via nginx at `localhost/grafana/` |
-| `fall_alertmanager` | AlertManager | 9093 | — (internal only) |
+**Via nginx only** — browser requests go to `localhost:80`, nginx routes by URL path:
+
+| URL path | Routed to | What it serves |
+|----------|-----------|----------------|
+| `localhost/operator/` | static files | Operator dashboard HTML/JS (served directly by nginx from disk) |
+| `localhost/caregiver/` | static files | Caregiver dashboard HTML/JS (served directly by nginx from disk) |
+| `localhost/emergency/` | static files | Emergency tablet UI HTML/JS (served directly by nginx from disk) |
+| `localhost/api/caregiver/` | `fall_caregiver_api:8002` | Caregiver REST API (patient list, fall history, SSE stream) |
+| `localhost/api/emergency/` | `fall_emergency_svc:8003` | Emergency SSE fan-out (live fall alerts to tablet UI) |
+| `localhost/grafana/` | `fall_grafana:3000` | Grafana dashboard UI |
+
+**Directly exposed to host** (bypass nginx):
+
+| URL | Container | Why exposed directly |
+|-----|-----------|----------------------|
+| `localhost:8001` | `fall_ml_server` | `main.py` runs on Windows (outside Docker) and cannot go through nginx |
+| `localhost:8002` | `fall_caregiver_api` | Dev health checks and `curl.exe` testing |
+| `localhost:9090` | `fall_prometheus` | No nginx route defined — direct browser access for debugging |
+| `localhost:8086` | `fall_influxdb` | SmarKo mobile app writes sensor data from outside the network |
+
+**Internal Docker network only** (not reachable from Windows host):
+
+| Container | Why internal is enough |
+|-----------|----------------------|
+| `fall_postgres` | Only accessed by Python services inside Docker |
+| `fall_redis` | Only accessed by Python services inside Docker |
+| `fall_grafana` | Accessed via nginx — no reason to expose port 3000 directly |
+| `fall_alertmanager` | Receives alerts from Prometheus (same network) — no external access needed |
+
+---
+
+### Production vs current setup
+
+What would change when moving to a real deployment:
+
+| Container | Current (dev) | Production |
+|-----------|--------------|------------|
+| `fall_ml_server` | Port 8001 published to host ⚠️ | Port closed — route through nginx only |
+| `fall_caregiver_api` | Port 8002 published to host ⚠️ | Port closed — route through nginx only |
+| `fall_prometheus` | Port 9090 published to host ⚠️ | Port closed — IP allowlist or VPN only |
+| `fall_influxdb` | Port 8086 published to host | Keep open — SmarKo app writes from outside |
+| `fall_nginx` | HTTP only (port 80) | Add SSL cert, redirect HTTP → HTTPS |
+| `fall_grafana` | No login enforcement beyond password | Add IP allowlist in nginx.conf |
+| `fall_alertmanager` | Email/Slack receivers are empty placeholders | Fill in real receivers in `alertmanager.yml` |
+| All services | Single `.env` with real secrets in plain text | Use Docker secrets or a secrets manager (e.g. Vault) |
 
 ---
 
 ## Access URLs (Docker Compose running)
 
-| What | URL | Auth |
-|------|-----|------|
-| Operator dashboard | http://localhost/operator/ | none |
-| Caregiver dashboard | http://localhost/caregiver/ | username + password |
-| Emergency tablet UI | http://localhost/emergency/ | none |
-| Grafana | http://localhost/grafana/ | `admin` / `GRAFANA_ADMIN_PASSWORD` |
-| Prometheus | http://localhost:9090 | none |
-| ML server API docs | http://localhost:8001/docs | none |
-| Caregiver API docs | http://localhost:8002/docs | none |
-| ML server health | http://localhost:8001/health | none |
-| Caregiver health | http://localhost:8002/health | none |
+| What | URL | Auth | Notes |
+|------|-----|------|-------|
+| Operator dashboard | http://localhost/operator/ | none | Static HTML, served by nginx |
+| Caregiver dashboard | http://localhost/caregiver/ | username + password (JWT) | Static HTML + API calls to `/api/caregiver/` |
+| Emergency tablet UI | http://localhost/emergency/ | none | Static HTML, SSE stream from `/api/emergency/stream` |
+| Grafana | http://localhost/grafana/ | `admin` / `GRAFANA_ADMIN_PASSWORD` | Via nginx |
+| Prometheus | http://localhost:9090 | none | Direct — dev/debug only |
+| ML server API docs | http://localhost:8001/docs | none | Dev only — Swagger UI |
+| Caregiver API docs | http://localhost:8002/docs | none | Dev only — Swagger UI |
+| ML server health | http://localhost:8001/health | none | Dev only |
+| Caregiver health | http://localhost:8002/health | none | Dev only |
 
 ---
 
