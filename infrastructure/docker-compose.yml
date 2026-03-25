@@ -26,6 +26,7 @@ volumes:
   influxdb_data:
   grafana_data:
   prometheus_data:
+  minio_data:
 
 # ---------------------------------------------------------------------------
 # Shared environment snippet (referenced by ml services)
@@ -104,6 +105,30 @@ services:
     restart: unless-stopped
 
   # -------------------------------------------------------------------------
+  # MinIO — S3-compatible object store (datalake for sensor recording CSVs)
+  # -------------------------------------------------------------------------
+  minio:
+    image: minio/minio:latest
+    container_name: fall_minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER:     ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"   # S3 API — used by ml_server (inside Docker) and boto3 (host)
+      - "9001:9001"   # MinIO web console — http://localhost:9001
+    networks:
+      - fall_detection
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # -------------------------------------------------------------------------
   # ML Inference Server — FastAPI, runs XGBoost inference
   # -------------------------------------------------------------------------
   ml_server:
@@ -124,10 +149,16 @@ services:
       - ACC_SENSOR_TYPE=${ACC_SENSOR_TYPE:-bosch}
       - JWT_SECRET_KEY=${JWT_SECRET_KEY:-changeme-jwt-secret}
       - SERVER_PORT=8001
+      - MINIO_URL=http://minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      - MINIO_BUCKET=${MINIO_BUCKET:-sensor-recordings}
     depends_on:
       postgres:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      minio:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8001/health"]

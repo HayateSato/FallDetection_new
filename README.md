@@ -50,6 +50,7 @@ All 10 containers and how they are currently reachable:
 | `fall_postgres` | PostgreSQL (inference history) | 5432 | — | — |
 | `fall_redis` | Redis pub/sub (fall events) | 6379 | — | — |
 | `fall_alertmanager` | AlertManager (alert routing) | 9093 | — | — |
+| `fall_minio` | MinIO datalake (sensor CSV files) | 9000, 9001 | **:9000, :9001** | — |
 
 ⚠️ = port published for **development/testing only** — see production table below.
 
@@ -76,6 +77,8 @@ All 10 containers and how they are currently reachable:
 | `localhost:8002` | `fall_caregiver_api` | Dev health checks and `curl.exe` testing |
 | `localhost:9090` | `fall_prometheus` | No nginx route defined — direct browser access for debugging |
 | `localhost:8086` | `fall_influxdb` | SmarKo mobile app writes sensor data from outside the network |
+| `localhost:9000` | `fall_minio` | S3 API — used by ml_server (Docker) and boto3 tools (host) |
+| `localhost:9001` | `fall_minio` | MinIO web console — upload/browse CSV files |
 
 **Internal Docker network only** (not reachable from Windows host):
 
@@ -114,10 +117,80 @@ What would change when moving to a real deployment:
 | Emergency tablet UI | http://localhost/emergency/ | none | Static HTML, SSE stream from `/api/emergency/stream` |
 | Grafana | http://localhost/grafana/ | `admin` / `GRAFANA_ADMIN_PASSWORD` | Via nginx |
 | Prometheus | http://localhost:9090 | none | Direct — dev/debug only |
+| MinIO web console | http://localhost:9001 | `minioadmin` / `minioadmin` | Browse and upload sensor CSV files |
+| MinIO S3 API | http://localhost:9000 | access/secret key | Used by ml_server internally and boto3 tools |
 | ML server API docs | http://localhost:8001/docs | none | Dev only — Swagger UI |
 | Caregiver API docs | http://localhost:8002/docs | none | Dev only — Swagger UI |
 | ML server health | http://localhost:8001/health | none | Dev only |
 | Caregiver health | http://localhost:8002/health | none | Dev only |
+
+---
+
+## Backend Architecture — What Each Server Actually Is
+
+The system uses a **Backend-For-Frontend (BFF)** pattern: each user type has its own dedicated API server. They do not share endpoints.
+
+### ml_server — FastAPI :8001 — inference engine + operator API
+
+This is the core of the system. It owns the XGBoost model and is the only service that does inference.
+
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /predict` | Run inference pipeline, return `{ fall_detected, confidence }` |
+| `GET /model/info` | Currently loaded model name, version, feature count |
+| `GET /model/list` | All available model versions found in `model/` directory |
+| `POST /model/switch` | Hot-swap the loaded model without restart (API key required) |
+| `GET /inferences` | Recent inference history from PostgreSQL (for operator dashboard) |
+| `GET /health` | Uptime, model version |
+| `GET /metrics` | Prometheus metrics endpoint (scraped every 15s) |
+
+After every `/predict` call, three things happen as background tasks:
+- Write row to PostgreSQL `inference_log`
+- Update Prometheus counters
+- If fall detected: publish to Redis `fall_events` channel
+
+**Who calls it:** `main.py` (Flask client, for inference) and the operator dashboard (for model management and recent log).
+
+---
+
+### caregiver/api — FastAPI :8002 — caregiver data API
+
+This server is for the caregiver dashboard only. It does not do inference. It reads historical data from PostgreSQL (written by ml_server) and streams live fall events from Redis.
+
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /auth/login` | Username + password → JWT token |
+| `GET /patients` | List all participant sessions with summary stats |
+| `GET /patients/{name}/falls` | Paginated fall history for one patient |
+| `GET /patients/{name}/stream` | SSE stream of live fall events for one patient |
+| `GET /patients/stream` | SSE stream of all fall events (any patient) |
+| `GET /stats/summary` | Aggregate stats for today (falls count, avg confidence) |
+
+**Who calls it:** The caregiver dashboard only.
+
+---
+
+### emergency/notification_service — FastAPI :8003 — SSE fan-out only
+
+The simplest service. It subscribes to Redis `fall_events` and fans out to all connected SSE clients (emergency tablets). No database, no auth, no inference.
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /stream` | SSE stream — any connected client receives every fall event in real time |
+| `GET /health` | Uptime check |
+
+**Who calls it:** The emergency tablet UI only.
+
+---
+
+### Why this separation?
+
+Each user type sees different data and has different access rights:
+- The operator needs model control and raw inference metrics — ml_server owns those.
+- The caregiver needs patient history and live alerts per patient — caregiver_api owns those.
+- The emergency responder only needs a loud real-time alert — emergency_svc owns that.
+
+None of these services share an endpoint. If you need data from a different user's domain, you are looking at the wrong server.
 
 ---
 
@@ -141,7 +214,7 @@ main.py — Flask :8000  (runs on Windows, outside Docker)
   │  POST /predict  +  X-API-Key header
   ▼
 ┌──────────────────────────────────────────────────────────────────┐
-│  ml_server  FastAPI :8001                                        │
+│  ml_server  FastAPI :8001 (inference engine + operator API)      │
 │                                                                  │
 │  1. AccelerometerResampler  (25Hz → 50Hz)                        │
 │  2. convert_lsb_to_g                                             │
@@ -181,9 +254,9 @@ main.py — Flask :8000  (runs on Windows, outside Docker)
        │                  links to Grafana)
        │                      ▲
        └──────────────────────┘
-         operator dashboard also reads
-         PostgreSQL via caregiver API
-         for recent inference log
+         operator dashboard reads
+         PostgreSQL via ml_server
+         GET /inferences endpoint
 ```
 
 ---
@@ -269,6 +342,10 @@ FallDetection_new/
 │   ├── grafana/                    3 pre-built dashboards + provisioning
 │   ├── alertmanager/               Alert routing (email / webhook)
 │   └── nginx/                      Reverse proxy config (SSE-aware)
+│
+├── datalake/
+│   ├── minio_client.py             boto3 S3 helpers — list/upload/download CSV files in MinIO
+│   └── csv_converter.py            SmarKo CSV → sliding windows for offline inference replay
 │
 ├── app/                            Core ML pipeline (shared by main.py and ml_server)
 ├── model/                          XGBoost .pkl files (v0, v3, v5_lsb, ...)

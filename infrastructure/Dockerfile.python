@@ -23,7 +23,10 @@ RUN pip install --no-cache-dir \
     prometheus-client \
     prometheus-fastapi-instrumentator \
     python-jose[cryptography] \
-    passlib[bcrypt]
+    passlib[bcrypt] \
+    boto3 \
+    pandas \
+    python-multipart
 
 # Project root is mounted at runtime via volumes: [..:/app]
 # No COPY needed — everything comes from the bind mount

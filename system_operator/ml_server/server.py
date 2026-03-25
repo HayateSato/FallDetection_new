@@ -25,7 +25,7 @@ from typing import Dict, List, Optional, Any
 
 import numpy as np
 import uvicorn
-from fastapi import FastAPI, HTTPException, Depends, Request, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Depends, Request, BackgroundTasks, UploadFile, File, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -49,6 +49,7 @@ from config.settings import (
     API_KEYS,
     RATE_LIMIT_PER_MINUTE,
     CORS_ALLOWED_ORIGINS,
+    ACC_SENSOR_TYPE,
 )
 from config.hardware_config import ACC_SENSOR_SENSITIVITY
 
@@ -98,6 +99,12 @@ _current_model_version = MODEL_VERSION
 _inference_engine = PipelineSelector(MODEL_VERSION, MODEL_PATH)
 _model_info = _inference_engine.get_model_info()
 _model_config = get_model_config(get_model_name(MODEL_VERSION))
+
+# Mutable runtime config — updated by POST /config, default to settings values
+_window_size_seconds:   float = WINDOW_SIZE_SECONDS
+_hardware_sample_rate:  int   = HARDWARE_ACC_SAMPLE_RATE   # 25, 50, or 100 Hz
+_resampling_method:     str   = RESAMPLING_METHOD          # 'linear', 'decimate', 'average'
+_acc_sensor_type:       str   = ACC_SENSOR_TYPE            # 'bosch' or 'non_bosch'
 
 logger.info("=" * 60)
 logger.info("Fall Detection ML Server")
@@ -375,10 +382,10 @@ async def predict(req: PredictRequest, background_tasks: BackgroundTasks):
         acc_time = np.array(req.timestamps_ms)
 
         # 2. Resampling
-        hw_rate = req.sample_rate or HARDWARE_ACC_SAMPLE_RATE
+        hw_rate = req.sample_rate or _hardware_sample_rate
         if hw_rate != ACC_SAMPLE_RATE:
             resampler = AccelerometerResampler(source_rate=hw_rate, target_rate=ACC_SAMPLE_RATE,
-                                               method=RESAMPLING_METHOD)
+                                               method=_resampling_method)
             acc_data, acc_time = resampler.process(acc_data, acc_time)
             logger.info(f"  Resampled {hw_rate}Hz -> {ACC_SAMPLE_RATE}Hz ({acc_data.shape[1]} samples)")
 
@@ -393,7 +400,7 @@ async def predict(req: PredictRequest, background_tasks: BackgroundTasks):
         df = convert_acc_nparray_to_df(acc_data, acc_time)
 
         # 5. Window extraction
-        required_samples = int(WINDOW_SIZE_SECONDS * ACC_SAMPLE_RATE)
+        required_samples = int(_window_size_seconds * ACC_SAMPLE_RATE)
         pressure = np.array(req.pressure) if req.pressure else None
         pressure_time = np.array(req.pressure_timestamps_ms) if req.pressure_timestamps_ms else None
         window_df, window_pressure, window_pressure_time = compose_detection_window(
@@ -478,6 +485,212 @@ def _bg_write_and_publish(mv: str, is_fall: bool, confidence: float,
         model_version=mv,
         inference_id=inference_id,
     )
+
+# ---------------------------------------------------------------------------
+# /config — update detection window size at runtime
+# ---------------------------------------------------------------------------
+
+class ConfigRequest(BaseModel):
+    window_seconds:      Optional[float] = Field(None, ge=1.0,   le=60.0,
+                                                 description="Detection window size in seconds")
+    hardware_sample_rate: Optional[int]  = Field(None,
+                                                 description="Hardware ACC sample rate in Hz (25, 50, or 100)")
+    resampling_method:   Optional[str]   = Field(None,
+                                                 description="Resampling algorithm: 'linear', 'decimate', or 'average'")
+    acc_sensor_type:     Optional[str]   = Field(None,
+                                                 description="Accelerometer sensor type: 'bosch' or 'non_bosch'")
+
+
+@app.post("/config")
+async def set_config(req: ConfigRequest):
+    """Update runtime processing config. Only supplied fields are changed."""
+    global _window_size_seconds, _hardware_sample_rate, _resampling_method, _acc_sensor_type
+
+    if req.window_seconds is not None:
+        _window_size_seconds = req.window_seconds
+
+    if req.hardware_sample_rate is not None:
+        if req.hardware_sample_rate not in (25, 50, 100):
+            raise HTTPException(status_code=422, detail="hardware_sample_rate must be 25, 50, or 100")
+        _hardware_sample_rate = req.hardware_sample_rate
+
+    if req.resampling_method is not None:
+        if req.resampling_method not in ("linear", "decimate", "average"):
+            raise HTTPException(status_code=422,
+                                detail="resampling_method must be 'linear', 'decimate', or 'average'")
+        _resampling_method = req.resampling_method
+
+    if req.acc_sensor_type is not None:
+        if req.acc_sensor_type not in ("bosch", "non_bosch"):
+            raise HTTPException(status_code=422, detail="acc_sensor_type must be 'bosch' or 'non_bosch'")
+        _acc_sensor_type = req.acc_sensor_type
+
+    logger.info(
+        f"Config updated: window={_window_size_seconds}s, hw_rate={_hardware_sample_rate}Hz, "
+        f"resample={_resampling_method}, sensor={_acc_sensor_type}"
+    )
+    return _build_config_response()
+
+
+@app.get("/config")
+async def get_config():
+    """Return the current runtime processing configuration."""
+    return _build_config_response()
+
+
+def _build_config_response() -> dict:
+    return {
+        "window_seconds":       _window_size_seconds,
+        "window_samples":       int(_window_size_seconds * ACC_SAMPLE_RATE),
+        "model_sample_rate_hz": ACC_SAMPLE_RATE,
+        "hardware_sample_rate": _hardware_sample_rate,
+        "resampling_method":    _resampling_method,
+        "acc_sensor_type":      _acc_sensor_type,
+    }
+
+
+# ---------------------------------------------------------------------------
+# /datalake — MinIO file management + CSV offline inference replay
+# ---------------------------------------------------------------------------
+
+@app.get("/datalake/files")
+async def datalake_list_files():
+    """List CSV files available in the MinIO datalake bucket."""
+    try:
+        from datalake.minio_client import list_csv_files
+        files = list_csv_files()
+        return {"files": files, "bucket": os.getenv("MINIO_BUCKET", "sensor-recordings")}
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"MinIO unavailable: {e}")
+
+
+@app.post("/datalake/upload")
+async def datalake_upload(file: UploadFile = File(...)):
+    """Upload a SmarKo CSV recording to the MinIO datalake."""
+    if not file.filename.lower().endswith(".csv"):
+        raise HTTPException(status_code=400, detail="Only .csv files are accepted.")
+    try:
+        from datalake.minio_client import upload_file
+        upload_file(file.filename, file.file)
+        return {"success": True, "filename": file.filename}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Upload failed: {e}")
+
+
+@app.post("/datalake/replay")
+async def datalake_replay(
+    filename: str = Query(..., description="CSV filename in MinIO bucket"),
+    window_seconds: Optional[float] = Query(None, ge=1.0, le=60.0,
+                                            description="Window size in seconds (default: server config)"),
+    step_seconds: float = Query(3.0, ge=0.5, le=30.0,
+                                description="Step between windows in seconds"),
+    participant: str = Query("replay", description="Participant label for DB logging"),
+    sample_rate: float = Query(25.0, ge=1.0, le=200.0,
+                               description="Hardware ACC sample rate of the recording in Hz"),
+):
+    """
+    Run fall detection on every window of a CSV file stored in MinIO.
+
+    Downloads the CSV, splits it into sliding windows, runs each through
+    the currently loaded model, and returns all predictions. This is the
+    core of the offline model comparison workflow — same CSV, different
+    models, compare the results.
+    """
+    win_s = window_seconds if window_seconds is not None else _window_size_seconds
+
+    try:
+        from datalake.minio_client import download_file_bytes
+        from datalake.csv_converter import load_csv, extract_acc, extract_pressure, split_into_windows
+
+        logger.info(f"Replay start: file={filename!r}, window={win_s}s, step={step_seconds}s")
+        csv_bytes = download_file_bytes(filename)
+        df        = load_csv(csv_bytes)
+        acc_data, acc_time  = extract_acc(df)
+        pressure, pres_time = extract_pressure(df)
+        windows = split_into_windows(
+            acc_data, acc_time, pressure, pres_time,
+            window_seconds=win_s,
+            step_seconds=step_seconds,
+            sample_rate=sample_rate,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"MinIO unavailable or CSV invalid: {e}")
+
+    with _model_lock:
+        engine = _inference_engine
+        mv     = _current_model_version
+        mc     = _model_config
+
+    predictions = []
+    falls_detected = 0
+
+    for i, w in enumerate(windows):
+        try:
+            t_start = time.monotonic()
+
+            acc = np.array([w["acc_x"], w["acc_y"], w["acc_z"]])
+            ts  = np.array(w["timestamps_ms"])
+
+            hw_rate = w.get("sample_rate", sample_rate)
+            if hw_rate != ACC_SAMPLE_RATE:
+                resampler = AccelerometerResampler(
+                    source_rate=hw_rate, target_rate=ACC_SAMPLE_RATE,
+                    method=_resampling_method,
+                )
+                acc, ts = resampler.process(acc, ts)
+
+            if not mc.acc_in_lsb:
+                acc = convert_lsb_to_g(acc)
+
+            df_win = convert_acc_nparray_to_df(acc, ts)
+            required = int(win_s * ACC_SAMPLE_RATE)
+            pres_arr = np.array(w["pressure"])               if w["pressure"]               else None
+            pres_ts  = np.array(w["pressure_timestamps_ms"]) if w["pressure_timestamps_ms"] else None
+            df_win, w_pressure, w_pres_ts = compose_detection_window(
+                df_win, required, pres_arr, pres_ts)
+
+            result     = engine.predict(df_win, pressure=w_pressure, pressure_timestamps=w_pres_ts)
+            latency_ms = int((time.monotonic() - t_start) * 1000)
+            is_fall    = result["is_fall"]
+            confidence = float(result["confidence"])
+            if is_fall:
+                falls_detected += 1
+
+            predictions.append({
+                "window_index":    i,
+                "window_start_ms": w["window_start_ms"],
+                "window_end_ms":   w["window_end_ms"],
+                "fall_detected":   is_fall,
+                "confidence":      round(confidence, 4),
+                "latency_ms":      latency_ms,
+            })
+
+        except Exception as e:
+            logger.warning(f"Replay window {i} failed: {e}")
+            predictions.append({
+                "window_index":    i,
+                "window_start_ms": w.get("window_start_ms"),
+                "window_end_ms":   w.get("window_end_ms"),
+                "fall_detected":   None,
+                "confidence":      None,
+                "latency_ms":      None,
+                "error":           str(e),
+            })
+
+    logger.info(f"Replay complete: {len(predictions)} windows, {falls_detected} falls")
+    return {
+        "filename":       filename,
+        "participant":    participant,
+        "model_version":  mv,
+        "total_windows":  len(predictions),
+        "falls_detected": falls_detected,
+        "window_seconds": win_s,
+        "step_seconds":   step_seconds,
+        "predictions":    predictions,
+    }
+
 
 # ---------------------------------------------------------------------------
 # Run

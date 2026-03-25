@@ -94,12 +94,9 @@
       </div>
     </section>
 
-    <!-- Panel 4: Processing Configuration (placeholder) -->
+    <!-- Panel 4: Processing Configuration -->
     <section class="panel" id="panel-config">
       <h2>Processing Configuration</h2>
-      <p class="meta" style="margin-bottom:1rem">
-        Controls sent to ml_server on next prediction. Backend wiring in progress.
-      </p>
 
       <div class="config-grid">
 
@@ -107,25 +104,48 @@
           <div class="label">Time Window (seconds)</div>
           <div class="config-row">
             <input id="cfg-window" type="number" min="3" max="30" value="9" step="1">
-            <span class="meta">Current default: 9s (450 samples @ 50Hz)</span>
+            <span id="cfg-window-hint" class="meta">9s = 450 samples @ 50Hz</span>
           </div>
+        </div>
+
+        <div class="config-group">
+          <div class="label">Accelerometer Sensor Type</div>
+          <select id="cfg-sensor-type">
+            <option value="bosch">Bosch (25Hz, LSB ÷ 16384 → g)</option>
+            <option value="non_bosch">Non-Bosch (100Hz, different sensitivity)</option>
+          </select>
+        </div>
+
+        <div class="config-group">
+          <div class="label">Hardware Sample Rate (Hz)</div>
+          <select id="cfg-sample-rate">
+            <option value="25">25 Hz — Bosch default</option>
+            <option value="50">50 Hz — already at model rate</option>
+            <option value="100">100 Hz — Non-Bosch, downsampled</option>
+          </select>
+        </div>
+
+        <div class="config-group">
+          <div class="label">Resampling Method</div>
+          <select id="cfg-resample-method">
+            <option value="linear">Linear interpolation (default)</option>
+            <option value="decimate">Decimate (anti-alias filter)</option>
+            <option value="average">Average pooling</option>
+          </select>
         </div>
 
         <div class="config-group">
           <div class="label">Data Source</div>
           <div class="config-row">
             <label class="radio-label">
-              <input type="radio" name="data-source" value="influx" checked> Live InfluxDB
+              <input type="radio" name="data-source" value="influx" checked
+                     onchange="onDataSourceChange('influx')"> Live InfluxDB
             </label>
             <label class="radio-label">
-              <input type="radio" name="data-source" value="csv"> CSV / MinIO
-              <span class="badge badge-grey" style="font-size:0.7rem;margin-left:0.4rem">Not yet wired</span>
+              <input type="radio" name="data-source" value="csv"
+                     onchange="onDataSourceChange('csv')"> CSV / MinIO
             </label>
           </div>
-          <p class="meta" style="margin-top:0.5rem">
-            CSV/MinIO: upload historical sensor recordings to MinIO object store,
-            select a file here to replay predictions offline for model comparison.
-          </p>
         </div>
 
         <div class="config-group">
@@ -135,6 +155,71 @@
         </div>
 
       </div>
+
+      <!-- CSV / MinIO panel — shown only when CSV radio is selected -->
+      <div id="csv-panel" style="display:none; margin-top:1.4rem; border-top:1px solid #2a2a2a; padding-top:1.2rem;">
+        <h3 style="font-size:0.95rem; color:#aaa; margin-bottom:1rem;">MinIO Datalake — Offline Replay</h3>
+
+        <div class="config-grid">
+
+          <div class="config-group">
+            <div class="label">Select Recording</div>
+            <div class="config-row" style="gap:0.6rem; flex-wrap:wrap;">
+              <select id="csv-file-select" style="min-width:260px;">
+                <option value="">— loading files… —</option>
+              </select>
+              <button onclick="loadFileList()" class="btn-apply">Refresh</button>
+            </div>
+            <p id="csv-file-meta" class="meta" style="margin-top:0.3rem;"></p>
+          </div>
+
+          <div class="config-group">
+            <div class="label">Step Between Windows (s)</div>
+            <div class="config-row">
+              <input id="cfg-step" type="number" min="0.5" max="30" value="3" step="0.5">
+              <span class="meta">Smaller = more windows, more overlap</span>
+            </div>
+          </div>
+
+          <div class="config-group">
+            <div class="label">Upload New CSV</div>
+            <div class="config-row" style="gap:0.6rem; flex-wrap:wrap;">
+              <input type="file" id="csv-upload-input" accept=".csv" style="color:#ccc;">
+              <button onclick="uploadCsv()" class="btn-apply">Upload to MinIO</button>
+            </div>
+            <span id="upload-status" class="meta" style="margin-top:0.3rem; display:block;"></span>
+          </div>
+
+          <div class="config-group">
+            <div class="label">Run Replay</div>
+            <button id="btn-replay" onclick="runReplay()" class="btn-apply" style="background:#1a6b3a;">
+              Run Predictions on Selected CSV
+            </button>
+            <span id="replay-status" class="meta" style="margin-left:0.8rem;"></span>
+          </div>
+
+        </div>
+
+        <!-- Replay results table -->
+        <div id="replay-results" style="display:none; margin-top:1.2rem;">
+          <h3 style="font-size:0.9rem; color:#aaa; margin-bottom:0.6rem;">
+            Replay Results — <span id="replay-summary"></span>
+          </h3>
+          <table id="replay-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Window Start</th>
+                <th>Fall?</th>
+                <th>Confidence</th>
+                <th>Latency</th>
+              </tr>
+            </thead>
+            <tbody id="replay-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
     </section>
 
     <!-- Panel 5: Recent Inference Log -->

@@ -409,18 +409,20 @@ processing pipelines, and time window sizes systematically, replacing manual CSV
 - Emergency SSE alerts to tablet UI
 - These are lower priority until model comparison workflow is established
 
-### Planned: MinIO for historical CSV replay
-- User will upload historical sensor recording CSV files to MinIO object store
-- Operator dashboard will have a file picker to select a CSV for offline replay
-- ml_server will fetch the CSV from MinIO and run predictions against it (no live InfluxDB needed)
-- This enables systematic offline comparison: same data → different models → compare results
-- **Status:** UI placeholder added to operator dashboard (data source toggle). Backend wiring pending.
-- **Stack:** MinIO (S3-compatible, runs as Docker service), ml_server reads via boto3/minio-py
+### MinIO datalake + CSV offline replay — IMPLEMENTED
+- MinIO runs as Docker service (`fall_minio`), S3-compatible, ports 9000 (API) and 9001 (console)
+- `datalake/minio_client.py` — boto3 S3 client helpers (list/upload/download)
+- `datalake/csv_converter.py` — SmarKo CSV → sliding windows for inference (filters `is_accelerometer_bosch==1`, `is_pressure==1`)
+- ml_server new endpoints: `GET /datalake/files`, `POST /datalake/upload`, `POST /datalake/replay`
+- Operator dashboard: CSV radio shows file picker, upload button, replay button, results table
+- Replay runs the full inference pipeline server-side (resample → LSB→g → window → XGBoost) for every window
+- **Stack:** MinIO + boto3 + pandas (all in Dockerfile.python)
+- **MinIO console:** http://localhost:9001 (minioadmin / minioadmin by default)
 
-### Planned: Time window configuration via API
-- Operator dashboard time window input (UI placeholder exists) needs a `/config` POST endpoint on ml_server
-- ml_server should accept `window_seconds` and recompute `compose_detection_window` dynamically
-- Enables systematic comparison: same model + same data → different window sizes → compare F1/confidence
+### Time window configuration via API — IMPLEMENTED
+- `POST /config` on ml_server sets `_window_size_seconds` (mutable global, survives until container restart)
+- `GET /config` returns current window settings
+- Operator dashboard "Set Window" button POSTs to `/config` and shows confirmation with sample count
 
 ---
 

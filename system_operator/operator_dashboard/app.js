@@ -38,6 +38,7 @@ window.addEventListener("DOMContentLoaded", () => {
   loadModelList();
   loadServerHealth();
   loadRecentLog();
+  loadConfig();
   setInterval(loadServerHealth, 15_000);
   setInterval(loadRecentLog, 30_000);
 });
@@ -117,18 +118,178 @@ function formatUptime(seconds) {
   return h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
-// ---- Processing Config (placeholder — backend wiring pending) ----
+// ---- Processing Config ----
 
-function applyConfig() {
-  const window_s = document.getElementById("cfg-window").value;
-  const source   = document.querySelector('input[name="data-source"]:checked').value;
-  const status   = document.getElementById("config-status");
+/** Populate all config dropdowns from the server's current state on page load. */
+async function loadConfig() {
+  const data = await mlFetch("/config");
+  if (!data) return;
+  _applyConfigToUI(data);
+}
+
+function _applyConfigToUI(d) {
+  if (d.window_seconds != null)
+    document.getElementById("cfg-window").value = d.window_seconds;
+  if (d.window_samples != null && d.model_sample_rate_hz != null)
+    document.getElementById("cfg-window-hint").textContent =
+      `${d.window_seconds}s = ${d.window_samples} samples @ ${d.model_sample_rate_hz}Hz`;
+  if (d.acc_sensor_type)
+    document.getElementById("cfg-sensor-type").value = d.acc_sensor_type;
+  if (d.hardware_sample_rate)
+    document.getElementById("cfg-sample-rate").value = String(d.hardware_sample_rate);
+  if (d.resampling_method)
+    document.getElementById("cfg-resample-method").value = d.resampling_method;
+}
+
+function onDataSourceChange(source) {
+  const csvPanel = document.getElementById("csv-panel");
   if (source === "csv") {
-    status.textContent = "CSV/MinIO data source not yet wired. Change noted.";
+    csvPanel.style.display = "block";
+    loadFileList();
+  } else {
+    csvPanel.style.display = "none";
+  }
+}
+
+async function applyConfig() {
+  const status  = document.getElementById("config-status");
+  const payload = {
+    window_seconds:       parseFloat(document.getElementById("cfg-window").value),
+    acc_sensor_type:      document.getElementById("cfg-sensor-type").value,
+    hardware_sample_rate: parseInt(document.getElementById("cfg-sample-rate").value, 10),
+    resampling_method:    document.getElementById("cfg-resample-method").value,
+  };
+  status.textContent = "Applying…";
+  const res = await mlFetchRaw("/config", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res) { status.textContent = "Cannot reach ml_server."; return; }
+  if (res.ok) {
+    const d = await res.json();
+    _applyConfigToUI(d);
+    status.textContent =
+      `Applied — window: ${d.window_seconds}s (${d.window_samples} smp), ` +
+      `sensor: ${d.acc_sensor_type}, rate: ${d.hardware_sample_rate}Hz, ` +
+      `resample: ${d.resampling_method}`;
+  } else {
+    const d = await res.json().catch(() => ({}));
+    status.textContent = `Failed (${res.status}): ${d.detail || "unknown error"}`;
+  }
+}
+
+// ---- MinIO / CSV Datalake ----
+
+let _csvFiles = [];   // cached file list
+
+async function loadFileList() {
+  const sel = document.getElementById("csv-file-select");
+  sel.innerHTML = "<option value=''>— loading… —</option>";
+  const data = await mlFetch("/datalake/files");
+  if (!data) {
+    sel.innerHTML = "<option value=''>MinIO unavailable</option>";
     return;
   }
-  // TODO: POST to ml_server /config endpoint once implemented
-  status.textContent = `Config noted — window: ${window_s}s, source: ${source}. (Backend wiring pending)`;
+  _csvFiles = data.files || [];
+  if (_csvFiles.length === 0) {
+    sel.innerHTML = "<option value=''>No CSV files in bucket yet — upload one above</option>";
+    return;
+  }
+  sel.innerHTML = _csvFiles.map(f =>
+    `<option value="${f.name}">${f.name} (${(f.size_bytes / 1024).toFixed(1)} KB)</option>`
+  ).join("");
+  sel.onchange = () => {
+    const f = _csvFiles.find(x => x.name === sel.value);
+    document.getElementById("csv-file-meta").textContent = f
+      ? `Last modified: ${new Date(f.last_modified).toLocaleString()}`
+      : "";
+  };
+  sel.dispatchEvent(new Event("change"));
+}
+
+async function uploadCsv() {
+  const input    = document.getElementById("csv-upload-input");
+  const statusEl = document.getElementById("upload-status");
+  if (!input.files.length) { statusEl.textContent = "Select a .csv file first."; return; }
+  const file   = input.files[0];
+  const formData = new FormData();
+  formData.append("file", file);
+  statusEl.textContent = `Uploading ${file.name}…`;
+  try {
+    const res = await fetch(`${ML_API}/datalake/upload`, {
+      method: "POST",
+      headers: { "X-API-Key": API_KEY || "" },
+      body: formData,
+    });
+    if (res.ok) {
+      const d = await res.json();
+      statusEl.textContent = `Uploaded: ${d.filename}`;
+      input.value = "";
+      loadFileList();
+    } else {
+      const d = await res.json().catch(() => ({}));
+      statusEl.textContent = `Upload failed (${res.status}): ${d.detail || "unknown"}`;
+    }
+  } catch (e) {
+    statusEl.textContent = `Upload error: ${e.message}`;
+  }
+}
+
+async function runReplay() {
+  const filename  = document.getElementById("csv-file-select").value;
+  const window_s  = parseFloat(document.getElementById("cfg-window").value);
+  const step_s    = parseFloat(document.getElementById("cfg-step").value);
+  const statusEl  = document.getElementById("replay-status");
+  const resultsEl = document.getElementById("replay-results");
+
+  if (!filename) { statusEl.textContent = "Select a CSV file first."; return; }
+
+  statusEl.textContent = "Running replay… (may take a moment for long recordings)";
+  document.getElementById("btn-replay").disabled = true;
+  resultsEl.style.display = "none";
+
+  const params = new URLSearchParams({
+    filename,
+    window_seconds: window_s,
+    step_seconds:   step_s,
+  });
+  const res = await mlFetchRaw(`/datalake/replay?${params}`);
+  document.getElementById("btn-replay").disabled = false;
+
+  if (!res) { statusEl.textContent = "Cannot reach ml_server."; return; }
+  if (!res.ok) {
+    const d = await res.json().catch(() => ({}));
+    statusEl.textContent = `Replay failed (${res.status}): ${d.detail || "unknown"}`;
+    return;
+  }
+
+  const data = await res.json();
+  statusEl.textContent = "";
+
+  // Summary line
+  const fallRate = data.total_windows > 0
+    ? ((data.falls_detected / data.total_windows) * 100).toFixed(1)
+    : "0";
+  document.getElementById("replay-summary").textContent =
+    `${data.total_windows} windows | ${data.falls_detected} falls (${fallRate}%) | model: ${data.model_version?.toUpperCase()} | file: ${data.filename}`;
+
+  // Results table
+  const tbody = document.getElementById("replay-tbody");
+  tbody.innerHTML = data.predictions.map(p => {
+    const t = p.window_start_ms ? new Date(p.window_start_ms).toISOString().substring(11, 23) : "—";
+    if (p.error) return `<tr><td>${p.window_index}</td><td>${t}</td><td colspan="3" style="color:#888">Error: ${p.error}</td></tr>`;
+    return `
+      <tr>
+        <td>${p.window_index}</td>
+        <td style="font-size:0.8rem">${t}</td>
+        <td class="${p.fall_detected ? "fall-yes" : "fall-no"}">${p.fall_detected ? "FALL" : "No"}</td>
+        <td>${p.confidence != null ? (p.confidence * 100).toFixed(1) + "%" : "—"}</td>
+        <td>${p.latency_ms != null ? p.latency_ms + "ms" : "—"}</td>
+      </tr>`;
+  }).join("");
+
+  resultsEl.style.display = "block";
 }
 
 // ---- Recent Inference Log (reads /inferences from ml_server → Postgres) ----
