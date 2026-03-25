@@ -30,7 +30,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 from app.core.inference_engine import PipelineSelector
-from app.core.model_registry import get_model_name, get_model_config, list_available_models
+from app.core.model_registry import get_model_name, get_model_config, get_model_path, list_available_models
 from app.data_input.data_converter import (
     convert_lsb_to_g,
     convert_acc_nparray_to_df,
@@ -307,6 +307,42 @@ async def switch_model(req: ModelSwitchRequest):
     except Exception as e:
         logger.error(f"Model switch failed: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Model switch failed: {e}")
+
+
+@app.get("/inferences")
+async def recent_inferences(limit: int = 20):
+    """
+    Return the most recent N rows from inference_log.
+    Used by the operator dashboard. No API key required (read-only, non-sensitive).
+    """
+    from shared.db.session import SessionLocal
+    from shared.db.models import InferenceLog
+    from sqlalchemy import desc as sa_desc
+
+    if SessionLocal is None:
+        raise HTTPException(status_code=503, detail="Database not configured (DATABASE_URL not set)")
+    db = SessionLocal()
+    try:
+        rows = db.query(InferenceLog).order_by(sa_desc(InferenceLog.timestamp)).limit(min(limit, 200)).all()
+        return {
+            "inferences": [
+                {
+                    "id": r.id,
+                    "timestamp": r.timestamp.isoformat(),
+                    "participant": r.participant,
+                    "fall_detected": r.fall_detected,
+                    "confidence": round(r.confidence, 3) if r.confidence is not None else None,
+                    "model_version": r.model_version,
+                    "latency_ms": r.latency_ms,
+                    "window_size": r.window_size,
+                }
+                for r in rows
+            ]
+        }
+    except Exception as e:
+        raise HTTPException(status_code=503, detail=f"Database unavailable: {e}")
+    finally:
+        db.close()
 
 
 @app.post("/predict", response_model=PredictResponse, dependencies=[Depends(verify_api_key)])

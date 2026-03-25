@@ -8,19 +8,32 @@
  *   4. Recent inference log via GET /api/caregiver/... (reads Postgres)
  */
 
-const ML_API   = "/api/ml";
-const CG_API   = "/api/caregiver";
-const API_KEY  = localStorage.getItem("op_api_key") || promptForApiKey();
+const ML_API = "/api/ml";
+const CG_API = "/api/caregiver";
 
-function promptForApiKey() {
-  const key = prompt("Enter operator API key:");
-  if (key) localStorage.setItem("op_api_key", key);
-  return key;
+let API_KEY = localStorage.getItem("op_api_key") || "";
+
+function saveApiKey() {
+  const input = document.getElementById("api-key-input");
+  const status = document.getElementById("api-key-status");
+  API_KEY = input.value.trim();
+  if (!API_KEY) { status.textContent = "Key is empty."; return; }
+  localStorage.setItem("op_api_key", API_KEY);
+  status.textContent = "Saved — connecting…";
+  loadModelInfo();
+  loadModelList();
+  loadServerHealth();
+  loadRecentLog();
 }
 
 // ---- Boot ----
 
 window.addEventListener("DOMContentLoaded", () => {
+  const input = document.getElementById("api-key-input");
+  if (API_KEY) {
+    input.value = API_KEY;
+    document.getElementById("api-key-status").textContent = "Key loaded from storage.";
+  }
   loadModelInfo();
   loadModelList();
   loadServerHealth();
@@ -55,18 +68,22 @@ async function loadModelList() {
 async function switchModel() {
   const version = document.getElementById("model-select").value;
   const statusEl = document.getElementById("switch-status");
-  if (!version) return;
+  if (!version) { statusEl.textContent = "Select a model first."; return; }
+  if (!API_KEY)  { statusEl.textContent = "Enter API key and click Connect first."; return; }
 
-  statusEl.textContent = "Switching...";
-  const data = await mlFetch("/model/switch", {
+  statusEl.textContent = "Switching…";
+  const res = await mlFetchRaw("/model/switch", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ version }),
   });
-  if (!data) {
-    statusEl.textContent = "Switch failed.";
+  if (!res) { statusEl.textContent = "No response — is ml_server running?"; return; }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    statusEl.textContent = `Failed (${res.status}): ${err.detail || "unknown error"}`;
     return;
   }
+  const data = await res.json();
   statusEl.textContent = `Switched to ${data.new_version?.toUpperCase()} (${data.num_features} features)`;
   loadModelInfo();
 }
@@ -100,27 +117,68 @@ function formatUptime(seconds) {
   return h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
-// ---- Recent Inference Log (reads from caregiver API → Postgres) ----
+// ---- Processing Config (placeholder — backend wiring pending) ----
+
+function applyConfig() {
+  const window_s = document.getElementById("cfg-window").value;
+  const source   = document.querySelector('input[name="data-source"]:checked').value;
+  const status   = document.getElementById("config-status");
+  if (source === "csv") {
+    status.textContent = "CSV/MinIO data source not yet wired. Change noted.";
+    return;
+  }
+  // TODO: POST to ml_server /config endpoint once implemented
+  status.textContent = `Config noted — window: ${window_s}s, source: ${source}. (Backend wiring pending)`;
+}
+
+// ---- Recent Inference Log (reads /inferences from ml_server → Postgres) ----
 
 async function loadRecentLog() {
-  // We read all patients' fall history — just show the last 20 any-patient predictions
-  // This requires caregiver API to expose a /inferences endpoint (add if needed)
-  // For now, show a placeholder that links to Grafana
   const tbody = document.getElementById("log-tbody");
-  tbody.innerHTML = `
-    <tr>
-      <td colspan="6" class="loading">
-        For full inference history, see
-        <a href="/grafana/d/fall-events-timeline" target="_blank">Fall Events Timeline</a>
-        in Grafana (PostgreSQL datasource).
-      </td>
-    </tr>
-  `;
+  try {
+    const res = await fetch(`${ML_API}/inferences?limit=20`);
+    if (!res.ok) {
+      tbody.innerHTML = `<tr><td colspan="7" class="loading">ML server unavailable (${res.status}). Is it running?</td></tr>`;
+      return;
+    }
+    const data = await res.json();
+    const rows = data.inferences || [];
+    if (rows.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" class="loading">No inferences yet. Send a prediction to see data here.</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = rows.map(r => `
+      <tr>
+        <td>${new Date(r.timestamp).toLocaleTimeString()}</td>
+        <td>${r.participant || "—"}</td>
+        <td class="${r.fall_detected ? "fall-yes" : "fall-no"}">${r.fall_detected ? "FALL" : "No"}</td>
+        <td>${r.confidence != null ? (r.confidence * 100).toFixed(1) + "%" : "—"}</td>
+        <td>${r.model_version?.toUpperCase() || "—"}</td>
+        <td>${r.latency_ms != null ? r.latency_ms + "ms" : "—"}</td>
+        <td>${r.window_size != null ? r.window_size + " smp" : "—"}</td>
+      </tr>
+    `).join("");
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="7" class="loading">Cannot reach caregiver API. Is Docker running?</td></tr>`;
+  }
 }
 
 // ---- Helpers ----
 
+/** Returns raw Response so callers can inspect status codes. */
+async function mlFetchRaw(path, options = {}) {
+  try {
+    return await fetch(`${ML_API}${path}`, {
+      ...options,
+      headers: { "X-API-Key": API_KEY || "", ...(options.headers || {}) },
+    });
+  } catch (e) {
+    return null;
+  }
+}
+
 async function mlFetch(path, options = {}) {
+  const keyStatus = document.getElementById("api-key-status");
   try {
     const res = await fetch(`${ML_API}${path}`, {
       ...options,
@@ -129,9 +187,19 @@ async function mlFetch(path, options = {}) {
         ...(options.headers || {}),
       },
     });
+    if (res.status === 403) {
+      keyStatus.textContent = "API key rejected (403). Check key and click Connect.";
+      return null;
+    }
+    if (res.status === 401) {
+      keyStatus.textContent = "API key missing (401). Enter key and click Connect.";
+      return null;
+    }
     if (!res.ok) return null;
+    if (API_KEY) keyStatus.textContent = "Connected.";
     return await res.json();
   } catch (e) {
+    keyStatus.textContent = "Cannot reach ml_server. Is it running?";
     return null;
   }
 }

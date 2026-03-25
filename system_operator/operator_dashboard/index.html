@@ -12,6 +12,12 @@
     <h1>System Operator Dashboard</h1>
     <span id="server-status" class="badge badge-grey">Checking...</span>
     <span id="uptime" class="meta"></span>
+    <div class="api-key-row">
+      <label for="api-key-input">API Key</label>
+      <input id="api-key-input" type="password" placeholder="Paste operator API key…" autocomplete="off">
+      <button onclick="saveApiKey()">Connect</button>
+      <span id="api-key-status" class="meta"></span>
+    </div>
   </header>
 
   <main>
@@ -88,10 +94,53 @@
       </div>
     </section>
 
-    <!-- Panel 4: Recent Inference Log -->
+    <!-- Panel 4: Processing Configuration (placeholder) -->
+    <section class="panel" id="panel-config">
+      <h2>Processing Configuration</h2>
+      <p class="meta" style="margin-bottom:1rem">
+        Controls sent to ml_server on next prediction. Backend wiring in progress.
+      </p>
+
+      <div class="config-grid">
+
+        <div class="config-group">
+          <div class="label">Time Window (seconds)</div>
+          <div class="config-row">
+            <input id="cfg-window" type="number" min="3" max="30" value="9" step="1">
+            <span class="meta">Current default: 9s (450 samples @ 50Hz)</span>
+          </div>
+        </div>
+
+        <div class="config-group">
+          <div class="label">Data Source</div>
+          <div class="config-row">
+            <label class="radio-label">
+              <input type="radio" name="data-source" value="influx" checked> Live InfluxDB
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="data-source" value="csv"> CSV / MinIO
+              <span class="badge badge-grey" style="font-size:0.7rem;margin-left:0.4rem">Not yet wired</span>
+            </label>
+          </div>
+          <p class="meta" style="margin-top:0.5rem">
+            CSV/MinIO: upload historical sensor recordings to MinIO object store,
+            select a file here to replay predictions offline for model comparison.
+          </p>
+        </div>
+
+        <div class="config-group">
+          <div class="label">Apply</div>
+          <button onclick="applyConfig()" class="btn-apply">Apply Configuration</button>
+          <span id="config-status" class="meta" style="margin-left:0.8rem"></span>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- Panel 5: Recent Inference Log -->
     <section class="panel" id="panel-log">
       <h2>Recent Inferences</h2>
-      <p class="meta">Reads from PostgreSQL via caregiver API. Shows last 20 predictions.</p>
+      <p class="meta">Last 20 predictions from PostgreSQL. Auto-refreshes every 30s.</p>
       <table id="log-table">
         <thead>
           <tr>
@@ -101,10 +150,11 @@
             <th>Confidence</th>
             <th>Model</th>
             <th>Latency</th>
+            <th>Window</th>
           </tr>
         </thead>
         <tbody id="log-tbody">
-          <tr><td colspan="6" class="loading">Loading...</td></tr>
+          <tr><td colspan="7" class="loading">Loading...</td></tr>
         </tbody>
       </table>
     </section>
