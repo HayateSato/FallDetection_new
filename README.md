@@ -121,7 +121,121 @@ What would change when moving to a real deployment:
 
 ---
 
-## Project Structure
+## Data Flow
+
+### Full pipeline — from sensor to all three dashboards
+
+```
+SmarKo Wearable
+  │  Bluetooth
+  ▼
+SmarKo Mobile App
+  │  HTTPS / Wi-Fi
+  ▼
+InfluxDB :8086  ←─────────────────────────────── sensor time-series stored here
+  │
+  │  influxdb-client query (lookback ~15s)
+  ▼
+main.py — Flask :8000  (runs on Windows, outside Docker)
+  │
+  │  POST /predict  +  X-API-Key header
+  ▼
+┌──────────────────────────────────────────────────────────────────┐
+│  ml_server  FastAPI :8001                                        │
+│                                                                  │
+│  1. AccelerometerResampler  (25Hz → 50Hz)                        │
+│  2. convert_lsb_to_g                                             │
+│  3. compose_detection_window  (last 9s = 450 samples)            │
+│  4. PipelineSelector.extract_features  (16–22 features)          │
+│  5. XGBoost.predict_proba  →  { fall_detected, confidence }      │
+│                                                                  │
+│  After every prediction — three things happen in parallel:       │
+│                                                                  │
+│  A. Background task → PostgreSQL (inference_log, feature_snapshot)│
+│  B. Prometheus counters updated → /metrics endpoint              │
+│  C. If fall: Redis PUBLISH → channel "fall_events"               │
+└──────┬──────────────────────┬──────────────────────┬─────────────┘
+       │ A                    │ B                    │ C
+       ▼                      ▼                      ▼
+  PostgreSQL             Prometheus             Redis pub/sub
+  :5432                  :9090                  :6379
+  (persists forever)     (30-day retention)     (real-time only,
+                                                 no persistence)
+       │                      │                      │
+       │              scrapes every 15s              │  subscribers
+       │                      │                      │
+       │                      ▼                      ├──────────────────┐
+       │                  Grafana                    │                  │
+       │                  :3000                      ▼                  ▼
+       │              reads BOTH sources:       caregiver_api      emergency_svc
+       │              • Prometheus metrics      :8002              :8003
+       │              • PostgreSQL history      │                  │
+       │                      │                 │  SSE stream      │  SSE stream
+       │                      │                 ▼                  ▼
+       │                      ▼            Caregiver          Emergency
+       │                 Operator          Dashboard          Tablet UI
+       │                 Dashboard         /caregiver/        /emergency/
+       │                 /operator/        (patient list,     (large-text
+       │                 (model switch,    fall history,      fall alert,
+       │                  health, metrics  live alerts)       auto-reconnect)
+       │                  links to Grafana)
+       │                      ▲
+       └──────────────────────┘
+         operator dashboard also reads
+         PostgreSQL via caregiver API
+         for recent inference log
+```
+
+---
+
+### What each dashboard sees and how
+
+| Dashboard | URL | Data source | What it shows |
+|-----------|-----|-------------|---------------|
+| **Operator** | `/operator/` | ml_server API (direct) + Grafana links | Active model, health, uptime, links to Grafana dashboards |
+| **Caregiver** | `/caregiver/` | caregiver_api → PostgreSQL + Redis SSE | Patient list, fall history per patient, live fall alert banner |
+| **Emergency tablet** | `/emergency/` | emergency_svc → Redis SSE | Large-text real-time fall alert, patient name, confidence, auto-reconnect |
+| **Grafana** | `/grafana/` | Prometheus (metrics) + PostgreSQL (history) | 3 dashboards: server health, model performance/drift, fall events timeline |
+
+---
+
+### PostgreSQL tables
+
+All written by `ml_server` after every `/predict` call. Read by `caregiver_api` and Grafana.
+
+| Table | Written by | Read by | What is stored |
+|-------|-----------|---------|----------------|
+| `inference_log` | ml_server (background task) | caregiver_api, Grafana | One row per prediction: `timestamp`, `model_version`, `fall_detected`, `confidence`, `window_size`, `latency_ms`, `participant` |
+| `feature_snapshot` | ml_server (background task) | Grafana (for retraining analysis) | One row per feature per prediction: `inference_id` (FK → inference_log), `feature_name`, `feature_value` — stores the full 16–22 feature vector |
+| `participant_session` | main.py (recording toggle) | caregiver_api, Grafana | One row per recording session: `participant_name`, `gender`, `start_time`, `end_time`, `fall_count` |
+| `api_request_log` | ml_server (every request) | Grafana (audit) | One row per HTTP request: `client_ip`, `endpoint`, `status_code`, `response_time_ms`, `api_key_hash` (SHA-256, never raw key) |
+
+**Key relationship:** `feature_snapshot.inference_id` → `inference_log.id`
+Every prediction has exactly one `inference_log` row and N `feature_snapshot` rows (one per feature).
+This lets you replay any past prediction by fetching its feature vector.
+
+---
+
+### Redis — what is published (not persisted)
+
+Channel: `fall_events`. Published only when `fall_detected = true`.
+
+```json
+{
+  "patient_id":    "alice",
+  "fall_detected": true,
+  "confidence":    0.93,
+  "model_version": "v3",
+  "timestamp":     "2026-03-25T14:32:01+00:00",
+  "inference_id":  42
+}
+```
+
+`inference_id` links back to the `inference_log` row in PostgreSQL so subscribers can fetch full details.
+
+---
+
+
 
 ```
 FallDetection_new/

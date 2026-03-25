@@ -389,6 +389,41 @@ python main.py
 
 ---
 
+## Development Priorities (as of 2026-03-25)
+
+The primary goal is **automated model comparison** — comparing XGBoost model versions, feature
+processing pipelines, and time window sizes systematically, replacing manual CSV inspection.
+
+### Priority 1 — Operator Dashboard + ML server communication (current focus)
+- Operator dashboard fully functional: model switching, recent inference log, live health
+- Processing config panel: time window control, data source toggle (InfluxDB vs CSV)
+- All operator → ml_server API calls working end-to-end
+
+### Priority 2 — Prometheus/Grafana + operator dashboard integration
+- Grafana dashboards showing model performance metrics per model version
+- Confidence distribution comparison across models visible in Grafana
+- Operator dashboard linking to correct Grafana panels
+
+### Priority 3 — Caregiver dashboard + emergency contact dashboard
+- Caregiver login, patient list, fall history
+- Emergency SSE alerts to tablet UI
+- These are lower priority until model comparison workflow is established
+
+### Planned: MinIO for historical CSV replay
+- User will upload historical sensor recording CSV files to MinIO object store
+- Operator dashboard will have a file picker to select a CSV for offline replay
+- ml_server will fetch the CSV from MinIO and run predictions against it (no live InfluxDB needed)
+- This enables systematic offline comparison: same data → different models → compare results
+- **Status:** UI placeholder added to operator dashboard (data source toggle). Backend wiring pending.
+- **Stack:** MinIO (S3-compatible, runs as Docker service), ml_server reads via boto3/minio-py
+
+### Planned: Time window configuration via API
+- Operator dashboard time window input (UI placeholder exists) needs a `/config` POST endpoint on ml_server
+- ml_server should accept `window_seconds` and recompute `compose_detection_window` dynamically
+- Enables systematic comparison: same model + same data → different window sizes → compare F1/confidence
+
+---
+
 ## Next Steps (remaining)
 
 ### 1. PostgreSQL — Inference History & Audit Log

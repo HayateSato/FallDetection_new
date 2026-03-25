@@ -358,6 +358,9 @@ curl.exe -X POST http://localhost:8001/predict -H "Content-Type: application/jso
 
 ```powershell
 docker exec fall_postgres psql -U falldetect -d falldetect -c "SELECT id, participant, fall_detected, confidence, latency_ms FROM inference_log ORDER BY id DESC LIMIT 3;"
+
+# run this - after this running "db-shell" gets you inside the postgres inside the docker
+alias db-shell='docker exec -it fall_postgres psql -U falldetect -d falldetect'
 ```
 
 ### Check Caregiver API health
