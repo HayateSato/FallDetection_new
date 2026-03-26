@@ -140,16 +140,22 @@ This is the core of the system. It owns the XGBoost model and is the only servic
 | `GET /model/info` | Currently loaded model name, version, feature count |
 | `GET /model/list` | All available model versions found in `model/` directory |
 | `POST /model/switch` | Hot-swap the loaded model without restart (API key required) |
+| `GET /model/comparison` | Aggregated replay stats per model — fall rate, confidence percentiles, latency (used by comparison sub-page) |
 | `GET /inferences` | Recent inference history from PostgreSQL (for operator dashboard) |
 | `GET /health` | Uptime, model version |
 | `GET /metrics` | Prometheus metrics endpoint (scraped every 15s) |
+| `GET /datalake/files` | List CSV files in MinIO |
+| `POST /datalake/upload` | Upload a SmarKo CSV to MinIO |
+| `POST /datalake/replay` | Run every window in a CSV through the current model; saves all results to `inference_log` |
+| `GET /config` | Current processing config (window size, sample rate, resampling method) |
+| `POST /config` | Update processing config at runtime |
 
 After every `/predict` call, three things happen as background tasks:
 - Write row to PostgreSQL `inference_log`
 - Update Prometheus counters
-- If fall detected: publish to Redis `fall_events` channel
+- Publish to Redis `fall_events` channel (caregiver + emergency services receive it)
 
-**Who calls it:** `main.py` (Flask client, for inference) and the operator dashboard (for model management and recent log).
+**Who calls it:** `main.py` (Flask client, for inference) and the operator dashboard (for model management, replay, and comparison).
 
 ---
 
@@ -265,10 +271,11 @@ main.py — Flask :8000  (runs on Windows, outside Docker)
 
 | Dashboard | URL | Data source | What it shows |
 |-----------|-----|-------------|---------------|
-| **Operator** | `/operator/` | ml_server API (direct) + Grafana links | Active model, health, uptime, links to Grafana dashboards |
+| **Operator** | `/operator/` | ml_server API | Active model, health, uptime, processing config, CSV replay, recent inference log |
+| **Operator — Model Comparison** | `/operator/model_comparison.html` | ml_server `GET /model/comparison` | Interactive Plotly charts: fall rate, confidence distribution, latency, per-recording × model matrix |
 | **Caregiver** | `/caregiver/` | caregiver_api → PostgreSQL + Redis SSE | Patient list, fall history per patient, live fall alert banner |
 | **Emergency tablet** | `/emergency/` | emergency_svc → Redis SSE | Large-text real-time fall alert, patient name, confidence, auto-reconnect |
-| **Grafana** | `/grafana/` | Prometheus (metrics) + PostgreSQL (history) | 3 dashboards: server health, model performance/drift, fall events timeline |
+| **Grafana** | `/grafana/` | Prometheus (metrics) + PostgreSQL (history) | Server health, model performance/drift, fall events timeline |
 
 ---
 
@@ -317,8 +324,8 @@ FallDetection_new/
 ├── .env                            All environment variables (single root file)
 │
 ├── system_operator/
-│   ├── ml_server/                  FastAPI :8001 — XGBoost inference, Prometheus metrics
-│   └── operator_dashboard/         HTML/JS — model switcher, health overview
+│   ├── ml_server/                  FastAPI :8001 — XGBoost inference, Prometheus metrics, replay, comparison API
+│   └── operator_dashboard/         HTML/JS — model switcher, health, config, replay, model_comparison.html
 │
 ├── caregiver/
 │   ├── api/                        FastAPI :8002 — patient list, fall history, SSE stream

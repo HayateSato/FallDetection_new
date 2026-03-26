@@ -2,10 +2,10 @@
 
 Project reference for AI-assisted development. Describes architecture, data flows, key files, and planned next steps.
 
-> **Current state (2026-03-25):** Full multi-user system implemented. Priority 1 (operator dashboard + ML server) complete. Priority 2 (Grafana model comparison) in progress.
+> **Current state (2026-03-26):** Full multi-user system implemented. Priority 1 (operator dashboard + ML server) complete. Priority 2 (model comparison) complete — built-in operator dashboard sub-page with interactive Plotly charts instead of Grafana.
 > New folder structure: `patient/`, `caregiver/`, `system_operator/`, `emergency/`, `shared/`, `infrastructure/`, `datalake/`.
 > Root `server.py` and `main.py` still work as-is (backward-compatible wrappers).
-> MinIO datalake + CSV offline replay implemented. Grafana model_comparison dashboard created.
+> MinIO datalake + CSV offline replay implemented. Model comparison page at `/operator/model_comparison.html`.
 
 ---
 
@@ -24,7 +24,7 @@ Project reference for AI-assisted development. Describes architecture, data flow
 │    ml_server/        FastAPI :8001 — XGBoost inference + Prometheus /metrics        │
 │                        → writes to PostgreSQL (inference_log, feature_snapshot)      │
 │                        → publishes to Redis 'fall_events' channel                   │
-│    operator_dashboard/ Vanilla HTML/JS — model switcher, Grafana links, health      │
+│    operator_dashboard/ Vanilla HTML/JS — model switcher, config, replay, comparison │
 └──────┬────────────────────────────────────────────────────┬───────────────────────┬─┘
        │ Redis pub/sub                                       │ Redis pub/sub         │
        ▼                                                     ▼                      │
@@ -323,10 +323,12 @@ threshold (0.5)  →  {is_fall: bool, confidence: float}
 
 | File | Role |
 |------|------|
-| `system_operator/ml_server/server.py` | FastAPI ML server with Prometheus, Postgres write, Redis publish, model hot-swap |
+| `system_operator/ml_server/server.py` | FastAPI ML server with Prometheus, Postgres write, Redis publish, model hot-swap, replay, model comparison API |
 | `system_operator/ml_server/services/db_writer.py` | Background-task Postgres writer (never blocks inference) |
 | `system_operator/ml_server/services/metrics_collector.py` | Prometheus metrics: fall_detections_total, inference_latency_seconds, model_confidence |
-| `system_operator/operator_dashboard/` | Operator HTML/JS — model switcher, health, Grafana links |
+| `system_operator/operator_dashboard/index.html` | Operator main page — model switcher, health, config, replay, links to Grafana + comparison |
+| `system_operator/operator_dashboard/model_comparison.html` | Model comparison sub-page — interactive Plotly charts sourced from `GET /model/comparison` |
+| `system_operator/operator_dashboard/model_comparison.js` | Comparison page logic — fetches API, renders 5 Plotly charts + tables |
 | `caregiver/api/server.py` | FastAPI REST API for care-givers — reads Postgres, SSE from Redis |
 | `caregiver/dashboard/` | Care-giver HTML/JS — patient list, live fall alert banner |
 | `emergency/notification_service/server.py` | SSE fan-out service — Redis → tablets + optional webhook |
@@ -401,47 +403,37 @@ processing pipelines, and time window sizes systematically, replacing manual CSV
 - Data source toggle: InfluxDB (live) or CSV/MinIO (offline replay)
 - All operator → ml_server API calls working end-to-end
 
-### Priority 2 — Prometheus/Grafana + operator dashboard integration — **CURRENT FOCUS**
+### Priority 2 — Model comparison — **COMPLETE**
 
-**Goal:** automated model comparison via Grafana — same CSV, different model versions, compare results.
+**Goal:** automated model comparison — same CSV, different model versions, compare results.
 
-**What has been implemented:**
-- `grafana_ro` PostgreSQL read-only user created manually:
-  ```sql
-  CREATE USER grafana_ro WITH PASSWORD 'grafana_ro';
-  GRANT SELECT ON ALL TABLES IN SCHEMA public TO grafana_ro;
-  ```
-- `infrastructure/grafana/dashboards/model_comparison.json` — new 12-panel dashboard:
-  - Stat panels: total replay windows, falls detected, models tested, recordings replayed
-  - Bar charts: fall rate % by model, average + p95 latency by model
-  - Tables: confidence percentiles (p10/p25/median/p75/p90/mean/stddev), uncertainty ratio, confidence bucket distribution (10% bands)
-  - Key comparison table: per-recording × model, fall_rate_pct + avg_fall_confidence colour-coded
-  - Window size vs fall rate table, replay history (last 30 runs)
-- All 4 Grafana dashboard JSON files (`ml_server_overview.json`, `model_performance.json`, `fall_events_timeline.json`, `model_comparison.json`) updated to use Grafana 10 datasource format:
-  ```json
-  {"type": "grafana-postgresql-datasource", "uid": "falldetect-postgres"}
-  {"type": "prometheus", "uid": "falldetect-prometheus"}
-  ```
-- `infrastructure/grafana/provisioning/datasources/datasources.yml` updated with explicit UIDs (`falldetect-postgres`, `falldetect-prometheus`) so they are stable across Grafana restarts
+**What was implemented:**
+- `GET /model/comparison` endpoint in `system_operator/ml_server/server.py`:
+  - Queries `inference_log WHERE inference_mode='replay'` aggregated by model_version
+  - Returns: fall rate %, confidence percentiles (p10–p95), latency avg+p95, confidence buckets, per-recording × model matrix, recent session list, raw timeseries for scatter
+- `system_operator/operator_dashboard/model_comparison.html` — standalone sub-page at `/operator/model_comparison.html`
+- `system_operator/operator_dashboard/model_comparison.js` — 5 interactive Plotly.js charts:
+  - Fall rate by model (horizontal bar)
+  - Latency avg + p95 (grouped bar)
+  - Confidence box plot — falls vs non-falls per model
+  - Confidence histogram — distribution across all windows per model
+  - Confidence scatter — every window coloured by fall/no-fall
+  - Confidence percentile table (p10/p25/median/p75/p90/p95/mean/stddev + uncertainty %)
+  - Per-recording × model table (fall rate colour-coded low/medium/high)
+  - Recent sessions audit table
 
-**What still needs verification:**
-- Confirm all 4 dashboards show data after Grafana restart (datasource UID fix was just applied)
-- Operator dashboard Grafana card links — verify they open to the correct dashboard UIDs:
-  - `fall-ml-overview` → ml_server_overview
-  - `fall-model-perf` → model_performance
-  - `fall-events-timeline` → fall_events_timeline
-  - Add link card for `model-comparison` dashboard
+**Decision:** model comparison is built into the operator dashboard (not Grafana). Grafana remains for server health metrics (ml_server_overview, model_performance, fall_events_timeline dashboards).
 
 **Workflow for model comparison (end-to-end):**
-1. Upload SmarKo CSV to MinIO via operator dashboard (or MinIO console http://localhost:9001)
-2. Switch to model v0 in operator dashboard → Run Replay on the CSV
+1. Upload SmarKo CSV to MinIO via operator dashboard → Processing Configuration panel
+2. Switch to model v0 → Run Replay on the CSV
 3. Switch to model v3 → Run Replay on same CSV
-4. Open Grafana → Model Comparison dashboard → see side-by-side results
+4. Click "View Full Model Comparison →" button (appears after replay) or open `/operator/model_comparison.html`
 
 ### Priority 3 — Caregiver dashboard + emergency contact dashboard
 - Caregiver login, patient list, fall history
 - Emergency SSE alerts to tablet UI
-- These are lower priority until model comparison workflow is established
+- These are lower priority until model comparison workflow is fully validated
 
 ### MinIO datalake + CSV offline replay — IMPLEMENTED
 - MinIO runs as Docker service (`fall_minio`), S3-compatible, ports 9000 (API) and 9001 (console)
