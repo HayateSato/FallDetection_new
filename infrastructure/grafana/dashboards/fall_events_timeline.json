@@ -4,27 +4,49 @@
   "uid": "fall-events-timeline",
   "schemaVersion": 39,
   "refresh": "30s",
-  "time": { "from": "now-24h", "to": "now" },
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
   "panels": [
     {
       "id": 1,
       "title": "Falls Today",
       "type": "stat",
-      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
       "targets": [
         {
-          "datasource": "PostgreSQL",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "PCC52D03280B7034C"
+          },
           "rawSql": "SELECT COUNT(*) AS count FROM inference_log WHERE fall_detected = true AND timestamp > NOW() - INTERVAL '24h'",
-          "format": "table"
+          "format": "table",
+          "refId": "A"
         }
       ],
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "colorMode": "background",
         "thresholds": {
           "steps": [
-            { "value": 0, "color": "green" },
-            { "value": 1, "color": "red" }
+            {
+              "value": 0,
+              "color": "green"
+            },
+            {
+              "value": 1,
+              "color": "red"
+            }
           ]
         }
       }
@@ -33,12 +55,21 @@
       "id": 2,
       "title": "Total Predictions Today",
       "type": "stat",
-      "gridPos": { "x": 4, "y": 0, "w": 4, "h": 4 },
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
       "targets": [
         {
-          "datasource": "PostgreSQL",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "PCC52D03280B7034C"
+          },
           "rawSql": "SELECT COUNT(*) AS count FROM inference_log WHERE timestamp > NOW() - INTERVAL '24h'",
-          "format": "table"
+          "format": "table",
+          "refId": "A"
         }
       ]
     },
@@ -46,48 +77,87 @@
       "id": 3,
       "title": "Average Confidence Today",
       "type": "stat",
-      "gridPos": { "x": 8, "y": 0, "w": 4, "h": 4 },
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
       "targets": [
         {
-          "datasource": "PostgreSQL",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "PCC52D03280B7034C"
+          },
           "rawSql": "SELECT ROUND(AVG(confidence)::numeric, 3) AS avg_confidence FROM inference_log WHERE timestamp > NOW() - INTERVAL '24h'",
-          "format": "table"
+          "format": "table",
+          "refId": "A"
         }
       ],
-      "fieldConfig": { "defaults": { "unit": "percentunit" } }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit"
+        }
+      }
     },
     {
       "id": 4,
       "title": "Recent Fall Events",
       "type": "table",
-      "gridPos": { "x": 0, "y": 4, "w": 24, "h": 10 },
+      "gridPos": {
+        "x": 0,
+        "y": 4,
+        "w": 24,
+        "h": 10
+      },
       "targets": [
         {
-          "datasource": "PostgreSQL",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "PCC52D03280B7034C"
+          },
           "rawSql": "SELECT timestamp, participant, ROUND(confidence::numeric, 3) AS confidence, model_version, latency_ms FROM inference_log WHERE fall_detected = true ORDER BY timestamp DESC LIMIT 50",
-          "format": "table"
+          "format": "table",
+          "refId": "A"
         }
       ],
       "options": {
-        "sortBy": [{ "displayName": "timestamp", "desc": true }]
+        "sortBy": [
+          {
+            "displayName": "timestamp",
+            "desc": true
+          }
+        ]
       }
     },
     {
       "id": 5,
       "title": "Confidence over Time (scatter)",
       "type": "timeseries",
-      "gridPos": { "x": 0, "y": 14, "w": 16, "h": 8 },
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 16,
+        "h": 8
+      },
       "targets": [
         {
-          "datasource": "PostgreSQL",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "PCC52D03280B7034C"
+          },
           "rawSql": "SELECT timestamp AS time, confidence FROM inference_log WHERE timestamp > NOW() - INTERVAL '24h' ORDER BY timestamp",
-          "format": "time_series"
+          "format": "time_series",
+          "refId": "A"
         }
       ],
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
-          "custom": { "drawStyle": "points", "pointSize": 4 }
+          "custom": {
+            "drawStyle": "points",
+            "pointSize": 4
+          }
         }
       }
     },
@@ -95,12 +165,21 @@
       "id": 6,
       "title": "Active Sessions Today",
       "type": "table",
-      "gridPos": { "x": 16, "y": 14, "w": 8, "h": 8 },
+      "gridPos": {
+        "x": 16,
+        "y": 14,
+        "w": 8,
+        "h": 8
+      },
       "targets": [
         {
-          "datasource": "PostgreSQL",
+          "datasource": {
+            "type": "grafana-postgresql-datasource",
+            "uid": "PCC52D03280B7034C"
+          },
           "rawSql": "SELECT participant_name, gender, fall_count, start_time FROM participant_session WHERE start_time > NOW() - INTERVAL '24h' ORDER BY fall_count DESC",
-          "format": "table"
+          "format": "table",
+          "refId": "A"
         }
       ]
     }

@@ -353,6 +353,193 @@ async def recent_inferences(limit: int = 20):
         db.close()
 
 
+@app.get("/model/comparison")
+async def get_model_comparison(since_days: int = Query(30, ge=1, le=365,
+                                                        description="Look back N days of replay data")):
+    """
+    Aggregated model comparison data from replay rows in inference_log.
+    Used by the operator dashboard model comparison sub-page.
+    Returns per-model stats, per-recording × model matrix, recent sessions, and raw timeseries.
+    """
+    from shared.db.session import SessionLocal
+    from shared.db.models import InferenceLog
+    from collections import defaultdict, OrderedDict
+    from datetime import timedelta
+
+    if SessionLocal is None:
+        raise HTTPException(status_code=503, detail="Database not configured (DATABASE_URL not set)")
+
+    db = SessionLocal()
+    try:
+        since = datetime.now(timezone.utc) - timedelta(days=since_days)
+        rows = (
+            db.query(InferenceLog)
+            .filter(InferenceLog.inference_mode == "replay")
+            .filter(InferenceLog.timestamp >= since)
+            .order_by(InferenceLog.id)
+            .all()
+        )
+
+        if not rows:
+            return {
+                "summary": {"total_windows": 0, "total_recordings": 0, "models_tested": []},
+                "by_model": [], "by_recording": [], "recent_sessions": [], "timeseries": [],
+            }
+
+        # Group by model version and by recording
+        by_model_rows: dict = defaultdict(list)
+        by_recording_rows: dict = defaultdict(lambda: defaultdict(list))
+        for r in rows:
+            by_model_rows[r.model_version].append(r)
+            if r.participant:
+                by_recording_rows[r.participant][r.model_version].append(r)
+
+        def _percentile(values: list, p: float):
+            if not values:
+                return None
+            sv = sorted(values)
+            idx = min(int(len(sv) * p / 100), len(sv) - 1)
+            return round(sv[idx], 4)
+
+        def _mean(values: list):
+            return round(sum(values) / len(values), 4) if values else None
+
+        def _stddev(values: list, mean: float):
+            if not values or mean is None:
+                return None
+            return round((sum((v - mean) ** 2 for v in values) / len(values)) ** 0.5, 4)
+
+        # Per-model stats
+        model_stats = []
+        for mv in sorted(by_model_rows):
+            mrows = by_model_rows[mv]
+            confs      = [r.confidence  for r in mrows if r.confidence  is not None]
+            fall_confs = [r.confidence  for r in mrows if r.fall_detected and r.confidence is not None]
+            nfall_confs= [r.confidence  for r in mrows if not r.fall_detected and r.confidence is not None]
+            latencies  = [r.latency_ms  for r in mrows if r.latency_ms  is not None]
+            falls = sum(1 for r in mrows if r.fall_detected)
+            total = len(mrows)
+
+            # Confidence buckets (10 bins 0.0–1.0)
+            buckets = {f"{i/10:.1f}-{(i+1)/10:.1f}": 0 for i in range(10)}
+            for c in confs:
+                idx = min(int(c * 10), 9)
+                key = f"{idx/10:.1f}-{(idx+1)/10:.1f}"
+                buckets[key] += 1
+
+            mean_conf = _mean(confs)
+            # Uncertainty: windows with confidence in [0.4, 0.6] (near decision boundary)
+            uncertain = sum(1 for c in confs if 0.4 <= c <= 0.6)
+
+            model_stats.append({
+                "model_version":    mv,
+                "total_windows":    total,
+                "falls_detected":   falls,
+                "fall_rate_pct":    round(100 * falls / total, 2) if total > 0 else 0,
+                "uncertainty_pct":  round(100 * uncertain / total, 2) if total > 0 else 0,
+                "percentiles": {
+                    "p10":   _percentile(confs, 10),
+                    "p25":   _percentile(confs, 25),
+                    "p50":   _percentile(confs, 50),
+                    "p75":   _percentile(confs, 75),
+                    "p90":   _percentile(confs, 90),
+                    "p95":   _percentile(confs, 95),
+                    "mean":  mean_conf,
+                    "stddev":_stddev(confs, mean_conf),
+                },
+                "latency": {
+                    "avg_ms": round(sum(latencies) / len(latencies), 1) if latencies else None,
+                    "p95_ms": _percentile(sorted(latencies), 95)        if latencies else None,
+                },
+                "confidence_buckets": [
+                    {"range": k, "count": v} for k, v in sorted(buckets.items())
+                ],
+                "box_data": {
+                    "all":      confs[:2000],
+                    "falls":    fall_confs[:1000],
+                    "no_falls": nfall_confs[:1000],
+                },
+                "recordings": sorted(set(r.participant for r in mrows if r.participant)),
+            })
+
+        # Per-recording × model matrix
+        by_recording = []
+        for rec in sorted(by_recording_rows):
+            models_map = {}
+            for mv, rec_rows in sorted(by_recording_rows[rec].items()):
+                rec_confs = [r.confidence for r in rec_rows if r.confidence is not None]
+                rec_falls = sum(1 for r in rec_rows if r.fall_detected)
+                models_map[mv] = {
+                    "total_windows":  len(rec_rows),
+                    "falls_detected": rec_falls,
+                    "fall_rate_pct":  round(100 * rec_falls / len(rec_rows), 2) if rec_rows else 0,
+                    "avg_confidence": _mean(rec_confs),
+                }
+            by_recording.append({"recording": rec, "models": models_map})
+
+        # Recent sessions (deduplicated by participant + model_version + date)
+        session_keys: OrderedDict = OrderedDict()
+        for r in reversed(rows):
+            date = r.timestamp.date() if r.timestamp else None
+            key = (r.participant, r.model_version, date)
+            if key not in session_keys:
+                session_keys[key] = r
+            if len(session_keys) >= 30:
+                break
+
+        recent_sessions = []
+        for (rec, mv, date), anchor in session_keys.items():
+            s_rows = [
+                row for row in rows
+                if row.participant == rec and row.model_version == mv
+                and (row.timestamp.date() == date if row.timestamp and date else True)
+            ]
+            s_falls = sum(1 for r in s_rows if r.fall_detected)
+            recent_sessions.append({
+                "timestamp":         anchor.timestamp.isoformat() if anchor.timestamp else None,
+                "model_version":     mv,
+                "recording":         rec,
+                "total_windows":     len(s_rows),
+                "falls_detected":    s_falls,
+                "fall_rate_pct":     round(100 * s_falls / len(s_rows), 2) if s_rows else 0,
+                "step_seconds":      anchor.step_seconds,
+                "resampling_method": anchor.resampling_method,
+            })
+
+        # Timeseries for scatter plot (capped at 5000 rows)
+        ts_rows = rows[-5000:] if len(rows) > 5000 else rows
+        timeseries = [
+            {
+                "id":            r.id,
+                "timestamp":     r.timestamp.isoformat() if r.timestamp else None,
+                "model_version": r.model_version,
+                "recording":     r.participant,
+                "confidence":    round(r.confidence, 4) if r.confidence is not None else None,
+                "fall_detected": r.fall_detected,
+                "latency_ms":    r.latency_ms,
+            }
+            for r in ts_rows
+        ]
+
+        return {
+            "summary": {
+                "total_windows":     len(rows),
+                "total_recordings":  len(by_recording_rows),
+                "models_tested":     sorted(by_model_rows.keys()),
+            },
+            "by_model":        model_stats,
+            "by_recording":    by_recording,
+            "recent_sessions": recent_sessions,
+            "timeseries":      timeseries,
+        }
+
+    except Exception as e:
+        logger.error(f"Model comparison query failed: {e}", exc_info=True)
+        raise HTTPException(status_code=503, detail=f"Database error: {e}")
+    finally:
+        db.close()
+
+
 @app.post("/predict", response_model=PredictResponse, dependencies=[Depends(verify_api_key)])
 async def predict(req: PredictRequest, background_tasks: BackgroundTasks):
     """
@@ -687,15 +874,18 @@ async def datalake_replay(
     from datetime import datetime, timezone as _tz
     db_rows = [
         {
-            "timestamp":      datetime.fromtimestamp(p["window_start_ms"] / 1000, tz=_tz.utc)
-                              if p.get("window_start_ms") else datetime.now(_tz.utc),
-            "model_version":  mv,
-            "fall_detected":  p["fall_detected"],
-            "confidence":     p["confidence"],
-            "window_size":    int(win_s * ACC_SAMPLE_RATE),
-            "inference_mode": "replay",
-            "latency_ms":     p.get("latency_ms"),
-            "participant":    filename,    # source CSV filename as participant label
+            "timestamp":         datetime.fromtimestamp(p["window_start_ms"] / 1000, tz=_tz.utc)
+                                 if p.get("window_start_ms") else datetime.now(_tz.utc),
+            "model_version":     mv,
+            "fall_detected":     p["fall_detected"],
+            "confidence":        p["confidence"],
+            "window_size":       int(win_s * ACC_SAMPLE_RATE),
+            "inference_mode":    "replay",
+            "latency_ms":        p.get("latency_ms"),
+            "participant":       filename,
+            "step_seconds":      step_seconds,
+            "resampling_method": _resampling_method,
+            "acc_sensor_type":   _acc_sensor_type,
         }
         for p in predictions
     ]

@@ -21,6 +21,9 @@ def write_inference_log(
     latency_ms: int,
     participant: Optional[str],
     features: dict,
+    step_seconds: Optional[float] = None,
+    resampling_method: Optional[str] = None,
+    acc_sensor_type: Optional[str] = None,
 ) -> Optional[int]:
     """
     Write one inference result to Postgres (inference_log + feature_snapshot rows).
@@ -47,6 +50,9 @@ def write_inference_log(
                 inference_mode=inference_mode,
                 latency_ms=latency_ms,
                 participant=participant or "unknown",
+                step_seconds=step_seconds,
+                resampling_method=resampling_method,
+                acc_sensor_type=acc_sensor_type,
             )
             db.add(log)
             db.flush()  # get auto-generated id before committing
@@ -103,14 +109,17 @@ def write_inference_batch(rows: list) -> int:
         try:
             db.bulk_insert_mappings(InferenceLog, [
                 {
-                    "timestamp":      r.get("timestamp"),
-                    "model_version":  r["model_version"],
-                    "fall_detected":  r["fall_detected"],
-                    "confidence":     r["confidence"],
-                    "window_size":    r["window_size"],
-                    "inference_mode": r["inference_mode"],
-                    "latency_ms":     r.get("latency_ms"),
-                    "participant":    r.get("participant", "unknown"),
+                    "timestamp":         r.get("timestamp"),
+                    "model_version":     r["model_version"],
+                    "fall_detected":     r["fall_detected"],
+                    "confidence":        r["confidence"],
+                    "window_size":       r["window_size"],
+                    "inference_mode":    r["inference_mode"],
+                    "latency_ms":        r.get("latency_ms"),
+                    "participant":       r.get("participant", "unknown"),
+                    "step_seconds":      r.get("step_seconds"),
+                    "resampling_method": r.get("resampling_method"),
+                    "acc_sensor_type":   r.get("acc_sensor_type"),
                 }
                 for r in rows
                 if r.get("fall_detected") is not None   # skip error windows

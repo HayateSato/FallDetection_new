@@ -4,31 +4,63 @@
   "uid": "fall-ml-overview",
   "schemaVersion": 39,
   "refresh": "30s",
-  "time": { "from": "now-1h", "to": "now" },
+  "time": {
+    "from": "now-1h",
+    "to": "now"
+  },
   "panels": [
     {
       "id": 1,
       "title": "Server Status",
       "type": "stat",
-      "gridPos": { "x": 0, "y": 0, "w": 4, "h": 4 },
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 4,
+        "h": 4
+      },
       "targets": [
         {
-          "datasource": "Prometheus",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
           "expr": "up{job=\"ml_server\"}",
-          "legendFormat": "ml_server"
+          "legendFormat": "ml_server",
+          "refId": "A"
         }
       ],
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "colorMode": "background",
         "thresholds": {
           "steps": [
-            { "value": 0, "color": "red" },
-            { "value": 1, "color": "green" }
+            {
+              "value": 0,
+              "color": "red"
+            },
+            {
+              "value": 1,
+              "color": "green"
+            }
           ]
         },
         "mappings": [
-          { "type": "value", "options": { "0": { "text": "DOWN" }, "1": { "text": "UP" } } }
+          {
+            "type": "value",
+            "options": {
+              "0": {
+                "text": "DOWN"
+              },
+              "1": {
+                "text": "UP"
+              }
+            }
+          }
         ]
       }
     },
@@ -36,12 +68,21 @@
       "id": 2,
       "title": "Requests per Minute",
       "type": "timeseries",
-      "gridPos": { "x": 4, "y": 0, "w": 10, "h": 8 },
+      "gridPos": {
+        "x": 4,
+        "y": 0,
+        "w": 10,
+        "h": 8
+      },
       "targets": [
         {
-          "datasource": "Prometheus",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
           "expr": "rate(http_requests_total{job=\"ml_server\"}[1m]) * 60",
-          "legendFormat": "{{ method }} {{ handler }}"
+          "legendFormat": "{{ method }} {{ handler }}",
+          "refId": "A"
         }
       ]
     },
@@ -49,21 +90,43 @@
       "id": 3,
       "title": "p95 Inference Latency",
       "type": "gauge",
-      "gridPos": { "x": 14, "y": 0, "w": 5, "h": 8 },
+      "gridPos": {
+        "x": 14,
+        "y": 0,
+        "w": 5,
+        "h": 8
+      },
       "targets": [
         {
-          "datasource": "Prometheus",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
           "expr": "histogram_quantile(0.95, rate(inference_latency_seconds_bucket[5m]))",
-          "legendFormat": "p95 latency"
+          "legendFormat": "p95 latency",
+          "refId": "A"
         }
       ],
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "thresholds": {
           "steps": [
-            { "value": 0, "color": "green" },
-            { "value": 1, "color": "yellow" },
-            { "value": 2, "color": "red" }
+            {
+              "value": 0,
+              "color": "green"
+            },
+            {
+              "value": 1,
+              "color": "yellow"
+            },
+            {
+              "value": 2,
+              "color": "red"
+            }
           ]
         }
       },
@@ -79,45 +142,87 @@
       "id": 4,
       "title": "5xx Error Rate",
       "type": "stat",
-      "gridPos": { "x": 19, "y": 0, "w": 5, "h": 4 },
+      "gridPos": {
+        "x": 19,
+        "y": 0,
+        "w": 5,
+        "h": 4
+      },
       "targets": [
         {
-          "datasource": "Prometheus",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
           "expr": "rate(http_requests_total{job=\"ml_server\", status_code=~\"5..\"}[5m])",
-          "legendFormat": "errors/s"
+          "legendFormat": "errors/s",
+          "refId": "A"
         }
       ],
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "colorMode": "background",
         "thresholds": {
           "steps": [
-            { "value": 0, "color": "green" },
-            { "value": 0.01, "color": "red" }
+            {
+              "value": 0,
+              "color": "green"
+            },
+            {
+              "value": 0.01,
+              "color": "red"
+            }
           ]
         }
       },
-      "fieldConfig": { "defaults": { "unit": "reqps" } }
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps"
+        }
+      }
     },
     {
       "id": 5,
       "title": "Falls Detected (last 1h)",
       "type": "stat",
-      "gridPos": { "x": 19, "y": 4, "w": 5, "h": 4 },
+      "gridPos": {
+        "x": 19,
+        "y": 4,
+        "w": 5,
+        "h": 4
+      },
       "targets": [
         {
-          "datasource": "Prometheus",
+          "datasource": {
+            "type": "prometheus",
+            "uid": "PBFA97CFB590B2093"
+          },
           "expr": "increase(fall_detections_total[1h])",
-          "legendFormat": "falls"
+          "legendFormat": "falls",
+          "refId": "A"
         }
       ],
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
         "colorMode": "background",
         "thresholds": {
           "steps": [
-            { "value": 0, "color": "green" },
-            { "value": 1, "color": "red" }
+            {
+              "value": 0,
+              "color": "green"
+            },
+            {
+              "value": 1,
+              "color": "red"
+            }
           ]
         }
       }

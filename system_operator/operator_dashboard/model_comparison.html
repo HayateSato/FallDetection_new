@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Model Comparison — Fall Detection Operator</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- Plotly.js — interactive charts with built-in zoom/pan/hover -->
+  <script src="https://cdn.plot.ly/plotly-2.27.0.min.js"></script>
+  <style>
+    /* ---- Comparison page layout ---- */
+    .comparison-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+    }
+    .chart-panel {
+      background: #1a1f2e;
+      border: 1px solid #2d3448;
+      border-radius: 10px;
+      padding: 1.4rem;
+    }
+    .chart-panel.wide { grid-column: 1 / -1; }
+    .chart-title {
+      font-size: 0.82rem;
+      color: #78909c;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.9rem;
+      font-weight: 600;
+    }
+
+    /* ---- Summary cards ---- */
+    .summary-cards {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+    .summary-card {
+      background: #1a1f2e;
+      border: 1px solid #2d3448;
+      border-radius: 10px;
+      padding: 1.2rem 1rem;
+      text-align: center;
+    }
+    .summary-card .big-number {
+      font-size: 2rem;
+      font-weight: 700;
+      color: #4fc3f7;
+    }
+    .summary-card .card-label {
+      font-size: 0.78rem;
+      color: #78909c;
+      margin-top: 0.35rem;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    /* ---- Controls row ---- */
+    .controls-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.4rem;
+    }
+    .controls-row label { font-size: 0.85rem; color: #78909c; }
+    .controls-row select {
+      padding: 0.4rem 0.8rem;
+      background: #0f1117;
+      color: #e0e0e0;
+      border: 1px solid #4a90d9;
+      border-radius: 6px;
+      font-size: 0.9rem;
+    }
+    .controls-row button {
+      padding: 0.4rem 1rem;
+      background: #4a90d9;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    .controls-row button:hover { background: #357ab8; }
+
+    /* ---- Percentile / recording tables ---- */
+    .data-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.85rem;
+    }
+    .data-table th {
+      text-align: left;
+      padding: 0.55rem 0.8rem;
+      background: #0f1117;
+      color: #78909c;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      border-bottom: 1px solid #2d3448;
+    }
+    .data-table td {
+      padding: 0.55rem 0.8rem;
+      border-bottom: 1px solid #1e2538;
+    }
+    .data-table tr:hover td { background: #1e2538; }
+    .fall-high { color: #ef5350; font-weight: 700; }
+    .fall-mid  { color: #ffd54f; font-weight: 600; }
+    .fall-low  { color: #66bb6a; }
+    .no-data   { color: #2d3448; }
+
+    /* ---- Empty state ---- */
+    .empty-state {
+      padding: 2rem;
+      text-align: center;
+      color: #78909c;
+      font-size: 0.9rem;
+    }
+
+    @media (max-width: 900px) {
+      .comparison-grid { grid-template-columns: 1fr; }
+      .chart-panel.wide { grid-column: 1; }
+      .summary-cards { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 540px) {
+      .summary-cards { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>
+      <a href="index.html" style="color:#4a90d9; text-decoration:none;">← Operator Dashboard</a>
+      <span style="color:#2d3448; margin:0 0.5rem;">/</span>
+      Model Comparison
+    </h1>
+    <span id="server-status" class="badge badge-grey">Loading…</span>
+  </header>
+
+  <main>
+
+    <!-- Controls -->
+    <section class="panel">
+      <div class="controls-row">
+        <label>Look back:</label>
+        <select id="since-days">
+          <option value="7">Last 7 days</option>
+          <option value="30" selected>Last 30 days</option>
+          <option value="90">Last 90 days</option>
+          <option value="365">Last year</option>
+        </select>
+        <button onclick="loadComparison()">Refresh</button>
+        <span id="load-status" class="meta"></span>
+      </div>
+      <p class="meta">
+        Run replays from the
+        <a href="index.html#panel-config">Operator Dashboard → Processing Configuration</a>
+        to populate this page. Each replay saves all predictions to PostgreSQL.
+      </p>
+    </section>
+
+    <!-- Summary cards -->
+    <div class="summary-cards">
+      <div class="summary-card">
+        <div id="stat-windows" class="big-number">—</div>
+        <div class="card-label">Total Windows Replayed</div>
+      </div>
+      <div class="summary-card">
+        <div id="stat-recordings" class="big-number">—</div>
+        <div class="card-label">Recordings Used</div>
+      </div>
+      <div class="summary-card">
+        <div id="stat-models" class="big-number">—</div>
+        <div class="card-label">Models Compared</div>
+      </div>
+      <div class="summary-card">
+        <div id="stat-falls" class="big-number">—</div>
+        <div class="card-label">Total Falls Detected</div>
+      </div>
+    </div>
+
+    <!-- Charts grid -->
+    <div class="comparison-grid">
+
+      <div class="chart-panel">
+        <div class="chart-title">Fall Detection Rate by Model (%)</div>
+        <div id="chart-fall-rate" style="height:300px;"></div>
+      </div>
+
+      <div class="chart-panel">
+        <div class="chart-title">Inference Latency by Model (ms) — Avg &amp; P95</div>
+        <div id="chart-latency" style="height:300px;"></div>
+      </div>
+
+      <div class="chart-panel wide">
+        <div class="chart-title">Confidence Score Distribution — Box Plot (falls vs non-falls per model)</div>
+        <div id="chart-boxplot" style="height:380px;"></div>
+      </div>
+
+      <div class="chart-panel wide">
+        <div class="chart-title">Confidence Score Histogram — Distribution across all windows</div>
+        <div id="chart-histogram" style="height:320px;"></div>
+      </div>
+
+      <div class="chart-panel wide">
+        <div class="chart-title">Confidence Score per Window — Scatter (× = fall detected, · = no fall)</div>
+        <div id="chart-scatter" style="height:420px;"></div>
+      </div>
+
+    </div>
+
+    <!-- Confidence percentile table -->
+    <section class="panel" style="margin-top:1.5rem;">
+      <h2>Confidence Score Percentiles</h2>
+      <p class="meta" style="margin-bottom:1rem;">
+        Per-model statistical summary. Low stddev + high p50 for falls = confident model.
+        High uncertainty % (confidence 0.4–0.6) signals the model is near its decision boundary.
+      </p>
+      <div id="percentile-table-container">
+        <p class="meta loading">Loading…</p>
+      </div>
+    </section>
+
+    <!-- Per-recording × model table -->
+    <section class="panel" style="margin-top:1.5rem;">
+      <h2>Per-Recording Comparison</h2>
+      <p class="meta" style="margin-bottom:1rem;">
+        Fall rate % and average confidence per recording × model.
+        Colour scale: <span class="fall-low">low (&lt;10%)</span> /
+        <span class="fall-mid">medium (10–30%)</span> /
+        <span class="fall-high">high (&gt;30%)</span>.
+      </p>
+      <div id="recording-table-container">
+        <p class="meta loading">Loading…</p>
+      </div>
+    </section>
+
+    <!-- Recent replay sessions -->
+    <section class="panel" style="margin-top:1.5rem;">
+      <h2>Recent Replay Sessions</h2>
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Timestamp</th>
+            <th>Recording</th>
+            <th>Model</th>
+            <th>Windows</th>
+            <th>Falls</th>
+            <th>Fall Rate</th>
+            <th>Step (s)</th>
+            <th>Resampling</th>
+          </tr>
+        </thead>
+        <tbody id="sessions-tbody">
+          <tr><td colspan="8" class="loading">Loading…</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+  </main>
+
+  <script src="model_comparison.js"></script>
+</body>
+</html>

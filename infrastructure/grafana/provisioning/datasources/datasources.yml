@@ -4,6 +4,7 @@ datasources:
   # Prometheus — for HTTP/ML metrics
   - name: Prometheus
     type: prometheus
+    uid: PBFA97CFB590B2093
     access: proxy
     url: http://prometheus:9090
     isDefault: true
@@ -11,11 +12,12 @@ datasources:
       timeInterval: "15s"
 
   # PostgreSQL — for inference history and patient data
-  # Read-only user: create with:
+  # Read-only user created with:
   #   CREATE USER grafana_ro WITH PASSWORD 'grafana_ro';
-  #   GRANT SELECT ON inference_log, participant_session TO grafana_ro;
+  #   GRANT SELECT ON ALL TABLES IN SCHEMA public TO grafana_ro;
   - name: PostgreSQL
     type: postgres
+    uid: PCC52D03280B7034C
     url: postgres:5432
     user: grafana_ro
     secureJsonData:

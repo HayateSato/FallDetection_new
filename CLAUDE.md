@@ -2,9 +2,10 @@
 
 Project reference for AI-assisted development. Describes architecture, data flows, key files, and planned next steps.
 
-> **Current state (2026-03-20):** Full multi-user system implemented.
-> New folder structure: `patient/`, `caregiver/`, `system_operator/`, `emergency/`, `shared/`, `infrastructure/`.
+> **Current state (2026-03-25):** Full multi-user system implemented. Priority 1 (operator dashboard + ML server) complete. Priority 2 (Grafana model comparison) in progress.
+> New folder structure: `patient/`, `caregiver/`, `system_operator/`, `emergency/`, `shared/`, `infrastructure/`, `datalake/`.
 > Root `server.py` and `main.py` still work as-is (backward-compatible wrappers).
+> MinIO datalake + CSV offline replay implemented. Grafana model_comparison dashboard created.
 
 ---
 
@@ -394,15 +395,48 @@ python main.py
 The primary goal is **automated model comparison** — comparing XGBoost model versions, feature
 processing pipelines, and time window sizes systematically, replacing manual CSV inspection.
 
-### Priority 1 — Operator Dashboard + ML server communication (current focus)
+### Priority 1 — Operator Dashboard + ML server communication — **COMPLETE**
 - Operator dashboard fully functional: model switching, recent inference log, live health
-- Processing config panel: time window control, data source toggle (InfluxDB vs CSV)
+- Processing config panel: window, sensor type, sample rate, resampling method
+- Data source toggle: InfluxDB (live) or CSV/MinIO (offline replay)
 - All operator → ml_server API calls working end-to-end
 
-### Priority 2 — Prometheus/Grafana + operator dashboard integration
-- Grafana dashboards showing model performance metrics per model version
-- Confidence distribution comparison across models visible in Grafana
-- Operator dashboard linking to correct Grafana panels
+### Priority 2 — Prometheus/Grafana + operator dashboard integration — **CURRENT FOCUS**
+
+**Goal:** automated model comparison via Grafana — same CSV, different model versions, compare results.
+
+**What has been implemented:**
+- `grafana_ro` PostgreSQL read-only user created manually:
+  ```sql
+  CREATE USER grafana_ro WITH PASSWORD 'grafana_ro';
+  GRANT SELECT ON ALL TABLES IN SCHEMA public TO grafana_ro;
+  ```
+- `infrastructure/grafana/dashboards/model_comparison.json` — new 12-panel dashboard:
+  - Stat panels: total replay windows, falls detected, models tested, recordings replayed
+  - Bar charts: fall rate % by model, average + p95 latency by model
+  - Tables: confidence percentiles (p10/p25/median/p75/p90/mean/stddev), uncertainty ratio, confidence bucket distribution (10% bands)
+  - Key comparison table: per-recording × model, fall_rate_pct + avg_fall_confidence colour-coded
+  - Window size vs fall rate table, replay history (last 30 runs)
+- All 4 Grafana dashboard JSON files (`ml_server_overview.json`, `model_performance.json`, `fall_events_timeline.json`, `model_comparison.json`) updated to use Grafana 10 datasource format:
+  ```json
+  {"type": "grafana-postgresql-datasource", "uid": "falldetect-postgres"}
+  {"type": "prometheus", "uid": "falldetect-prometheus"}
+  ```
+- `infrastructure/grafana/provisioning/datasources/datasources.yml` updated with explicit UIDs (`falldetect-postgres`, `falldetect-prometheus`) so they are stable across Grafana restarts
+
+**What still needs verification:**
+- Confirm all 4 dashboards show data after Grafana restart (datasource UID fix was just applied)
+- Operator dashboard Grafana card links — verify they open to the correct dashboard UIDs:
+  - `fall-ml-overview` → ml_server_overview
+  - `fall-model-perf` → model_performance
+  - `fall-events-timeline` → fall_events_timeline
+  - Add link card for `model-comparison` dashboard
+
+**Workflow for model comparison (end-to-end):**
+1. Upload SmarKo CSV to MinIO via operator dashboard (or MinIO console http://localhost:9001)
+2. Switch to model v0 in operator dashboard → Run Replay on the CSV
+3. Switch to model v3 → Run Replay on same CSV
+4. Open Grafana → Model Comparison dashboard → see side-by-side results
 
 ### Priority 3 — Caregiver dashboard + emergency contact dashboard
 - Caregiver login, patient list, fall history
@@ -416,13 +450,14 @@ processing pipelines, and time window sizes systematically, replacing manual CSV
 - ml_server new endpoints: `GET /datalake/files`, `POST /datalake/upload`, `POST /datalake/replay`
 - Operator dashboard: CSV radio shows file picker, upload button, replay button, results table
 - Replay runs the full inference pipeline server-side (resample → LSB→g → window → XGBoost) for every window
+- Replay saves all predictions to `inference_log` with `inference_mode='replay'` and `participant=filename`
 - **Stack:** MinIO + boto3 + pandas (all in Dockerfile.python)
 - **MinIO console:** http://localhost:9001 (minioadmin / minioadmin by default)
 
-### Time window configuration via API — IMPLEMENTED
-- `POST /config` on ml_server sets `_window_size_seconds` (mutable global, survives until container restart)
-- `GET /config` returns current window settings
-- Operator dashboard "Set Window" button POSTs to `/config` and shows confirmation with sample count
+### Processing configuration via API — IMPLEMENTED
+- `POST /config` accepts: `window_seconds`, `acc_sensor_type`, `hardware_sample_rate`, `resampling_method`
+- `GET /config` returns current values
+- Operator dashboard config panel sends all 4 fields and shows confirmation
 
 ---
 

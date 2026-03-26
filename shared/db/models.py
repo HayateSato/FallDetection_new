@@ -28,10 +28,13 @@ class InferenceLog(Base):
     model_version  = Column(String(20))
     fall_detected  = Column(Boolean)
     confidence     = Column(Float)
-    window_size    = Column(Integer)          # number of ACC samples used
-    inference_mode = Column(String(10))       # 'local', 'remote', or 'replay'
-    latency_ms     = Column(Integer)          # end-to-end inference pipeline latency
-    participant    = Column(String(100))      # participant/patient name from recording session
+    window_size        = Column(Integer)       # number of ACC samples used
+    inference_mode     = Column(String(10))   # 'local', 'remote', or 'replay'
+    latency_ms         = Column(Integer)      # end-to-end inference pipeline latency
+    participant        = Column(String(100))  # participant/patient name from recording session
+    step_seconds       = Column(Float)        # step between sliding windows (seconds)
+    resampling_method  = Column(String(20))   # 'linear', 'decimate', 'average'
+    acc_sensor_type    = Column(String(20))   # 'bosch', 'non_bosch'
 
     features = relationship("FeatureSnapshot", back_populates="inference",
                             cascade="all, delete-orphan")
