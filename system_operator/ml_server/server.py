@@ -15,6 +15,8 @@ Or with uvicorn:
     uvicorn system_operator.ml_server.server:app --host 0.0.0.0 --port 8001
 """
 
+import asyncio
+import json
 import logging
 import sys
 import os
@@ -118,31 +120,77 @@ logger.info(f"  Prometheus:      {'enabled' if PROMETHEUS_ENABLED else 'disabled
 logger.info("=" * 60)
 
 # ---------------------------------------------------------------------------
-# Redis publisher (Phase 3) — optional, gracefully disabled if Redis unavailable
+# Redis publisher — optional, gracefully disabled if Redis unavailable
 # ---------------------------------------------------------------------------
 
-def _publish_fall_event(patient_id: str, fall_detected: bool, confidence: float,
-                        model_version: str, inference_id: Optional[int]) -> None:
-    """Publish fall event to Redis channel 'fall_events'. Never raises."""
+# Pending emergency alert tasks: inference_id → asyncio.Task
+# When patient submits feedback, the task is cancelled.
+# NOTE: with --workers > 1, tasks are per-process; works correctly in dev
+# (single uvicorn worker) and single-container deployments.
+_pending_emergency_tasks: Dict[int, "asyncio.Task[None]"] = {}
+
+
+def _publish_to_redis(channel: str, payload: dict) -> None:
+    """Publish a JSON payload to a Redis channel. Never raises."""
     try:
-        import redis
+        import redis as _redis
         from config.settings import REDIS_URL
         if not REDIS_URL:
             return
-        r = redis.from_url(REDIS_URL)
-        import json
-        payload = json.dumps({
-            "patient_id": patient_id,
-            "fall_detected": fall_detected,
-            "confidence": confidence,
-            "model_version": model_version,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "inference_id": inference_id,
-        })
-        r.publish("fall_events", payload)
-        logger.debug(f"Published fall_event to Redis: fall={fall_detected}, patient={patient_id}")
+        r = _redis.from_url(REDIS_URL)
+        r.publish(channel, json.dumps(payload))
+        logger.debug(f"Redis publish → channel={channel!r}")
     except Exception as e:
         logger.debug(f"Redis publish skipped ({e})")
+
+
+async def _delayed_emergency_alert(
+    inference_id: int,
+    patient_id: str,
+    confidence: float,
+    model_version: str,
+    delay_seconds: int = 12,
+) -> None:
+    """
+    Waits delay_seconds. If no patient feedback was received, marks the row as
+    no_answer and publishes an emergency alert to Redis 'fall_events'.
+
+    This coroutine is created as an asyncio.Task and can be cancelled by the
+    POST /patient/feedback/{inference_id} endpoint when the patient responds.
+    """
+    try:
+        await asyncio.sleep(delay_seconds)
+    except asyncio.CancelledError:
+        logger.debug(f"Emergency timer cancelled — patient responded (inference_id={inference_id})")
+        return
+
+    # Timer fired — patient did not respond
+    logger.info(f"No patient feedback in {delay_seconds}s for inference_id={inference_id} — alerting emergency")
+    try:
+        from shared.db.session import SessionLocal
+        from shared.db.models import InferenceLog
+        db = SessionLocal()
+        try:
+            row = db.query(InferenceLog).filter(InferenceLog.id == inference_id).first()
+            if row and row.user_fall == 0:
+                row.user_fall = 3   # no_answer
+                row.need_help = 3   # no_answer
+                db.commit()
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"DB update for no-answer failed: {e}")
+
+    _publish_to_redis("fall_events", {
+        "patient_id":    patient_id,
+        "fall_detected": True,
+        "confidence":    confidence,
+        "model_version": model_version,
+        "timestamp":     datetime.now(timezone.utc).isoformat(),
+        "inference_id":  inference_id,
+        "alert_reason":  "no_patient_response",
+    })
+    _pending_emergency_tasks.pop(inference_id, None)
 
 # ---------------------------------------------------------------------------
 # Pydantic models
@@ -540,6 +588,123 @@ async def get_model_comparison(since_days: int = Query(30, ge=1, le=365,
         db.close()
 
 
+# ---------------------------------------------------------------------------
+# /patient — patient dashboard SSE + feedback submission
+# ---------------------------------------------------------------------------
+
+class FeedbackRequest(BaseModel):
+    user_fall: int = Field(..., description="0=pending, 1=yes(fell), 2=no(not fell), 3=no_answer")
+    need_help: int = Field(0,   description="0=pending, 1=yes, 2=no, 3=no_answer")
+
+
+@app.get("/patient/stream")
+async def patient_stream(participant: Optional[str] = Query(None,
+                          description="Patient name — filters events to this participant only")):
+    """
+    SSE stream for the patient dashboard.
+    Delivers fall alert events published to Redis 'patient_alerts'.
+    Only fires for real-time detections (not replay).
+    """
+    from fastapi.responses import StreamingResponse as _SR
+
+    async def _generator():
+        from shared.redis_client import subscribe_patient_alerts
+        # Keep-alive ping every 25s so nginx / browsers don't time out
+        ping_interval = 25
+        last_ping = asyncio.get_event_loop().time()
+        try:
+            async for event in subscribe_patient_alerts(participant):
+                yield f"data: {json.dumps(event)}\n\n"
+                last_ping = asyncio.get_event_loop().time()
+        except asyncio.CancelledError:
+            pass
+
+    return _SR(
+        _generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@app.post("/patient/feedback/{inference_id}")
+async def patient_feedback(inference_id: int, req: FeedbackRequest):
+    """
+    Submit patient feedback for a detected fall.
+
+    Called by the patient dashboard after the 10-second popup.
+    Cancels the pending emergency alert timer and decides whether to publish
+    an emergency alert based on the patient's response.
+
+    Decision logic:
+      - user_fall=1, need_help=1          → alert emergency (fell + needs help)
+      - user_fall=1, need_help=3          → alert emergency (fell, no answer on help = treat as needs help)
+      - user_fall=1, need_help=2          → no alert (fell but explicitly said no help needed)
+      - user_fall=2                       → no alert (not a fall)
+      - user_fall=3 (submitted by client) → alert emergency (no response at all)
+    """
+    # Cancel the pending emergency timer
+    task = _pending_emergency_tasks.pop(inference_id, None)
+    if task and not task.done():
+        task.cancel()
+
+    # Update the database
+    from shared.db.session import SessionLocal
+    from shared.db.models import InferenceLog
+
+    if SessionLocal is None:
+        raise HTTPException(status_code=503, detail="Database not configured")
+
+    db = SessionLocal()
+    try:
+        row = db.query(InferenceLog).filter(InferenceLog.id == inference_id).first()
+        if not row:
+            raise HTTPException(status_code=404, detail=f"Inference {inference_id} not found")
+
+        row.user_fall = req.user_fall
+        row.need_help = req.need_help
+        db.commit()
+
+        # Capture values before closing session
+        patient_id    = row.participant or "unknown"
+        confidence    = row.confidence
+        model_version = row.model_version
+        ts            = row.timestamp.isoformat() if row.timestamp else datetime.now(timezone.utc).isoformat()
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=503, detail=f"Database error: {e}")
+    finally:
+        db.close()
+
+    # Decide whether to publish the emergency alert
+    should_alert = (
+        req.user_fall == 1 and req.need_help in (1, 3)  # fell + needs help / fell + no answer on help
+        or req.user_fall == 3                            # patient gave no answer at all
+    )
+
+    if should_alert:
+        alert_reason = "patient_confirmed_help" if req.need_help == 1 else "no_patient_response"
+        _publish_to_redis("fall_events", {
+            "patient_id":    patient_id,
+            "fall_detected": True,
+            "confidence":    confidence,
+            "model_version": model_version,
+            "timestamp":     ts,
+            "inference_id":  inference_id,
+            "alert_reason":  alert_reason,
+        })
+        logger.info(f"Emergency alert published: inference_id={inference_id}, reason={alert_reason}")
+
+    return {
+        "inference_id":     inference_id,
+        "user_fall":        req.user_fall,
+        "need_help":        req.need_help,
+        "emergency_alerted": should_alert,
+    }
+
+
 @app.post("/predict", response_model=PredictResponse, dependencies=[Depends(verify_api_key)])
 async def predict(req: PredictRequest, background_tasks: BackgroundTasks):
     """
@@ -650,11 +815,22 @@ async def predict(req: PredictRequest, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=500, detail=f"Prediction failed: {str(e)}")
 
 
-def _bg_write_and_publish(mv: str, is_fall: bool, confidence: float,
-                           window_size: int, latency_ms: int,
-                           participant: Optional[str], features: dict) -> None:
-    """Background task: write to Postgres, then publish to Redis if fall detected."""
+async def _bg_write_and_publish(mv: str, is_fall: bool, confidence: float,
+                                window_size: int, latency_ms: int,
+                                participant: Optional[str], features: dict) -> None:
+    """
+    Async background task (runs in the event loop, not a thread pool).
+
+    Steps:
+      1. Write inference result to PostgreSQL.
+      2. If a fall was detected (real-time mode only):
+           a. Publish to Redis 'patient_alerts' → triggers the patient dashboard popup.
+           b. Schedule a 12-second delayed emergency alert.
+              The timer is cancelled if the patient submits feedback in time.
+              If it fires, user_fall=3/need_help=3 are written and 'fall_events' is published.
+    """
     from system_operator.ml_server.services.db_writer import write_inference_log
+
     inference_id = write_inference_log(
         model_version=mv,
         fall_detected=is_fall,
@@ -665,14 +841,24 @@ def _bg_write_and_publish(mv: str, is_fall: bool, confidence: float,
         participant=participant,
         features=features,
     )
-    # Phase 3: publish to Redis regardless of fall/not-fall so care-giver sees all events
-    _publish_fall_event(
-        patient_id=participant or "unknown",
-        fall_detected=is_fall,
-        confidence=confidence,
-        model_version=mv,
-        inference_id=inference_id,
-    )
+
+    if is_fall and inference_id:
+        patient_id = participant or "unknown"
+        # Notify the patient dashboard
+        _publish_to_redis("patient_alerts", {
+            "patient_id":    patient_id,
+            "fall_detected": True,
+            "confidence":    confidence,
+            "model_version": mv,
+            "timestamp":     datetime.now(timezone.utc).isoformat(),
+            "inference_id":  inference_id,
+        })
+        # Schedule the delayed emergency alert (fires in 12s if no patient response)
+        task = asyncio.create_task(
+            _delayed_emergency_alert(inference_id, patient_id, confidence, mv)
+        )
+        _pending_emergency_tasks[inference_id] = task
+        logger.info(f"Emergency timer started for inference_id={inference_id} (12s)")
 
 # ---------------------------------------------------------------------------
 # /config — update detection window size at runtime

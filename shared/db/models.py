@@ -36,6 +36,11 @@ class InferenceLog(Base):
     resampling_method  = Column(String(20))   # 'linear', 'decimate', 'average'
     acc_sensor_type    = Column(String(20))   # 'bosch', 'non_bosch'
 
+    # Patient feedback — populated by POST /patient/feedback/{id}
+    # Values: 0=pending (default), 1=yes, 2=no, 3=no_answer (10s timeout expired)
+    user_fall = Column(Integer, default=0)    # did the patient confirm they fell?
+    need_help = Column(Integer, default=0)    # did the patient request emergency help?
+
     features = relationship("FeatureSnapshot", back_populates="inference",
                             cascade="all, delete-orphan")
 
