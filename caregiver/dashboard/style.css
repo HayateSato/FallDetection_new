@@ -2,6 +2,11 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: system-ui, sans-serif; background: #f0f2f5; color: #222; }
 
+/* ---- Visibility helpers ---- */
+/* Use .hidden class instead of the HTML 'hidden' attribute so that
+   display:flex rules on specific elements cannot override it. */
+.hidden { display: none !important; }
+
 /* ---- Login ---- */
 #login-screen {
   display: flex; align-items: center; justify-content: center;
@@ -21,7 +26,7 @@ body { font-family: system-ui, sans-serif; background: #f0f2f5; color: #222; }
   border: none; border-radius: 6px; font-size: 1rem; cursor: pointer;
 }
 .login-box button:hover { background: #357ab8; }
-.error { color: #e53935; font-size: 0.9rem; text-align: center; }
+.error { color: #e53935; font-size: 0.9rem; text-align: center; min-height: 1.2rem; }
 
 /* ---- Alert Banner ---- */
 .alert-banner {
@@ -32,9 +37,14 @@ body { font-family: system-ui, sans-serif; background: #f0f2f5; color: #222; }
   font-size: 1.3rem; font-weight: bold;
   animation: pulse 1s ease-in-out infinite alternate;
 }
+/* Override .hidden so the banner is flex when visible */
+.alert-banner:not(.hidden) { display: flex; }
+.alert-content { display: flex; align-items: center; gap: 0.75rem; }
+.alert-icon { font-size: 1.6rem; }
 .alert-banner button {
   background: rgba(255,255,255,0.2); border: 2px solid white;
   color: white; padding: 0.4rem 1rem; border-radius: 4px; cursor: pointer;
+  font-size: 1rem; white-space: nowrap;
 }
 @keyframes pulse { from { background: #e53935; } to { background: #b71c1c; } }
 
@@ -42,21 +52,51 @@ body { font-family: system-ui, sans-serif; background: #f0f2f5; color: #222; }
 header {
   background: #1a1a2e; color: white;
   padding: 1rem 2rem;
-  display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
+  display: flex; align-items: center; gap: 1.5rem; flex-wrap: wrap;
 }
-header h1 { font-size: 1.4rem; flex: 1; }
-#header-stats { display: flex; gap: 1.5rem; font-size: 0.9rem; opacity: 0.85; }
+.header-left h1 { font-size: 1.4rem; white-space: nowrap; }
+#header-stats { display: flex; gap: 1rem; flex: 1; flex-wrap: wrap; }
+.stat-chip {
+  background: rgba(255,255,255,0.1); border-radius: 8px;
+  padding: 0.4rem 0.9rem; display: flex; flex-direction: column; align-items: center;
+  min-width: 80px;
+}
+.stat-label { font-size: 0.7rem; opacity: 0.7; text-transform: uppercase; letter-spacing: 0.05em; }
+.stat-value { font-size: 1.1rem; font-weight: 700; margin-top: 0.1rem; }
+
+/* ---- Tab Bar ---- */
+.tab-bar {
+  background: white; border-bottom: 2px solid #e0e0e0;
+  padding: 0 2rem; display: flex; gap: 0;
+}
+.tab {
+  padding: 0.9rem 1.5rem; background: none; border: none;
+  font-size: 0.95rem; cursor: pointer; color: #666;
+  border-bottom: 3px solid transparent; margin-bottom: -2px;
+  transition: color 0.15s;
+}
+.tab:hover { color: #333; }
+.tab.active { color: #4a90d9; border-bottom-color: #4a90d9; font-weight: 600; }
+
+/* ---- Tab Content ---- */
+.tab-content { max-width: 1200px; margin: 2rem auto; padding: 0 1.5rem; }
+
+/* ---- Buttons ---- */
+.btn-primary {
+  padding: 0.55rem 1.2rem; background: #4a90d9; color: white;
+  border: none; border-radius: 6px; font-size: 0.9rem; cursor: pointer;
+}
+.btn-primary:hover { background: #357ab8; }
 .btn-secondary {
-  padding: 0.5rem 1rem; border: 1px solid #ccc; background: transparent;
-  color: white; border-radius: 4px; cursor: pointer;
+  padding: 0.55rem 1.2rem; border: 1px solid #ccc; background: white;
+  color: #333; border-radius: 6px; font-size: 0.9rem; cursor: pointer;
 }
+.btn-secondary:hover { background: #f5f5f5; }
+header .btn-secondary { background: transparent; color: white; border-color: rgba(255,255,255,0.4); }
+header .btn-secondary:hover { background: rgba(255,255,255,0.1); }
 
-/* ---- Main ---- */
-main { max-width: 1100px; margin: 2rem auto; padding: 0 1rem; }
-h2 { font-size: 1.2rem; margin-bottom: 1rem; color: #333; }
-
-/* ---- Patient List ---- */
-#patient-list {
+/* ---- Patient Grid ---- */
+.patient-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 1rem;
@@ -73,18 +113,59 @@ h2 { font-size: 1.2rem; margin-bottom: 1rem; color: #333; }
 .patient-card .meta { font-size: 0.85rem; color: #666; margin-top: 0.3rem; }
 .badge {
   display: inline-block; padding: 0.2rem 0.6rem; border-radius: 12px;
-  font-size: 0.75rem; font-weight: 600; margin-top: 0.5rem;
+  font-size: 0.75rem; font-weight: 600; margin-top: 0.5rem; margin-right: 0.3rem;
 }
-.badge-green { background: #e8f5e9; color: #2e7d32; }
-.badge-red   { background: #ffebee; color: #c62828; }
-.badge-grey  { background: #f5f5f5; color: #666; }
+.badge-green  { background: #e8f5e9; color: #2e7d32; }
+.badge-red    { background: #ffebee; color: #c62828; }
+.badge-grey   { background: #f5f5f5; color: #666; }
+.badge-orange { background: #fff3e0; color: #e65100; }
 
-/* ---- Fall Table ---- */
-#fall-table { width: 100%; border-collapse: collapse; margin-top: 1rem; }
-#fall-table th, #fall-table td {
-  text-align: left; padding: 0.7rem 1rem;
-  border-bottom: 1px solid #eee;
+/* ---- Patient Detail ---- */
+.detail-header {
+  display: flex; align-items: center; gap: 1rem; margin-bottom: 1.5rem;
 }
-#fall-table th { background: #f5f5f5; font-weight: 600; font-size: 0.85rem; }
-#fall-table tr:hover { background: #fafafa; }
-.loading { color: #888; font-style: italic; }
+.detail-header h2 { font-size: 1.2rem; }
+
+/* ---- Data Table (shared by falls + history) ---- */
+.data-table { width: 100%; border-collapse: collapse; background: white;
+  border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.06); }
+.data-table th, .data-table td {
+  text-align: left; padding: 0.75rem 1rem;
+  border-bottom: 1px solid #f0f0f0;
+}
+.data-table th { background: #f7f8fa; font-weight: 600; font-size: 0.82rem;
+  text-transform: uppercase; letter-spacing: 0.04em; color: #555; }
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td { background: #fafafa; }
+.loading { color: #888; font-style: italic; padding: 1rem; }
+
+/* ---- Filter Bar ---- */
+.filter-bar {
+  background: white; border-radius: 10px; padding: 1.2rem 1.5rem;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  display: flex; gap: 1rem; flex-wrap: wrap; align-items: flex-end;
+  margin-bottom: 1.2rem;
+}
+.filter-group { display: flex; flex-direction: column; gap: 0.3rem; }
+.filter-group label { font-size: 0.78rem; font-weight: 600; color: #555;
+  text-transform: uppercase; letter-spacing: 0.04em; }
+.filter-group input, .filter-group select {
+  padding: 0.5rem 0.8rem; border: 1px solid #ccc; border-radius: 6px;
+  font-size: 0.9rem; min-width: 140px;
+}
+
+/* ---- History Meta (count + pagination) ---- */
+.history-meta {
+  display: flex; justify-content: space-between; align-items: center;
+  margin-bottom: 0.8rem;
+}
+#history-count { font-size: 0.9rem; color: #666; }
+.pagination { display: flex; align-items: center; gap: 0.8rem; font-size: 0.9rem; }
+.pagination button { padding: 0.4rem 0.9rem; }
+#page-info { color: #555; }
+
+/* ---- Feedback cell badges ---- */
+.fb-yes     { color: #2e7d32; font-weight: 600; }
+.fb-no      { color: #1565c0; font-weight: 600; }
+.fb-timeout { color: #e65100; font-weight: 600; }
+.fb-pending { color: #aaa; }

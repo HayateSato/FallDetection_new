@@ -288,6 +288,7 @@ services:
       - ../system_operator/operator_dashboard:/www/static/operator:ro
       - ../caregiver/dashboard:/www/static/caregiver:ro
       - ../emergency/tablet_ui:/www/static/emergency:ro
+      - ../patient/dashboard:/www/static/patient:ro
     networks:
       - fall_detection
     restart: unless-stopped

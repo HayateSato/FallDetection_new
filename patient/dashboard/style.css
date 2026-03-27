@@ -1,0 +1,138 @@
+/* ---- Reset & Base ---- */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: system-ui, sans-serif;
+  background: #0d1b2a;
+  color: #e8edf2;
+  min-height: 100vh;
+}
+.hidden { display: none !important; }
+
+/* ── Standby Screen ──────────────────────────────────────────────────── */
+#standby-screen {
+  min-height: 100vh;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: 2rem; padding: 2rem;
+}
+
+.standby-content {
+  display: flex; flex-direction: column; align-items: center; gap: 1rem;
+  text-align: center;
+}
+
+/* Pulsing ring animation to signal "monitoring active" */
+.pulse-ring {
+  width: 80px; height: 80px; border-radius: 50%;
+  border: 4px solid #4a90d9;
+  animation: ring-pulse 2s ease-out infinite;
+  margin-bottom: 0.5rem;
+}
+@keyframes ring-pulse {
+  0%   { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(74,144,217,0.7); }
+  70%  { transform: scale(1);   box-shadow: 0 0 0 20px rgba(74,144,217,0); }
+  100% { transform: scale(0.9); box-shadow: 0 0 0 0 rgba(74,144,217,0); }
+}
+
+.standby-content h1  { font-size: 2rem; font-weight: 700; }
+#standby-patient     { font-size: 1.1rem; opacity: 0.85; }
+.standby-sub         { font-size: 0.9rem; opacity: 0.55; }
+
+.status-indicator {
+  font-size: 0.8rem; padding: 0.3rem 0.9rem; border-radius: 20px; font-weight: 600;
+}
+.status-indicator.connecting { background: #37474f; color: #90a4ae; }
+.status-indicator.connected  { background: #1b5e20; color: #a5d6a7; }
+.status-indicator.error      { background: #b71c1c; color: #ef9a9a; }
+
+.config-bar {
+  display: flex; gap: 0.5rem; align-items: center;
+}
+.config-bar input {
+  padding: 0.5rem 0.9rem; border: 1px solid #37474f; border-radius: 6px;
+  background: #1c2b3a; color: #e8edf2; font-size: 0.9rem; width: 200px;
+}
+.config-bar button {
+  padding: 0.5rem 1rem; background: #4a90d9; color: white;
+  border: none; border-radius: 6px; cursor: pointer; font-size: 0.9rem;
+}
+
+/* ── Popup overlay ───────────────────────────────────────────────────── */
+.popup {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.85);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100;
+  animation: fade-in 0.2s ease;
+}
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+.popup-box {
+  background: #1c2b3a; border-radius: 20px; padding: 2.5rem 3rem;
+  max-width: 440px; width: 90%; text-align: center;
+  box-shadow: 0 8px 40px rgba(0,0,0,0.6);
+  border: 1px solid #2e4057;
+}
+
+.popup-icon { font-size: 3rem; margin-bottom: 1rem; }
+
+.popup-box h2 { font-size: 1.6rem; margin-bottom: 0.5rem; }
+
+.popup-ts {
+  font-size: 0.85rem; color: #90a4ae; margin-bottom: 0.5rem;
+}
+
+.popup-question {
+  font-size: 1.05rem; opacity: 0.88; margin-bottom: 1.5rem; line-height: 1.5;
+}
+
+/* ── Timer bar ───────────────────────────────────────────────────────── */
+.timer-bar-container {
+  height: 6px; background: #2e4057; border-radius: 3px;
+  overflow: hidden; margin-bottom: 0.5rem;
+}
+.timer-bar {
+  height: 100%; background: #4a90d9; border-radius: 3px;
+  width: 100%;
+  transition: width 1s linear, background 1s;
+}
+.timer-bar.urgent { background: #e53935; }
+
+.timer-label {
+  font-size: 0.82rem; color: #90a4ae; margin-bottom: 1.5rem;
+}
+
+/* ── Popup buttons ───────────────────────────────────────────────────── */
+.popup-buttons {
+  display: flex; gap: 1rem; justify-content: center;
+}
+.popup-buttons button {
+  flex: 1; padding: 1rem; font-size: 1.1rem; font-weight: 600;
+  border: none; border-radius: 12px; cursor: pointer;
+  transition: transform 0.1s, box-shadow 0.1s;
+}
+.popup-buttons button:active { transform: scale(0.97); }
+
+.btn-yes {
+  background: #e53935; color: white;
+  box-shadow: 0 4px 14px rgba(229,57,53,0.4);
+}
+.btn-yes:hover { background: #c62828; }
+
+.btn-no {
+  background: #2e7d32; color: white;
+  box-shadow: 0 4px 14px rgba(46,125,50,0.4);
+}
+.btn-no:hover { background: #1b5e20; }
+
+/* ── Toast ───────────────────────────────────────────────────────────── */
+.toast {
+  position: fixed; bottom: 2rem; left: 50%; transform: translateX(-50%);
+  background: #263238; color: #e8edf2;
+  padding: 0.9rem 2rem; border-radius: 50px;
+  font-size: 0.95rem; font-weight: 500;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  animation: slide-up 0.3s ease;
+  z-index: 200;
+}
+@keyframes slide-up { from { opacity: 0; transform: translateX(-50%) translateY(10px); } }

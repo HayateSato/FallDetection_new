@@ -2,10 +2,11 @@
 
 Project reference for AI-assisted development. Describes architecture, data flows, key files, and planned next steps.
 
-> **Current state (2026-03-26):** Full multi-user system implemented. Priority 1 (operator dashboard + ML server) complete. Priority 2 (model comparison) complete — built-in operator dashboard sub-page with interactive Plotly charts instead of Grafana.
+> **Current state (2026-03-26):** Full multi-user system implemented. Priority 1 (operator dashboard + ML server) complete. Priority 2 (model comparison) complete. Priority 3 (caregiver dashboard + patient feedback + emergency) complete.
 > New folder structure: `patient/`, `caregiver/`, `system_operator/`, `emergency/`, `shared/`, `infrastructure/`, `datalake/`.
 > Root `server.py` and `main.py` still work as-is (backward-compatible wrappers).
 > MinIO datalake + CSV offline replay implemented. Model comparison page at `/operator/model_comparison.html`.
+> Patient feedback loop implemented: fall → `patient_alerts` Redis channel → patient popup (10s) → conditional `fall_events` → emergency alert.
 
 ---
 
@@ -13,27 +14,33 @@ Project reference for AI-assisted development. Describes architecture, data flow
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
-│  patient/            Wearable (SmarKo) → BT → Smartphone App → InfluxDB             │
-│                      (no code here — see patient/README.md)                         │
+│  patient/                                                                           │
+│    dashboard/  HTML/JS — standby screen + 10s fall popup + YES/NO feedback flow    │
+│                SSE from /api/ml/patient/stream  →  POST /api/ml/patient/feedback   │
 └──────────────────────────────────────────┬──────────────────────────────────────────┘
-                                           │ InfluxDB query
-                                           ▼
+                        ▲ Redis 'patient_alerts' SSE │ feedback POST
+                        │                            ▼
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
 │  system_operator/                                                                   │
 │    client/           Flask :8000 — queries InfluxDB, sends to ml_server             │
 │    ml_server/        FastAPI :8001 — XGBoost inference + Prometheus /metrics        │
-│                        → writes to PostgreSQL (inference_log, feature_snapshot)      │
-│                        → publishes to Redis 'fall_events' channel                   │
+│                        → writes to PostgreSQL (inference_log + user_fall/need_help) │
+│                        → publishes to Redis 'patient_alerts' on every fall          │
+│                        → starts 12s asyncio timer; cancels on feedback              │
+│                        → publishes to Redis 'fall_events' only when alert needed    │
 │    operator_dashboard/ Vanilla HTML/JS — model switcher, config, replay, comparison │
 └──────┬────────────────────────────────────────────────────┬───────────────────────┬─┘
-       │ Redis pub/sub                                       │ Redis pub/sub         │
+       │ Redis 'fall_events'                                 │ Redis 'fall_events'   │
        ▼                                                     ▼                      │
 ┌──────────────────────────┐              ┌──────────────────────────┐              │
 │  caregiver/              │              │  emergency/              │              │
 │    api/  FastAPI :8002   │              │    notification_service/ │              │
 │    dashboard/ HTML/JS    │              │    FastAPI :8003 (SSE)   │              │
-│    (patient list, falls) │              │    tablet_ui/ HTML/JS    │              │
-└──────────────────────────┘              └──────────────────────────┘              │
+│    (patient list, falls  │              │    tablet_ui/ HTML/JS    │              │
+│     history + feedback)  │              │    (alert ONLY when      │              │
+└──────────────────────────┘              │     patient didn't       │              │
+                                          │     cancel timer)        │              │
+                                          └──────────────────────────┘              │
                                                                                     │
 ┌───────────────────────────────────────────────────────────────────────────────────┘
 │  infrastructure/                                                                    │
@@ -323,25 +330,26 @@ threshold (0.5)  →  {is_fall: bool, confidence: float}
 
 | File | Role |
 |------|------|
-| `system_operator/ml_server/server.py` | FastAPI ML server with Prometheus, Postgres write, Redis publish, model hot-swap, replay, model comparison API |
+| `system_operator/ml_server/server.py` | FastAPI ML server with Prometheus, Postgres write, Redis publish, model hot-swap, replay, model comparison API, patient feedback endpoints |
 | `system_operator/ml_server/services/db_writer.py` | Background-task Postgres writer (never blocks inference) |
 | `system_operator/ml_server/services/metrics_collector.py` | Prometheus metrics: fall_detections_total, inference_latency_seconds, model_confidence |
 | `system_operator/operator_dashboard/index.html` | Operator main page — model switcher, health, config, replay, links to Grafana + comparison |
 | `system_operator/operator_dashboard/model_comparison.html` | Model comparison sub-page — interactive Plotly charts sourced from `GET /model/comparison` |
 | `system_operator/operator_dashboard/model_comparison.js` | Comparison page logic — fetches API, renders 5 Plotly charts + tables |
-| `caregiver/api/server.py` | FastAPI REST API for care-givers — reads Postgres, SSE from Redis |
-| `caregiver/dashboard/` | Care-giver HTML/JS — patient list, live fall alert banner |
-| `emergency/notification_service/server.py` | SSE fan-out service — Redis → tablets + optional webhook |
+| `caregiver/api/server.py` | FastAPI REST API for care-givers — reads Postgres, SSE from Redis; includes `/falls/history` with time range + feedback filters |
+| `caregiver/dashboard/` | Care-giver HTML/JS — two-tab layout: patient list + fall history table with filters and feedback columns |
+| `emergency/notification_service/server.py` | SSE fan-out service — Redis `fall_events` → tablets + optional webhook |
 | `emergency/tablet_ui/` | Emergency tablet HTML/JS — large-text fall alert, auto-reconnect |
-| `shared/db/models.py` | SQLAlchemy ORM: inference_log, feature_snapshot, participant_session, api_request_log |
-| `shared/db/migrations/` | Alembic migrations. Run: `alembic upgrade head` |
-| `shared/redis_client.py` | Async/sync Redis helpers, subscribe_fall_events() generator |
+| `patient/dashboard/` | Patient HTML/JS — standby screen + 10s fall detection popup + two-step YES/NO feedback flow |
+| `shared/db/models.py` | SQLAlchemy ORM: inference_log (+ user_fall/need_help), feature_snapshot, participant_session, api_request_log |
+| `shared/db/migrations/versions/0002_add_feedback_and_missing_columns.py` | Adds user_fall, need_help columns + step_seconds, resampling_method, acc_sensor_type |
+| `shared/redis_client.py` | Async/sync Redis helpers; two channels: `patient_alerts` + `fall_events`; subscribe generators |
 | `shared/auth/jwt_utils.py` | JWT create/verify, bcrypt password hashing, require_role() FastAPI dependency |
-| `infrastructure/docker-compose.yml` | Full 10-service stack |
+| `infrastructure/docker-compose.yml` | Full 10-service stack; nginx mounts patient/dashboard |
 | `infrastructure/prometheus/` | Prometheus config + alert rules (latency, drift, downtime) |
 | `infrastructure/grafana/dashboards/` | 3 pre-built dashboards: server overview, model performance, fall timeline |
 | `infrastructure/alertmanager/` | Alert routing to email/webhook |
-| `infrastructure/nginx/nginx.conf` | Reverse proxy with SSE support (proxy_buffering off) |
+| `infrastructure/nginx/nginx.conf` | Reverse proxy; SSE locations for `/api/ml/patient/stream` + `/api/caregiver/patients/stream`; `/patient/` static files |
 | `alembic.ini` | Alembic config (project root) |
 
 ## How to Run (full stack)
@@ -430,10 +438,35 @@ processing pipelines, and time window sizes systematically, replacing manual CSV
 3. Switch to model v3 → Run Replay on same CSV
 4. Click "View Full Model Comparison →" button (appears after replay) or open `/operator/model_comparison.html`
 
-### Priority 3 — Caregiver dashboard + emergency contact dashboard
-- Caregiver login, patient list, fall history
-- Emergency SSE alerts to tablet UI
-- These are lower priority until model comparison workflow is fully validated
+### Priority 3 — Patient feedback + Caregiver dashboard + Emergency alerts — **COMPLETE**
+
+**What was implemented:**
+
+**Patient feedback loop (ml_server + new patient/dashboard/):**
+- On every real-time fall (not replay): publishes to Redis `patient_alerts` channel + starts 12-second `asyncio` timer
+- `GET /patient/stream` SSE endpoint — patient dashboard subscribes, filtered by `?participant=name`
+- Patient popup shows for 10s: "Strong impact detected — did you fall?" with animated countdown
+  - YES → second popup: "Do you need help?" (10s countdown)
+    - YES → `POST /patient/feedback` with `user_fall=1, need_help=1` → cancels timer → publishes `fall_events` → emergency alerted
+    - NO  → `user_fall=1, need_help=2` → cancels timer → no emergency alert
+    - 10s timeout → `user_fall=1, need_help=3` → publishes `fall_events` → emergency alerted
+  - NO  → `user_fall=2, need_help=2` → cancels timer → no emergency alert
+  - 12s server-side timeout (no response at all) → `user_fall=3, need_help=3` → publishes `fall_events` → emergency alerted
+- Feedback values logged to `inference_log`: `user_fall` (0=pending/1=yes/2=no/3=no_answer), `need_help` (same)
+- Emergency service receives events only from `fall_events` channel (conditional) — NOT on every fall
+
+**Caregiver dashboard (full rewrite):**
+- Fixed CSS `.hidden` class bug (`display:none !important`) — login screen no longer dominates after login
+- Two-tab layout: **Patients** (patient cards with fall count badges) and **Fall History**
+- Fall History tab: filter by patient name, time range (from/to), `user_fall` status, `need_help` status
+- All fall tables show "Patient confirmed" and "Help requested" columns (Yes / No / No answer / Pending)
+- Header stats: falls today, confirmed falls, help requested, avg confidence
+- `GET /falls/history` API endpoint: paginated, all filters, returns feedback columns
+
+**Caregiver API fixes:**
+- Fixed route ordering: `/patients/stream` declared before `/patients/{name}/...` (FastAPI matching bug)
+- Added `user_fall`/`need_help` to all fall history responses
+- New `GET /falls/history` endpoint with time range + feedback filters + pagination
 
 ### MinIO datalake + CSV offline replay — IMPLEMENTED
 - MinIO runs as Docker service (`fall_minio`), S3-compatible, ports 9000 (API) and 9001 (console)

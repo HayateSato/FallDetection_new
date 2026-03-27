@@ -65,6 +65,9 @@ All 10 containers and how they are currently reachable:
 | `localhost/operator/` | static files | Operator dashboard HTML/JS (served directly by nginx from disk) |
 | `localhost/caregiver/` | static files | Caregiver dashboard HTML/JS (served directly by nginx from disk) |
 | `localhost/emergency/` | static files | Emergency tablet UI HTML/JS (served directly by nginx from disk) |
+| `localhost/patient/` | static files | Patient feedback dashboard HTML/JS (served directly by nginx from disk) |
+| `localhost/api/ml/patient/stream` | `fall_ml_server:8001` | Patient SSE stream (SSE-specific location — proxy_buffering off) |
+| `localhost/api/caregiver/patients/stream` | `fall_caregiver_api:8002` | Caregiver all-patients SSE stream (SSE-specific location) |
 | `localhost/api/caregiver/` | `fall_caregiver_api:8002` | Caregiver REST API (patient list, fall history, SSE stream) |
 | `localhost/api/emergency/` | `fall_emergency_svc:8003` | Emergency SSE fan-out (live fall alerts to tablet UI) |
 | `localhost/grafana/` | `fall_grafana:3000` | Grafana dashboard UI |
@@ -113,8 +116,9 @@ What would change when moving to a real deployment:
 | What | URL | Auth | Notes |
 |------|-----|------|-------|
 | Operator dashboard | http://localhost/operator/ | none | Static HTML, served by nginx |
-| Caregiver dashboard | http://localhost/caregiver/ | username + password (JWT) | Static HTML + API calls to `/api/caregiver/` |
-| Emergency tablet UI | http://localhost/emergency/ | none | Static HTML, SSE stream from `/api/emergency/stream` |
+| Caregiver dashboard | http://localhost/caregiver/ | username + password (JWT) | Two tabs: patient list + fall history with feedback filters |
+| Emergency tablet UI | http://localhost/emergency/ | none | SSE stream from `/api/emergency/stream` — alerts only after patient feedback |
+| **Patient feedback** | http://localhost/patient/ | none | Standby screen + 10s fall popup + YES/NO feedback flow |
 | Grafana | http://localhost/grafana/ | `admin` / `GRAFANA_ADMIN_PASSWORD` | Via nginx |
 | Prometheus | http://localhost:9090 | none | Direct — dev/debug only |
 | MinIO web console | http://localhost:9001 | `minioadmin` / `minioadmin` | Browse and upload sensor CSV files |
@@ -149,11 +153,15 @@ This is the core of the system. It owns the XGBoost model and is the only servic
 | `POST /datalake/replay` | Run every window in a CSV through the current model; saves all results to `inference_log` |
 | `GET /config` | Current processing config (window size, sample rate, resampling method) |
 | `POST /config` | Update processing config at runtime |
+| `GET /patient/stream` | SSE stream for patient dashboard — delivers events from Redis `patient_alerts` channel |
+| `POST /patient/feedback/{id}` | Patient submits YES/NO feedback; cancels emergency timer; conditionally publishes to `fall_events` |
 
-After every `/predict` call, three things happen as background tasks:
-- Write row to PostgreSQL `inference_log`
-- Update Prometheus counters
-- Publish to Redis `fall_events` channel (caregiver + emergency services receive it)
+After every real-time `/predict` that detects a fall, the background task:
+1. Writes row to PostgreSQL `inference_log`
+2. Updates Prometheus counters
+3. Publishes to Redis `patient_alerts` → patient dashboard popup appears
+4. Starts 12-second asyncio timer. If the timer expires with no patient response: sets `user_fall=3, need_help=3` and publishes to `fall_events` → emergency alerted.
+   If the patient responds via `POST /patient/feedback` before the timer: cancels the timer and publishes to `fall_events` only if the patient confirmed a fall AND requested help (or gave no answer on help).
 
 **Who calls it:** `main.py` (Flask client, for inference) and the operator dashboard (for model management, replay, and comparison).
 
@@ -167,10 +175,11 @@ This server is for the caregiver dashboard only. It does not do inference. It re
 |----------|---------|
 | `POST /auth/login` | Username + password → JWT token |
 | `GET /patients` | List all participant sessions with summary stats |
-| `GET /patients/{name}/falls` | Paginated fall history for one patient |
+| `GET /patients/stream` | SSE stream of all fall events — any patient (declared before `/{name}/...`) |
+| `GET /patients/{name}/falls` | Paginated fall history for one patient (includes `user_fall`/`need_help`) |
 | `GET /patients/{name}/stream` | SSE stream of live fall events for one patient |
-| `GET /patients/stream` | SSE stream of all fall events (any patient) |
-| `GET /stats/summary` | Aggregate stats for today (falls count, avg confidence) |
+| `GET /falls/history` | Paginated fall history with filters: `patient`, `from_ts`, `to_ts`, `user_fall`, `need_help` |
+| `GET /stats/summary` | Aggregate stats for today: falls, confirmed falls, help requested, avg confidence |
 
 **Who calls it:** The caregiver dashboard only.
 
@@ -273,8 +282,9 @@ main.py — Flask :8000  (runs on Windows, outside Docker)
 |-----------|-----|-------------|---------------|
 | **Operator** | `/operator/` | ml_server API | Active model, health, uptime, processing config, CSV replay, recent inference log |
 | **Operator — Model Comparison** | `/operator/model_comparison.html` | ml_server `GET /model/comparison` | Interactive Plotly charts: fall rate, confidence distribution, latency, per-recording × model matrix |
-| **Caregiver** | `/caregiver/` | caregiver_api → PostgreSQL + Redis SSE | Patient list, fall history per patient, live fall alert banner |
-| **Emergency tablet** | `/emergency/` | emergency_svc → Redis SSE | Large-text real-time fall alert, patient name, confidence, auto-reconnect |
+| **Caregiver** | `/caregiver/` | caregiver_api → PostgreSQL + Redis SSE | Patient list; Fall History tab with time range + feedback filters; live alert banner |
+| **Patient feedback** | `/patient/` | ml_server SSE + POST feedback | Standby screen; 10s popup on fall; YES/NO → help? flow; toast confirmations |
+| **Emergency tablet** | `/emergency/` | emergency_svc → Redis `fall_events` | Large-text alert — only fires when patient did not cancel the timer (no response or confirmed fall + help needed) |
 | **Grafana** | `/grafana/` | Prometheus (metrics) + PostgreSQL (history) | Server health, model performance/drift, fall events timeline |
 
 ---
@@ -285,7 +295,7 @@ All written by `ml_server` after every `/predict` call. Read by `caregiver_api` 
 
 | Table | Written by | Read by | What is stored |
 |-------|-----------|---------|----------------|
-| `inference_log` | ml_server (background task) | caregiver_api, Grafana | One row per prediction: `timestamp`, `model_version`, `fall_detected`, `confidence`, `window_size`, `latency_ms`, `participant` |
+| `inference_log` | ml_server (background task) | caregiver_api, Grafana | One row per prediction: `timestamp`, `model_version`, `fall_detected`, `confidence`, `window_size`, `latency_ms`, `participant`, `user_fall` (0=pending/1=yes/2=no/3=no_answer), `need_help` (same) |
 | `feature_snapshot` | ml_server (background task) | Grafana (for retraining analysis) | One row per feature per prediction: `inference_id` (FK → inference_log), `feature_name`, `feature_value` — stores the full 16–22 feature vector |
 | `participant_session` | main.py (recording toggle) | caregiver_api, Grafana | One row per recording session: `participant_name`, `gender`, `start_time`, `end_time`, `fall_count` |
 | `api_request_log` | ml_server (every request) | Grafana (audit) | One row per HTTP request: `client_ip`, `endpoint`, `status_code`, `response_time_ms`, `api_key_hash` (SHA-256, never raw key) |
@@ -298,7 +308,18 @@ This lets you replay any past prediction by fetching its feature vector.
 
 ### Redis — what is published (not persisted)
 
-Channel: `fall_events`. Published only when `fall_detected = true`.
+Two channels are used. Both carry the same JSON payload shape.
+
+**Channel: `patient_alerts`** — published on every real-time fall detection immediately.
+Consumed by: patient dashboard SSE (`GET /patient/stream`).
+
+**Channel: `fall_events`** — published conditionally, only when an alert must reach the emergency contact:
+- 12s server-side timer expires with no patient response (`user_fall=3`)
+- Patient confirmed fall AND requested help (`user_fall=1, need_help=1`)
+- Patient confirmed fall AND gave no answer to help question (`user_fall=1, need_help=3`)
+
+NOT published when patient says they didn't fall (`user_fall=2`) or said they're fine (`need_help=2`).
+Consumed by: caregiver_api SSE (`GET /patients/stream`) and emergency_svc.
 
 ```json
 {
@@ -311,7 +332,7 @@ Channel: `fall_events`. Published only when `fall_detected = true`.
 }
 ```
 
-`inference_id` links back to the `inference_log` row in PostgreSQL so subscribers can fetch full details.
+`inference_id` links back to the `inference_log` row in PostgreSQL so subscribers can fetch full details including `user_fall` and `need_help`.
 
 ---
 
@@ -327,9 +348,12 @@ FallDetection_new/
 │   ├── ml_server/                  FastAPI :8001 — XGBoost inference, Prometheus metrics, replay, comparison API
 │   └── operator_dashboard/         HTML/JS — model switcher, health, config, replay, model_comparison.html
 │
+├── patient/
+│   └── dashboard/                  HTML/JS — standby screen, 10s fall popup, YES/NO feedback flow
+│
 ├── caregiver/
-│   ├── api/                        FastAPI :8002 — patient list, fall history, SSE stream
-│   └── dashboard/                  HTML/JS — patient list, live fall alert banner
+│   ├── api/                        FastAPI :8002 — patient list, fall history (with feedback filters), SSE stream
+│   └── dashboard/                  HTML/JS — two-tab: patient list + fall history with feedback columns
 │
 ├── emergency/
 │   ├── notification_service/       FastAPI :8003 — Redis → SSE fan-out to tablets

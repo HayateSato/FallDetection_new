@@ -8,9 +8,10 @@ Endpoints:
     POST /auth/login                  — username/password → JWT token
     GET  /health                      — health check
     GET  /patients                    — list all participant sessions
+    GET  /patients/stream             — SSE stream of ALL fall events  [MUST be before /{name}/...]
     GET  /patients/{name}/falls       — fall history for one patient
     GET  /patients/{name}/stream      — SSE stream of live fall events for one patient
-    GET  /patients/stream             — SSE stream of ALL fall events (any patient)
+    GET  /falls/history               — paginated fall history with time range + patient filter
     GET  /stats/summary               — aggregate stats for today
 
 Run from project root:
@@ -108,6 +109,25 @@ def get_db():
         db.close()
 
 # ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
+
+def _fall_row(f) -> dict:
+    """Serialize an InferenceLog row to a dict for the fall history response."""
+    return {
+        "id": f.id,
+        "timestamp": f.timestamp.isoformat(),
+        "participant": f.participant,
+        "confidence": f.confidence,
+        "model_version": f.model_version,
+        "latency_ms": f.latency_ms,
+        "inference_mode": f.inference_mode,
+        # Patient feedback columns (may be None on older rows before migration 0002)
+        "user_fall": f.user_fall if f.user_fall is not None else 0,
+        "need_help": f.need_help if f.need_help is not None else 0,
+    }
+
+# ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 
@@ -144,7 +164,6 @@ async def list_patients(db: Session = Depends(get_db)):
 
     result = []
     for s in sessions:
-        # Get latest inference for this patient
         latest = (
             db.query(InferenceLog)
             .filter(InferenceLog.participant == s.participant_name)
@@ -166,6 +185,32 @@ async def list_patients(db: Session = Depends(get_db)):
     return {"patients": result}
 
 
+# IMPORTANT: /patients/stream MUST be declared before /patients/{patient_name}/...
+# FastAPI matches routes in declaration order; without this, "stream" would be
+# treated as a {patient_name} path parameter.
+
+@app.get("/patients/stream")
+async def all_events_stream():
+    """
+    SSE stream of ALL fall events (any patient).
+    Used by the caregiver dashboard alert banner.
+    """
+    async def event_generator() -> AsyncGenerator[str, None]:
+        from shared.redis_client import subscribe_fall_events
+        try:
+            async for event in subscribe_fall_events():
+                if event.get("fall_detected"):
+                    yield f"data: {json.dumps(event)}\n\n"
+        except asyncio.CancelledError:
+            pass
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
 @app.get("/patients/{patient_name}/falls")
 async def patient_falls(
     patient_name: str,
@@ -173,7 +218,7 @@ async def patient_falls(
     offset: int = Query(0, ge=0),
     db: Session = Depends(get_db),
 ):
-    """Paginated fall history for one patient."""
+    """Paginated fall history for one patient. Includes patient feedback columns."""
     from shared.db.models import InferenceLog
 
     total = (
@@ -195,16 +240,7 @@ async def patient_falls(
         "total": total,
         "limit": limit,
         "offset": offset,
-        "falls": [
-            {
-                "id": f.id,
-                "timestamp": f.timestamp.isoformat(),
-                "confidence": f.confidence,
-                "model_version": f.model_version,
-                "latency_ms": f.latency_ms,
-            }
-            for f in falls
-        ],
+        "falls": [_fall_row(f) for f in falls],
     }
 
 
@@ -229,31 +265,62 @@ async def patient_event_stream(patient_name: str):
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",   # tells nginx not to buffer SSE
+            "X-Accel-Buffering": "no",
         },
     )
 
 
-@app.get("/patients/stream")
-async def all_events_stream():
+@app.get("/falls/history")
+async def falls_history(
+    patient: Optional[str] = Query(None, description="Filter by participant name"),
+    from_ts: Optional[str] = Query(None, description="ISO 8601 start timestamp, e.g. 2026-01-01T00:00:00Z"),
+    to_ts: Optional[str] = Query(None, description="ISO 8601 end timestamp"),
+    user_fall: Optional[int] = Query(None, description="Filter by user_fall value: 0=pending,1=yes,2=no,3=no_answer"),
+    need_help: Optional[int] = Query(None, description="Filter by need_help value: 0=pending,1=yes,2=no,3=no_answer"),
+    limit: int = Query(100, ge=1, le=1000),
+    offset: int = Query(0, ge=0),
+    db: Session = Depends(get_db),
+):
     """
-    SSE stream of ALL fall events (any patient).
-    Used by the caregiver dashboard alert banner.
+    Paginated fall history with optional time range, patient, and feedback filters.
+    Used by the caregiver dashboard history table.
     """
-    async def event_generator() -> AsyncGenerator[str, None]:
-        from shared.redis_client import subscribe_fall_events
-        try:
-            async for event in subscribe_fall_events():
-                if event.get("fall_detected"):   # only push actual falls
-                    yield f"data: {json.dumps(event)}\n\n"
-        except asyncio.CancelledError:
-            pass
+    from shared.db.models import InferenceLog
 
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-    )
+    q = db.query(InferenceLog).filter(InferenceLog.fall_detected == True)
+
+    if patient:
+        q = q.filter(InferenceLog.participant == patient)
+
+    if from_ts:
+        try:
+            dt = datetime.fromisoformat(from_ts.replace("Z", "+00:00"))
+            q = q.filter(InferenceLog.timestamp >= dt)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid from_ts: {from_ts}")
+
+    if to_ts:
+        try:
+            dt = datetime.fromisoformat(to_ts.replace("Z", "+00:00"))
+            q = q.filter(InferenceLog.timestamp <= dt)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid to_ts: {to_ts}")
+
+    if user_fall is not None:
+        q = q.filter(InferenceLog.user_fall == user_fall)
+
+    if need_help is not None:
+        q = q.filter(InferenceLog.need_help == need_help)
+
+    total = q.with_entities(func.count(InferenceLog.id)).scalar()
+    falls = q.order_by(desc(InferenceLog.timestamp)).offset(offset).limit(limit).all()
+
+    return {
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+        "falls": [_fall_row(f) for f in falls],
+    }
 
 
 @app.get("/stats/summary")
@@ -278,11 +345,27 @@ async def stats_summary(db: Session = Depends(get_db)):
         .filter(InferenceLog.timestamp >= today_start)
         .scalar()
     )
+    confirmed_falls = (
+        db.query(func.count(InferenceLog.id))
+        .filter(InferenceLog.fall_detected == True,
+                InferenceLog.timestamp >= today_start,
+                InferenceLog.user_fall == 1)
+        .scalar()
+    )
+    help_requested = (
+        db.query(func.count(InferenceLog.id))
+        .filter(InferenceLog.fall_detected == True,
+                InferenceLog.timestamp >= today_start,
+                InferenceLog.need_help == 1)
+        .scalar()
+    )
 
     return {
         "falls_today": falls_today,
         "predictions_today": total_today,
         "avg_confidence_today": round(float(avg_confidence), 3) if avg_confidence else None,
+        "confirmed_falls_today": confirmed_falls,
+        "help_requested_today": help_requested,
     }
 
 

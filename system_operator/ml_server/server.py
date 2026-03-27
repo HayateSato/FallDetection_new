@@ -609,13 +609,9 @@ async def patient_stream(participant: Optional[str] = Query(None,
 
     async def _generator():
         from shared.redis_client import subscribe_patient_alerts
-        # Keep-alive ping every 25s so nginx / browsers don't time out
-        ping_interval = 25
-        last_ping = asyncio.get_event_loop().time()
         try:
             async for event in subscribe_patient_alerts(participant):
                 yield f"data: {json.dumps(event)}\n\n"
-                last_ping = asyncio.get_event_loop().time()
         except asyncio.CancelledError:
             pass
 

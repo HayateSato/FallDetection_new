@@ -19,28 +19,27 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Columns added to the ORM after 0001 but never migrated
-    op.add_column("inference_log",
-        sa.Column("step_seconds", sa.Float(), nullable=True))
-    op.add_column("inference_log",
-        sa.Column("resampling_method", sa.String(20), nullable=True))
-    op.add_column("inference_log",
-        sa.Column("acc_sensor_type", sa.String(20), nullable=True))
+    # These three columns may already exist if the table was created directly from
+    # the ORM model before this migration was written — use IF NOT EXISTS to be safe.
+    op.execute("ALTER TABLE inference_log ADD COLUMN IF NOT EXISTS step_seconds FLOAT")
+    op.execute("ALTER TABLE inference_log ADD COLUMN IF NOT EXISTS resampling_method VARCHAR(20)")
+    op.execute("ALTER TABLE inference_log ADD COLUMN IF NOT EXISTS acc_sensor_type VARCHAR(20)")
 
     # Patient feedback columns
     # 0 = pending/default  1 = yes  2 = no  3 = no_answer (timeout)
-    op.add_column("inference_log",
-        sa.Column("user_fall", sa.Integer(), nullable=True, server_default="0"))
-    op.add_column("inference_log",
-        sa.Column("need_help", sa.Integer(), nullable=True, server_default="0"))
+    op.execute("ALTER TABLE inference_log ADD COLUMN IF NOT EXISTS user_fall INTEGER DEFAULT 0")
+    op.execute("ALTER TABLE inference_log ADD COLUMN IF NOT EXISTS need_help INTEGER DEFAULT 0")
 
-    op.create_index("ix_inference_log_user_fall", "inference_log", ["user_fall"])
+    # Index for filtering by feedback status in the caregiver dashboard
+    op.execute("""
+        CREATE INDEX IF NOT EXISTS ix_inference_log_user_fall
+        ON inference_log (user_fall)
+    """)
 
 
 def downgrade() -> None:
-    op.drop_index("ix_inference_log_user_fall", "inference_log")
+    op.execute("DROP INDEX IF EXISTS ix_inference_log_user_fall")
     op.drop_column("inference_log", "need_help")
     op.drop_column("inference_log", "user_fall")
-    op.drop_column("inference_log", "acc_sensor_type")
-    op.drop_column("inference_log", "resampling_method")
-    op.drop_column("inference_log", "step_seconds")
+    # Note: step_seconds/resampling_method/acc_sensor_type are NOT dropped on downgrade
+    # because they may have pre-dated this migration and dropping them would be destructive.
