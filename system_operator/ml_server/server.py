@@ -20,6 +20,7 @@ import json
 import logging
 import sys
 import os
+import subprocess
 import time
 import threading
 from datetime import datetime, timezone
@@ -1085,6 +1086,149 @@ async def datalake_replay(
         "db_rows_saved":  written,
         "predictions":    predictions,
     }
+
+
+# ---------------------------------------------------------------------------
+# /client — start/stop/monitor main.py (inference client subprocess)
+# ---------------------------------------------------------------------------
+
+_client_process: Optional[subprocess.Popen] = None
+_client_process_lock = threading.Lock()
+_client_log_buffer: List[str] = []
+_MAX_CLIENT_LOG_LINES = 2000
+_client_log_subscribers: List[asyncio.Queue] = []
+_client_event_loop: Optional[asyncio.AbstractEventLoop] = None
+
+
+def _client_log_reader_thread(proc: subprocess.Popen) -> None:
+    """Reads stdout+stderr from the subprocess and fans out to log buffer + SSE subscribers."""
+    global _client_log_buffer
+    try:
+        for raw_line in proc.stdout:  # type: ignore[union-attr]
+            line = raw_line.rstrip("\n")
+            _client_log_buffer.append(line)
+            if len(_client_log_buffer) > _MAX_CLIENT_LOG_LINES:
+                _client_log_buffer = _client_log_buffer[-_MAX_CLIENT_LOG_LINES:]
+            if _client_event_loop and not _client_event_loop.is_closed():
+                for q in list(_client_log_subscribers):
+                    try:
+                        asyncio.run_coroutine_threadsafe(q.put(line), _client_event_loop)
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+    # Signal EOF to all SSE subscribers
+    eof_line = "--- main.py process ended ---"
+    _client_log_buffer.append(eof_line)
+    if _client_event_loop and not _client_event_loop.is_closed():
+        for q in list(_client_log_subscribers):
+            try:
+                asyncio.run_coroutine_threadsafe(q.put(None), _client_event_loop)
+            except Exception:
+                pass
+
+
+@app.post("/client/start", dependencies=[Depends(verify_api_key)])
+async def client_start():
+    """Start main.py as a managed subprocess. Stdout/stderr are captured for /client/logs."""
+    global _client_process, _client_log_buffer, _client_event_loop
+
+    # Capture the running event loop so the log reader thread can schedule puts onto it.
+    _client_event_loop = asyncio.get_event_loop()
+
+    with _client_process_lock:
+        if _client_process is not None and _client_process.poll() is None:
+            return {"status": "already_running", "pid": _client_process.pid}
+
+        _client_log_buffer = []
+        try:
+            proc = subprocess.Popen(
+                ["python", "/app/main.py"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                cwd="/app",
+            )
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Failed to start main.py: {e}")
+
+        _client_process = proc
+
+    t = threading.Thread(target=_client_log_reader_thread, args=(proc,), daemon=True)
+    t.start()
+    logger.info(f"main.py client started (PID={proc.pid})")
+    return {"status": "started", "pid": proc.pid}
+
+
+@app.post("/client/stop", dependencies=[Depends(verify_api_key)])
+async def client_stop():
+    """Terminate the running main.py subprocess."""
+    global _client_process
+
+    with _client_process_lock:
+        if _client_process is None or _client_process.poll() is not None:
+            return {"status": "not_running"}
+
+        pid = _client_process.pid
+        _client_process.terminate()
+        try:
+            _client_process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            _client_process.kill()
+        logger.info(f"main.py client stopped (PID={pid})")
+        return {"status": "stopped", "pid": pid}
+
+
+@app.get("/client/status")
+async def client_status():
+    """Return whether main.py is currently running."""
+    with _client_process_lock:
+        if _client_process is None:
+            return {"running": False, "pid": None, "returncode": None}
+        rc = _client_process.poll()
+        if rc is None:
+            return {"running": True, "pid": _client_process.pid, "returncode": None}
+        return {"running": False, "pid": _client_process.pid, "returncode": rc}
+
+
+@app.get("/client/logs")
+async def client_logs_sse():
+    """
+    SSE stream of main.py stdout/stderr.
+    First delivers the buffered history, then streams live lines.
+    """
+    from fastapi.responses import StreamingResponse as _SR
+
+    q: asyncio.Queue = asyncio.Queue()
+    _client_log_subscribers.append(q)
+
+    async def _generator():
+        # Send buffered history first
+        for line in list(_client_log_buffer):
+            yield f"data: {json.dumps({'line': line, 'buffered': True})}\n\n"
+        # Stream live lines
+        try:
+            while True:
+                try:
+                    item = await asyncio.wait_for(q.get(), timeout=25)
+                    if item is None:
+                        yield f"data: {json.dumps({'line': '--- process ended ---', 'eof': True})}\n\n"
+                        break
+                    yield f"data: {json.dumps({'line': item})}\n\n"
+                except asyncio.TimeoutError:
+                    yield 'data: {"keepalive":true}\n\n'
+        finally:
+            try:
+                _client_log_subscribers.remove(q)
+            except ValueError:
+                pass
+
+    return _SR(
+        _generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 # ---------------------------------------------------------------------------

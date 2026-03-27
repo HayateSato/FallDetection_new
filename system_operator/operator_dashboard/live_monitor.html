@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Live Monitor — main.py Client</title>
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .monitor-header {
+      display: flex;
+      align-items: center;
+      gap: 1.2rem;
+      flex-wrap: wrap;
+      margin-bottom: 1.4rem;
+    }
+    .status-dot {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: #555;
+      flex-shrink: 0;
+    }
+    .status-dot.running  { background: #4caf50; box-shadow: 0 0 6px #4caf50; }
+    .status-dot.stopped  { background: #888; }
+    .status-dot.error    { background: #e74c3c; }
+    #status-text {
+      font-size: 0.95rem;
+      color: #ccc;
+    }
+    .btn-start {
+      background: #1a6b3a;
+      color: #fff;
+      border: none;
+      padding: 0.45rem 1.2rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    .btn-start:hover { background: #1e8045; }
+    .btn-stop {
+      background: #7a1a1a;
+      color: #fff;
+      border: none;
+      padding: 0.45rem 1.2rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.9rem;
+    }
+    .btn-stop:hover { background: #922020; }
+    .btn-clear {
+      background: #2a2a2a;
+      color: #aaa;
+      border: 1px solid #444;
+      padding: 0.45rem 1rem;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    .btn-clear:hover { background: #333; }
+    #terminal {
+      background: #0d0d0d;
+      color: #c8ffc8;
+      font-family: 'Courier New', Courier, monospace;
+      font-size: 0.82rem;
+      line-height: 1.5;
+      padding: 1rem;
+      border-radius: 6px;
+      border: 1px solid #2a2a2a;
+      height: 520px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    #terminal .line-err  { color: #ff6b6b; }
+    #terminal .line-warn { color: #ffd166; }
+    #terminal .line-info { color: #c8ffc8; }
+    #terminal .line-sep  { color: #555; }
+    #terminal .line-eof  { color: #888; font-style: italic; }
+    .back-link {
+      display: inline-block;
+      margin-bottom: 1.2rem;
+      color: #4da6ff;
+      text-decoration: none;
+      font-size: 0.88rem;
+    }
+    .back-link:hover { text-decoration: underline; }
+    #action-status { font-size: 0.85rem; color: #aaa; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Live Monitor — main.py Inference Client</h1>
+    <span id="server-status" class="badge badge-grey">Checking...</span>
+  </header>
+
+  <main>
+
+    <a href="index.html" class="back-link">← Back to Operator Dashboard</a>
+
+    <section class="panel">
+      <h2>Client Process Control</h2>
+
+      <div class="monitor-header">
+        <span class="status-dot" id="status-dot"></span>
+        <span id="status-text">Checking status…</span>
+        <button class="btn-start" onclick="startClient()">Start main.py</button>
+        <button class="btn-stop"  onclick="stopClient()">Stop main.py</button>
+        <button class="btn-clear" onclick="clearTerminal()">Clear Log</button>
+        <span id="action-status"></span>
+      </div>
+
+      <p class="meta" style="margin-bottom:0.6rem;">
+        Terminal output of <code>main.py</code> running inside the Docker container.
+        Stderr is merged with stdout. Last 2000 lines are buffered — reconnecting
+        replays the buffer automatically.
+      </p>
+
+      <div id="terminal"></div>
+    </section>
+
+  </main>
+
+  <script src="live_monitor.js"></script>
+</body>
+</html>
