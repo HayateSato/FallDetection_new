@@ -2,11 +2,14 @@
 
 Project reference for AI-assisted development. Describes architecture, data flows, key files, and planned next steps.
 
-> **Current state (2026-03-26):** Full multi-user system implemented. Priority 1 (operator dashboard + ML server) complete. Priority 2 (model comparison) complete. Priority 3 (caregiver dashboard + patient feedback + emergency) complete.
+> **Current state (2026-03-27):** Full multi-user system implemented. All three priorities complete.
 > New folder structure: `patient/`, `caregiver/`, `system_operator/`, `emergency/`, `shared/`, `infrastructure/`, `datalake/`.
 > Root `server.py` and `main.py` still work as-is (backward-compatible wrappers).
 > MinIO datalake + CSV offline replay implemented. Model comparison page at `/operator/model_comparison.html`.
-> Patient feedback loop implemented: fall → `patient_alerts` Redis channel → patient popup (10s) → conditional `fall_events` → emergency alert.
+> Patient feedback loop: fall → `patient_alerts` Redis → patient popup (10s) → conditional `fall_events` → emergency.
+> Live Monitor page at `/operator/live_monitor.html`: start/stop `main.py` from the browser, stream terminal output via SSE.
+> Patient SSE uses queue + keepalive pattern — stays "Connected" even when no falls occur.
+> ml_server runs with `--workers 1` so asyncio timer tasks and feedback POSTs always share the same process.
 
 ---
 
@@ -330,12 +333,14 @@ threshold (0.5)  →  {is_fall: bool, confidence: float}
 
 | File | Role |
 |------|------|
-| `system_operator/ml_server/server.py` | FastAPI ML server with Prometheus, Postgres write, Redis publish, model hot-swap, replay, model comparison API, patient feedback endpoints |
+| `system_operator/ml_server/server.py` | FastAPI ML server with Prometheus, Postgres write, Redis publish, model hot-swap, replay, model comparison API, patient feedback endpoints, client subprocess management (`/client/start`, `/client/stop`, `/client/status`, `/client/logs`) |
 | `system_operator/ml_server/services/db_writer.py` | Background-task Postgres writer (never blocks inference) |
 | `system_operator/ml_server/services/metrics_collector.py` | Prometheus metrics: fall_detections_total, inference_latency_seconds, model_confidence |
-| `system_operator/operator_dashboard/index.html` | Operator main page — model switcher, health, config, replay, links to Grafana + comparison |
+| `system_operator/operator_dashboard/index.html` | Operator main page — model switcher, health, config, replay, links to Grafana + comparison + Live Monitor |
 | `system_operator/operator_dashboard/model_comparison.html` | Model comparison sub-page — interactive Plotly charts sourced from `GET /model/comparison` |
 | `system_operator/operator_dashboard/model_comparison.js` | Comparison page logic — fetches API, renders 5 Plotly charts + tables |
+| `system_operator/operator_dashboard/live_monitor.html` | Live Monitor sub-page — Start/Stop `main.py` + terminal log viewer |
+| `system_operator/operator_dashboard/live_monitor.js` | Status polling, SSE log stream, API key save/load from localStorage, auto-scroll terminal |
 | `caregiver/api/server.py` | FastAPI REST API for care-givers — reads Postgres, SSE from Redis; includes `/falls/history` with time range + feedback filters |
 | `caregiver/dashboard/` | Care-giver HTML/JS — two-tab layout: patient list + fall history table with filters and feedback columns |
 | `emergency/notification_service/server.py` | SSE fan-out service — Redis `fall_events` → tablets + optional webhook |
@@ -444,7 +449,8 @@ processing pipelines, and time window sizes systematically, replacing manual CSV
 
 **Patient feedback loop (ml_server + new patient/dashboard/):**
 - On every real-time fall (not replay): publishes to Redis `patient_alerts` channel + starts 12-second `asyncio` timer
-- `GET /patient/stream` SSE endpoint — patient dashboard subscribes, filtered by `?participant=name`
+- `GET /patient/stream` SSE endpoint — queue-based with 15s keepalive; stays "Connected" even when no falls occur; retries Redis internally on error
+- ml_server runs with `--workers 1` — asyncio timer tasks and feedback POSTs always hit the same process
 - Patient popup shows for 10s: "Strong impact detected — did you fall?" with animated countdown
   - YES → second popup: "Do you need help?" (10s countdown)
     - YES → `POST /patient/feedback` with `user_fall=1, need_help=1` → cancels timer → publishes `fall_events` → emergency alerted
@@ -468,6 +474,25 @@ processing pipelines, and time window sizes systematically, replacing manual CSV
 - Added `user_fall`/`need_help` to all fall history responses
 - New `GET /falls/history` endpoint with time range + feedback filters + pagination
 
+### Live Monitor — main.py integration — **COMPLETE** (2026-03-27)
+
+Operator can start/stop `main.py` from the browser and watch its terminal output in real time.
+
+**Backend (ml_server):**
+- `POST /client/start` — spawns `python /app/main.py` as subprocess, captures stdout+stderr
+- `POST /client/stop` — terminates subprocess (SIGTERM → SIGKILL after 5s)
+- `GET /client/status` — `{ running, pid, returncode }`
+- `GET /client/logs` — SSE stream: sends buffered history (last 2000 lines) on connect, then live lines; 25s keepalive; retries on subscriber disconnect
+
+**Frontend (`operator_dashboard/live_monitor.html` + `live_monitor.js`):**
+- API key field (pre-fills from localStorage if already set on main dashboard)
+- Start/Stop buttons with action status
+- Terminal-style log viewer: colour-coded (errors red, warnings yellow), auto-scroll, manual scroll to pause
+- Status dot (green = running, grey = stopped)
+- Polls status every 10s
+
+**nginx:** Added `/api/ml/client/logs` SSE location (proxy_buffering off) before generic `/api/ml/` block.
+
 ### MinIO datalake + CSV offline replay — IMPLEMENTED
 - MinIO runs as Docker service (`fall_minio`), S3-compatible, ports 9000 (API) and 9001 (console)
 - `datalake/minio_client.py` — boto3 S3 client helpers (list/upload/download)
@@ -486,74 +511,50 @@ processing pipelines, and time window sizes systematically, replacing manual CSV
 
 ---
 
-## Next Steps (remaining)
+## Known Issues / Gotchas
 
-### 1. PostgreSQL — Inference History & Audit Log
+- Docker Compose must always use `--env-file .env` (compose file is in `infrastructure/` subdirectory)
+- Bcrypt hashes contain `$` — use `infrastructure/caregiver_secrets.env` with `$$` for Docker; `caregiver/api/.env` with single `$` for dev mode
+- `GF_SECURITY_ADMIN_PASSWORD` is ignored after first Grafana startup — use `grafana cli admin reset-admin-password` to change password
+- nginx `proxy_pass http://grafana/;` (trailing slash) breaks Grafana sub-path — must be `http://grafana;` (no slash)
+- Grafana 10.x requires datasource as `{"type": "...", "uid": "..."}` object — plain string silently gives no data
+- Grafana datasource UIDs are fixed after first creation (NOT updated by datasources.yml): PostgreSQL=`PCC52D03280B7034C`, Prometheus=`PBFA97CFB590B2093`
+- `grafana_ro` Postgres user must be created manually after first `docker-compose up`
+- ml_server must run `--workers 1` — asyncio timer tasks (`_pending_emergency_tasks`) are per-process; feedback POSTs on a different worker cannot cancel the timer
+- nginx SSE locations (`/api/ml/patient/stream`, `/api/caregiver/patients/stream`, `/api/ml/client/logs`) MUST be declared before their parent `/api/ml/` and `/api/caregiver/` blocks
+- Patient SSE generator uses a queue + background task pattern with 15s keepalive — do not replace with a simple `async for` loop over Redis or the browser will show "Connection error" if Redis briefly hiccups on startup
+- Alembic must be run inside the ml_server container (`docker exec fall_ml_server alembic upgrade head`) — Postgres port 5432 is not published to the host
+- If `step_seconds`/`resampling_method`/`acc_sensor_type` columns already exist in the DB (ORM was created before migration 0002), migration uses `IF NOT EXISTS` — safe to re-run
 
-Currently, inference results are only written to local CSV files on the client. Adding PostgreSQL would give:
+---
 
-**What to store:**
+## Potential Next Steps
 
-| Table | Columns | Purpose |
-|-------|---------|---------|
-| `inference_log` | `id, timestamp, model_version, fall_detected, confidence, window_size, num_features, inference_mode, latency_ms` | Track every prediction |
-| `api_request_log` | `id, timestamp, client_ip, endpoint, status_code, response_time_ms, api_key_hash` | Server-side request audit |
-| `feature_snapshot` | `inference_id (FK), feature_name, feature_value` | Store feature vectors for retraining / debugging |
-| `participant_session` | `id, participant_name, gender, start_time, end_time, fall_count` | Session tracking |
+### 1. Automated Retraining Pipeline
 
-**Where to add it:**
-- Server-side: `server.py` saves to PostgreSQL after every `/predict` call
-- Client-side: `continuous_monitoring.py` and `detection.py` save session metadata
+`inference_log` now stores confirmed fall labels (`user_fall=1`) and `feature_snapshot` stores the full feature vectors. This is ready to use as training data.
 
-**Stack:**
-```
-PostgreSQL (local or cloud e.g. Supabase)
-    │
-psycopg2 or SQLAlchemy ORM
-    │
-server.py / main.py
-```
-
-**Example schema:**
-```sql
-CREATE TABLE inference_log (
-    id              SERIAL PRIMARY KEY,
-    timestamp       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    model_version   VARCHAR(20),
-    fall_detected   BOOLEAN,
-    confidence      FLOAT,
-    window_size     INT,
-    inference_mode  VARCHAR(10),   -- 'local' or 'remote'
-    latency_ms      INT,
-    participant     VARCHAR(100)
-);
+```python
+# retrain.py (not yet written)
+# 1. SELECT * FROM inference_log WHERE user_fall=1 (confirmed falls)
+# 2. JOIN feature_snapshot ON inference_id to get feature vectors
+# 3. Retrain XGBoost
+# 4. Save to model/ with version bump
 ```
 
-**Why this matters for MLOps:**
-- Lets you query "how many falls detected per day?"
-- Track model confidence distributions over time
-- Identify drift (model starts returning unusual confidence scores)
-- Feed historical results back into model retraining pipeline
+### 2. Wire participant_session writes
 
-### 2. Docker
+`participant_session` table exists but is never written to. The caregiver `/patients` list will be empty until `main.py` writes session rows on recording start/stop.
 
-Containerize `server.py` so the inference server is fully portable:
-```
-docker build -t fall-detection-server .
-docker run -p 8000:8000 --env-file .env fall-detection-server
-```
+### 3. AlertManager notification targets
 
-### 3. Model Versioning
+`infrastructure/alertmanager/alertmanager.yml` has placeholder receivers. Add real email or webhook to get alerts from `ConfidenceDrift`, `HighInferenceLatency`, etc.
 
-Store model metadata in PostgreSQL and serve different versions via `/predict?model=v3` query param.
+### 4. Production hardening
 
-### 4. Automated Retraining Pipeline
-
-Use PostgreSQL `feature_snapshot` table as training data source. Add a `retrain.py` script that:
-1. Queries confirmed falls from `inference_log`
-2. Fetches feature vectors from `feature_snapshot`
-3. Retrains XGBoost
-4. Saves new model to `model/` with version bump
+- Close ports 8001, 8002, 9090 on host (dev-only — route through nginx)
+- Add SSL certificate to nginx
+- Replace plaintext `.env` secrets with Docker secrets or Vault
 
 ---
 

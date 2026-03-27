@@ -111,6 +111,18 @@
         <span id="action-status"></span>
       </div>
 
+      <div style="display:flex; align-items:center; gap:0.6rem; margin-bottom:0.8rem;">
+        <label for="lm-api-key" style="font-size:0.85rem; color:#aaa; white-space:nowrap;">API Key</label>
+        <input id="lm-api-key" type="password" placeholder="Paste operator API key…"
+               autocomplete="off"
+               style="background:#1a1a1a; border:1px solid #444; color:#eee; padding:0.35rem 0.6rem;
+                      border-radius:4px; font-size:0.85rem; width:260px;">
+        <button onclick="saveApiKey()"
+                style="background:#2a2a2a; border:1px solid #555; color:#ccc; padding:0.35rem 0.8rem;
+                       border-radius:4px; cursor:pointer; font-size:0.85rem;">Save</button>
+        <span id="api-key-hint" class="meta"></span>
+      </div>
+
       <p class="meta" style="margin-bottom:0.6rem;">
         Terminal output of <code>main.py</code> running inside the Docker container.
         Stderr is merged with stdout. Last 2000 lines are buffered — reconnecting

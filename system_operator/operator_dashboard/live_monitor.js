@@ -16,6 +16,14 @@ function getApiKey() {
   return localStorage.getItem("operatorApiKey") || "";
 }
 
+function saveApiKey() {
+  const val = document.getElementById("lm-api-key").value.trim();
+  if (!val) return;
+  localStorage.setItem("operatorApiKey", val);
+  document.getElementById("api-key-hint").textContent = "Saved.";
+  setTimeout(() => { document.getElementById("api-key-hint").textContent = ""; }, 2000);
+}
+
 function setActionStatus(msg, colour) {
   const el = document.getElementById("action-status");
   el.textContent = msg;
@@ -143,7 +151,8 @@ function connectLogStream() {
 async function startClient() {
   const apiKey = getApiKey();
   if (!apiKey) {
-    setActionStatus("Set API key on the main dashboard first.", "#e74c3c");
+    setActionStatus("Enter and save your API key above first.", "#e74c3c");
+    document.getElementById("lm-api-key").focus();
     return;
   }
   setActionStatus("Starting…", "#aaa");
@@ -171,7 +180,8 @@ async function startClient() {
 async function stopClient() {
   const apiKey = getApiKey();
   if (!apiKey) {
-    setActionStatus("Set API key on the main dashboard first.", "#e74c3c");
+    setActionStatus("Enter and save your API key above first.", "#e74c3c");
+    document.getElementById("lm-api-key").focus();
     return;
   }
   setActionStatus("Stopping…", "#aaa");
@@ -199,6 +209,13 @@ async function stopClient() {
 // ── Auto-scroll toggle ─────────────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", () => {
+  // Pre-fill API key if already saved
+  const stored = getApiKey();
+  if (stored) {
+    document.getElementById("lm-api-key").value = stored;
+    document.getElementById("api-key-hint").textContent = "Key loaded from storage.";
+  }
+
   const terminal = document.getElementById("terminal");
   terminal.addEventListener("scroll", () => {
     const atBottom = terminal.scrollHeight - terminal.scrollTop - terminal.clientHeight < 40;

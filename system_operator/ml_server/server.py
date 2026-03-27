@@ -605,16 +605,69 @@ async def patient_stream(participant: Optional[str] = Query(None,
     SSE stream for the patient dashboard.
     Delivers fall alert events published to Redis 'patient_alerts'.
     Only fires for real-time detections (not replay).
+
+    Implementation notes:
+    - Uses a queue to decouple Redis subscription from the HTTP stream.
+    - Sends SSE comment keepalives every 15 s so nginx / browsers never
+      treat a quiet connection as dead.
+    - Redis subscription task retries automatically on error — the HTTP
+      connection stays open (browser keeps showing "Connected").
     """
     from fastapi.responses import StreamingResponse as _SR
+    from shared.redis_client import REDIS_URL, PATIENT_ALERTS_CHANNEL
+
+    q: asyncio.Queue = asyncio.Queue()
+
+    async def _redis_subscriber() -> None:
+        """Background task: put fall events into the queue; retry on error."""
+        import redis.asyncio as _aioredis
+        while True:
+            client = _aioredis.from_url(REDIS_URL, decode_responses=True)
+            pubsub = client.pubsub()
+            try:
+                await pubsub.subscribe(PATIENT_ALERTS_CHANNEL)
+                async for message in pubsub.listen():
+                    if message["type"] != "message":
+                        continue
+                    try:
+                        event = json.loads(message["data"])
+                    except (ValueError, KeyError):
+                        continue
+                    if participant and event.get("patient_id") != participant:
+                        continue
+                    await q.put(event)
+            except asyncio.CancelledError:
+                return
+            except Exception as exc:
+                logger.warning(f"Patient SSE Redis subscription error, retrying in 3s: {exc}")
+                try:
+                    await asyncio.sleep(3)
+                except asyncio.CancelledError:
+                    return
+            finally:
+                try:
+                    await pubsub.unsubscribe(PATIENT_ALERTS_CHANNEL)
+                    await client.aclose()
+                except Exception:
+                    pass
 
     async def _generator():
-        from shared.redis_client import subscribe_patient_alerts
+        task = asyncio.create_task(_redis_subscriber())
         try:
-            async for event in subscribe_patient_alerts(participant):
-                yield f"data: {json.dumps(event)}\n\n"
+            while True:
+                try:
+                    event = await asyncio.wait_for(q.get(), timeout=15)
+                    yield f"data: {json.dumps(event)}\n\n"
+                except asyncio.TimeoutError:
+                    yield ": keepalive\n\n"   # SSE comment — browser ignores, but keeps stream alive
         except asyncio.CancelledError:
             pass
+        finally:
+            task.cancel()
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):
+                pass
 
     return _SR(
         _generator(),

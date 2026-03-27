@@ -153,8 +153,12 @@ This is the core of the system. It owns the XGBoost model and is the only servic
 | `POST /datalake/replay` | Run every window in a CSV through the current model; saves all results to `inference_log` |
 | `GET /config` | Current processing config (window size, sample rate, resampling method) |
 | `POST /config` | Update processing config at runtime |
-| `GET /patient/stream` | SSE stream for patient dashboard — delivers events from Redis `patient_alerts` channel |
+| `GET /patient/stream` | SSE stream for patient dashboard — delivers events from Redis `patient_alerts` channel; sends keepalive comment every 15 s |
 | `POST /patient/feedback/{id}` | Patient submits YES/NO feedback; cancels emergency timer; conditionally publishes to `fall_events` |
+| `POST /client/start` | Start `main.py` as a managed subprocess (API key required) |
+| `POST /client/stop` | Terminate the running `main.py` subprocess (API key required) |
+| `GET /client/status` | Returns `{ running, pid, returncode }` |
+| `GET /client/logs` | SSE stream of `main.py` stdout/stderr — sends buffered history on connect, then live lines |
 
 After every real-time `/predict` that detects a fall, the background task:
 1. Writes row to PostgreSQL `inference_log`
@@ -282,6 +286,7 @@ main.py — Flask :8000  (runs on Windows, outside Docker)
 |-----------|-----|-------------|---------------|
 | **Operator** | `/operator/` | ml_server API | Active model, health, uptime, processing config, CSV replay, recent inference log |
 | **Operator — Model Comparison** | `/operator/model_comparison.html` | ml_server `GET /model/comparison` | Interactive Plotly charts: fall rate, confidence distribution, latency, per-recording × model matrix |
+| **Operator — Live Monitor** | `/operator/live_monitor.html` | ml_server `/client/*` | Start/stop `main.py`; terminal-style log viewer streaming stdout/stderr in real time |
 | **Caregiver** | `/caregiver/` | caregiver_api → PostgreSQL + Redis SSE | Patient list; Fall History tab with time range + feedback filters; live alert banner |
 | **Patient feedback** | `/patient/` | ml_server SSE + POST feedback | Standby screen; 10s popup on fall; YES/NO → help? flow; toast confirmations |
 | **Emergency tablet** | `/emergency/` | emergency_svc → Redis `fall_events` | Large-text alert — only fires when patient did not cancel the timer (no response or confirmed fall + help needed) |
@@ -345,8 +350,8 @@ FallDetection_new/
 ├── .env                            All environment variables (single root file)
 │
 ├── system_operator/
-│   ├── ml_server/                  FastAPI :8001 — XGBoost inference, Prometheus metrics, replay, comparison API
-│   └── operator_dashboard/         HTML/JS — model switcher, health, config, replay, model_comparison.html
+│   ├── ml_server/                  FastAPI :8001 — XGBoost inference, Prometheus metrics, replay, comparison API, client subprocess management
+│   └── operator_dashboard/         HTML/JS — model switcher, health, config, replay, model_comparison.html, live_monitor.html
 │
 ├── patient/
 │   └── dashboard/                  HTML/JS — standby screen, 10s fall popup, YES/NO feedback flow
@@ -384,6 +389,7 @@ FallDetection_new/
 └── Docu/                           Documentation
     ├── HOW_TO_RUN.md               Full setup and run guide (start here)
     ├── STATUS.md                   What is done vs. still to implement
+    ├── OBSERVABILITY.md            What Prometheus vs PostgreSQL stores and why both exist
     ├── GRAFANA_PROMETHEUS_PLAN.md  Monitoring integration plan
     └── REDIS.md                    Redis architecture notes
 ```
