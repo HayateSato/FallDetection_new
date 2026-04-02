@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Patient Dashboard — Fall Detection</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ── Standby Screen ─────────────────────────────────────────────── -->
+  <div id="standby-screen">
+    <div class="standby-content">
+      <div class="pulse-ring"></div>
+      <h1>Fall Detection</h1>
+      <p id="standby-patient">Monitoring active</p>
+      <p class="standby-sub">You will be notified if a fall is detected.</p>
+      <div id="connection-status" class="status-indicator connecting">Connecting...</div>
+    </div>
+    <div class="config-bar">
+      <input id="patient-name-input" type="text" placeholder="Your name (optional)" />
+      <button onclick="setPatientName()">Set</button>
+    </div>
+  </div>
+
+  <!-- ── Fall Popup — Step 1: Are you OK? ───────────────────────────── -->
+  <div id="popup-step1" class="popup hidden">
+    <div class="popup-box">
+      <div class="popup-icon">⚠</div>
+      <h2>Strong impact detected</h2>
+      <p id="popup-timestamp" class="popup-ts"></p>
+      <p class="popup-question">Are you experiencing a fall or do you need help?</p>
+
+      <div class="timer-bar-container">
+        <div id="timer-bar" class="timer-bar"></div>
+      </div>
+      <p id="timer-label" class="timer-label">Responding in <span id="countdown">10</span>s</p>
+
+      <div class="popup-buttons">
+        <button class="btn-yes" onclick="respondFall(true)">Yes — I fell</button>
+        <button class="btn-no"  onclick="respondFall(false)">No — I'm OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Fall Popup — Step 2: Do you need help? ─────────────────────── -->
+  <div id="popup-step2" class="popup hidden">
+    <div class="popup-box">
+      <div class="popup-icon">🚑</div>
+      <h2>Do you need help?</h2>
+      <p class="popup-question">Should we alert your emergency contact?</p>
+
+      <div class="timer-bar-container">
+        <div id="timer-bar2" class="timer-bar"></div>
+      </div>
+      <p id="timer-label2" class="timer-label">Auto-alerting in <span id="countdown2">10</span>s</p>
+
+      <div class="popup-buttons">
+        <button class="btn-yes" onclick="respondHelp(true)">Yes — Send help</button>
+        <button class="btn-no"  onclick="respondHelp(false)">No — I'm fine</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Confirmation Toast ──────────────────────────────────────────── -->
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

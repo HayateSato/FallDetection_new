@@ -1,0 +1,299 @@
+---
+# Full-stack Docker Compose for the Fall Detection System
+#
+# Services:
+#   Infrastructure:  postgres, redis, influxdb, nginx
+#   ML/Backend:      ml_server, caregiver_api, emergency_svc
+#   Observability:   prometheus, grafana, alertmanager
+#
+# Usage:
+#   docker-compose -f infrastructure/docker-compose.yml up
+#
+# First-time setup (from project root):
+#   cp .env.example .env          # fill in INFLUXDB_TOKEN, API_KEYS, etc.
+#   docker-compose -f infrastructure/docker-compose.yml up -d postgres
+#   DATABASE_URL=postgresql://falldetect:falldetect@localhost:5432/falldetect alembic upgrade head
+
+version: "3.9"
+
+networks:
+  fall_detection:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  influxdb_data:
+  grafana_data:
+  prometheus_data:
+  minio_data:
+
+# ---------------------------------------------------------------------------
+# Shared environment snippet (referenced by ml services)
+# ---------------------------------------------------------------------------
+x-python-base: &python-base
+  build:
+    context: ..          # project root so app/ and config/ are available
+    dockerfile: infrastructure/Dockerfile.python
+  volumes:
+    - ..:/app            # mount entire repo so app/, config/, model/ are importable
+  working_dir: /app
+  networks:
+    - fall_detection
+  restart: unless-stopped
+
+services:
+
+  # -------------------------------------------------------------------------
+  # PostgreSQL — inference history, feature snapshots, participant sessions
+  # -------------------------------------------------------------------------
+  postgres:
+    image: postgres:16-alpine
+    container_name: fall_postgres
+    environment:
+      POSTGRES_USER: falldetect
+      POSTGRES_PASSWORD: falldetect
+      POSTGRES_DB: falldetect
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - fall_detection
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U falldetect -d falldetect"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # -------------------------------------------------------------------------
+  # Redis — pub/sub broker for fall event fan-out
+  # -------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: fall_redis
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    networks:
+      - fall_detection
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  # -------------------------------------------------------------------------
+  # InfluxDB — time-series sensor data (moved from root docker-compose.yml)
+  # -------------------------------------------------------------------------
+  influxdb:
+    image: influxdb:2.7-alpine
+    container_name: fall_influxdb
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUXDB_USERNAME:-admin}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUXDB_PASSWORD:-adminpassword}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUXDB_ORG:-falldetect}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUXDB_BUCKET:-sensor_data}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUXDB_TOKEN:-changeme}
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+    ports:
+      - "8086:8086"    # exposed for SmarKo app and client laptop access
+    networks:
+      - fall_detection
+    restart: unless-stopped
+
+  # -------------------------------------------------------------------------
+  # MinIO — S3-compatible object store (datalake for sensor recording CSVs)
+  # -------------------------------------------------------------------------
+  minio:
+    image: minio/minio:latest
+    container_name: fall_minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER:     ${MINIO_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-minioadmin}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"   # S3 API — used by ml_server (inside Docker) and boto3 (host)
+      - "9001:9001"   # MinIO web console — http://localhost:9001
+    networks:
+      - fall_detection
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # -------------------------------------------------------------------------
+  # ML Inference Server — FastAPI, runs XGBoost inference
+  # -------------------------------------------------------------------------
+  ml_server:
+    <<: *python-base
+    container_name: fall_ml_server
+    command: >
+      uvicorn system_operator.ml_server.server:app
+      --host 0.0.0.0 --port 8001 --workers 1
+    ports:
+      - "8001:8001"    # exposed so main.py (running on Windows host) can reach it
+    environment:
+      - DATABASE_URL=postgresql://falldetect:falldetect@postgres:5432/falldetect
+      - REDIS_URL=redis://redis:6379/0
+      - MODEL_VERSION=${MODEL_VERSION:-v0}
+      - PUBLIC_ENDPOINT_ENABLED=${PUBLIC_ENDPOINT_ENABLED:-true}
+      - API_KEYS=${API_KEYS:-changeme}
+      - HARDWARE_ACC_SAMPLE_RATE=${HARDWARE_ACC_SAMPLE_RATE:-25}
+      - ACC_SENSOR_TYPE=${ACC_SENSOR_TYPE:-bosch}
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-changeme-jwt-secret}
+      - SERVER_PORT=8001
+      - MINIO_URL=http://minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      - MINIO_BUCKET=${MINIO_BUCKET:-sensor-recordings}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8001/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # -------------------------------------------------------------------------
+  # Caregiver API — FastAPI, reads Postgres + streams fall events via SSE
+  # -------------------------------------------------------------------------
+  caregiver_api:
+    <<: *python-base
+    container_name: fall_caregiver_api
+    command: >
+      uvicorn caregiver.api.server:app
+      --host 0.0.0.0 --port 8002
+    ports:
+      - "8002:8002"    # exposed for direct health checks and dev access
+    env_file:
+      - ./caregiver_secrets.env   # $$ escaped bcrypt hashes — Docker interpolates $$ → $
+    environment:
+      - DATABASE_URL=postgresql://falldetect:falldetect@postgres:5432/falldetect
+      - REDIS_URL=redis://redis:6379/0
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY:-changeme-jwt-secret}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # -------------------------------------------------------------------------
+  # Emergency Notification Service — SSE fan-out to tablets
+  # -------------------------------------------------------------------------
+  emergency_svc:
+    <<: *python-base
+    container_name: fall_emergency_svc
+    command: >
+      uvicorn emergency.notification_service.server:app
+      --host 0.0.0.0 --port 8003
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - WEBHOOK_URL=${EMERGENCY_WEBHOOK_URL:-}  # optional: POST to pager/email service
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # -------------------------------------------------------------------------
+  # Prometheus — scrapes metrics from ml_server and caregiver_api
+  # -------------------------------------------------------------------------
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: fall_prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-lifecycle"
+    ports:
+      - "9090:9090"    # direct host access for querying and debugging
+    volumes:
+      - ./prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    networks:
+      - fall_detection
+    restart: unless-stopped
+    depends_on:
+      - ml_server
+
+  # -------------------------------------------------------------------------
+  # Grafana — dashboard UI connecting to Prometheus + Postgres
+  # -------------------------------------------------------------------------
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: fall_grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=%(protocol)s://%(domain)s/grafana/
+      - GF_SERVER_SERVE_FROM_SUB_PATH=true
+      - GF_LIVE_ALLOWED_ORIGINS=http://localhost,http://localhost:80
+      - GF_FEATURE_TOGGLES_ENABLE=publicDashboards
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    networks:
+      - fall_detection
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+
+  # -------------------------------------------------------------------------
+  # AlertManager — routes Prometheus alerts to email/webhook
+  # -------------------------------------------------------------------------
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: fall_alertmanager
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+    volumes:
+      - ./alertmanager:/etc/alertmanager
+    networks:
+      - fall_detection
+    restart: unless-stopped
+
+  # -------------------------------------------------------------------------
+  # nginx — reverse proxy, single public entry point
+  # -------------------------------------------------------------------------
+  nginx:
+    image: nginx:1.25-alpine
+    container_name: fall_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ../system_operator/operator_dashboard:/www/static/operator:ro
+      - ../caregiver/dashboard:/www/static/caregiver:ro
+      - ../emergency/tablet_ui:/www/static/emergency:ro
+      - ../patient/dashboard:/www/static/patient:ro
+    networks:
+      - fall_detection
+    restart: unless-stopped
+    depends_on:
+      - ml_server
+      - caregiver_api
+      - emergency_svc
+      - grafana

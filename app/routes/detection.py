@@ -3,6 +3,10 @@ Detection routes: /trigger, /validate-csv, /model/info
 
 Core fall detection pipeline - fetches sensor data, preprocesses,
 runs inference, and returns results.
+
+Supports two inference modes (set INFERENCE_MODE in .env):
+- local:  run model on this machine (default)
+- remote: send sensor data to a remote FastAPI server
 """
 import os
 import logging
@@ -21,6 +25,7 @@ from config.settings import (
     MODEL_VERSION,
     WINDOW_SIZE_SECONDS,
     ACC_SAMPLE_RATE,
+    INFERENCE_MODE,
 )
 
 logger = logging.getLogger(__name__)
@@ -81,11 +86,9 @@ def trigger() -> Tuple:
     manual_truth_fall = request_data.get('manual_truth_fall', 0)
 
     print("="*70)
-    print(f"FALL DETECTION PIPELINE - {model_info['name']}")
+    print(f"FALL DETECTION PIPELINE - {model_info['name']} (mode: {INFERENCE_MODE})")
     print("="*70)
     print(f"Test time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"Model: {model_info['description']}")
-    print(f"Features: {model_info['num_features']} ({model_info['acc_features']} ACC + {model_info['baro_features']} BARO)")
     print(f"Participant: {participant_name} ({participant_gender})")
     print(f"Manual truth: {manual_truth_fall}")
     print("="*70)
@@ -96,7 +99,7 @@ def trigger() -> Tuple:
         model_logger.log_data_fetch_start(query_start_time)
 
         acc_data, acc_time, pressure, pressure_time, flux_objects = fetch_and_preprocess_sensor_data(
-            uses_barometer=inference_engine.uses_barometer(),
+            uses_barometer=inference_engine.uses_barometer() if INFERENCE_MODE == 'local' else True,
             lookback_seconds=30,
         )
 
@@ -113,6 +116,72 @@ def trigger() -> Tuple:
         model_logger.log_preprocessing_complete(acc_samples=acc_data.shape[1], duration=acc_duration)
         print(f"  ACC samples: {acc_data.shape[1]}, duration: {acc_duration:.1f}s")
         print(f"  BARO samples: {len(pressure)}")
+
+        # ================================================================
+        # REMOTE INFERENCE MODE
+        # ================================================================
+        if INFERENCE_MODE == 'remote':
+            remote_client = current_app.config.get('remote_client')
+            if remote_client is None:
+                return jsonify({
+                    "message": "INFERENCE_MODE=remote but remote client not configured",
+                    "error": "Check REMOTE_SERVER_URL in .env"
+                }), 500
+
+            try:
+                server_result = remote_client.predict(
+                    acc_data=acc_data,
+                    acc_time=acc_time,
+                    pressure=pressure,
+                    pressure_time=pressure_time,
+                )
+            except Exception as e:
+                logger.error(f"Remote inference failed: {e}")
+                return jsonify({
+                    "message": "Remote inference server error",
+                    "error": str(e)
+                }), 502
+
+            # Save data locally (CSV export)
+            is_fall = server_result['fall_detected']
+            confidence = server_result['confidence']
+
+            save_detection_window_to_csv(
+                flux_records=flux_objects,
+                is_fall=is_fall,
+                confidence=confidence,
+                participant_name=participant_name,
+                participant_gender=participant_gender,
+                manual_truth_fall=manual_truth_fall,
+                timestamp_utc=query_start_time
+            )
+
+            return jsonify({
+                "message": f"Fall detection completed (remote: {server_result.get('model_name', '?')}).",
+                "data_source": "influx",
+                "inference_mode": "remote",
+                "fall_detected": is_fall,
+                "model_version": server_result.get('model_version', '?'),
+                "model_name": server_result.get('model_name', '?'),
+                "result": server_result.get('result', ''),
+                "confidence": confidence,
+                "threshold": server_result.get('threshold', 0.5),
+                "window_size": server_result.get('window_size', 0),
+                "window_duration_seconds": WINDOW_SIZE_SECONDS,
+                "num_features": server_result.get('num_features', 0),
+                "acc_features": server_result.get('acc_features', 0),
+                "baro_features": server_result.get('baro_features', 0),
+                "participant_name": participant_name,
+                "participant_gender": participant_gender,
+                "manual_truth_marker": manual_truth_fall
+            }), 200
+
+        # ================================================================
+        # LOCAL INFERENCE MODE (original behavior)
+        # ================================================================
+
+        print(f"Model: {model_info['description']}")
+        print(f"Features: {model_info['num_features']} ({model_info['acc_features']} ACC + {model_info['baro_features']} BARO)")
 
         # STEP 3: CONVERT TO DATAFRAME
         model_logger.log_dataframe_conversion_start()
@@ -227,6 +296,7 @@ def trigger() -> Tuple:
         return jsonify({
             "message": f"Fall detection completed ({model_info['name']}).",
             "data_source": "influx",
+            "inference_mode": "local",
             "fall_detected": is_fall,
             "model_version": MODEL_VERSION,
             "model_name": model_info['name'],

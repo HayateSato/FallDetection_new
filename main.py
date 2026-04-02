@@ -49,6 +49,9 @@ from config.settings import (
     API_KEYS,
     RATE_LIMIT_PER_MINUTE,
     FLASK_DEBUG,
+    INFERENCE_MODE,
+    REMOTE_SERVER_URL,
+    REMOTE_API_KEY,
 )
 
 # Data source settings
@@ -108,6 +111,28 @@ model_info = inference_engine.get_model_info()
 
 
 # ------------------------------------------------------------------------
+# REMOTE INFERENCE CLIENT (when INFERENCE_MODE=remote)
+# ------------------------------------------------------------------------
+
+remote_client = None
+if INFERENCE_MODE == 'remote':
+    if not REMOTE_SERVER_URL:
+        logger.error("INFERENCE_MODE=remote but REMOTE_SERVER_URL is not set in .env!")
+    else:
+        from app.services.remote_inference import RemoteInferenceClient
+        remote_client = RemoteInferenceClient(
+            server_url=REMOTE_SERVER_URL,
+            api_key=REMOTE_API_KEY,
+        )
+        logger.info(f"Remote inference client initialized: {REMOTE_SERVER_URL}")
+        try:
+            health = remote_client.health_check()
+            logger.info(f"  Server health: {health['status']} (model: {health['model_version']})")
+        except Exception as e:
+            logger.warning(f"  Server not reachable yet: {e} (will retry on each request)")
+
+
+# ------------------------------------------------------------------------
 # FLASK APP + BLUEPRINTS
 # ------------------------------------------------------------------------
 
@@ -117,6 +142,7 @@ app = Flask(__name__, static_folder='app/static')
 app.config['inference_engine'] = inference_engine
 app.config['model_info'] = model_info
 app.config['model_config'] = model_config
+app.config['remote_client'] = remote_client
 
 # Setup CORS (only active when PUBLIC_ENDPOINT_ENABLED=true)
 setup_cors(app)
@@ -144,6 +170,9 @@ def index() -> Response:
 if __name__ == '__main__':
     logger.info(f"="*70)
     logger.info(f"Starting Fall Detection System")
+    logger.info(f"  Inference Mode:  {INFERENCE_MODE.upper()}")
+    if INFERENCE_MODE == 'remote':
+        logger.info(f"  Remote Server:   {REMOTE_SERVER_URL}")
     logger.info(f"  Data Source:     {DATA_SOURCE}")
     logger.info(f"  Monitrng Intrvl: {MONITORING_INTERVAL_SECONDS} seconds")
     if DATA_SOURCE == 'csv':
@@ -194,7 +223,8 @@ if __name__ == '__main__':
                 inference_engine=inference_engine,
                 notification_queue=shared_state.fall_notification_queue,
                 export_callback=save_detection_window_to_csv,
-                notification_callback=shared_state.add_poll_notification
+                notification_callback=shared_state.add_poll_notification,
+                remote_client=remote_client,
             )
 
             shared_state.continuous_monitor.start()

@@ -11,3 +11,6 @@ matplotlib
 seaborn
 scipy
 optuna
+fastapi
+uvicorn
+requests

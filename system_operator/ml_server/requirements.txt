@@ -1,0 +1,29 @@
+# ML Server requirements
+# Install from project root: pip install -r system_operator/ml_server/requirements.txt
+
+# --- Core ML pipeline ---
+numpy
+pandas
+scikit-learn
+xgboost
+joblib
+scipy
+python-dotenv
+fastapi
+uvicorn[standard]
+
+# --- PostgreSQL ---
+sqlalchemy>=2.0
+psycopg2-binary
+alembic
+
+# --- Prometheus metrics ---
+prometheus-client
+prometheus-fastapi-instrumentator
+
+# --- Redis pub/sub ---
+redis
+
+# --- JWT auth ---
+python-jose[cryptography]
+passlib[bcrypt]

@@ -208,6 +208,37 @@ def get_model_path() -> str:
 MODEL_PATH = get_model_path()
 
 # =============================================================================
+# DATABASE & MESSAGING (Phase 1 / Phase 3 additions)
+# =============================================================================
+
+# PostgreSQL connection string — used by ml_server for inference logging
+# Format: postgresql://user:password@host:5432/dbname
+DATABASE_URL = os.getenv('DATABASE_URL', '')
+
+# Redis connection string — used for fall event pub/sub
+# Format: redis://host:6379/0
+REDIS_URL = os.getenv('REDIS_URL', '')
+
+# JWT secret key — used by operator and caregiver dashboards
+# Generate: python -c "import secrets; print(secrets.token_urlsafe(32))"
+JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', '')
+
+# =============================================================================
+# INFERENCE MODE (local vs remote)
+# =============================================================================
+
+# 'local' = run model locally (default, current behavior)
+# 'remote' = send sensor data to a remote FastAPI server for inference
+INFERENCE_MODE = os.getenv('INFERENCE_MODE', 'local').lower()
+
+# Remote server URL (only used when INFERENCE_MODE=remote)
+# e.g. https://abc123.ngrok-free.app  or  http://192.168.1.50:8000
+REMOTE_SERVER_URL = os.getenv('REMOTE_SERVER_URL', '')
+
+# API key for the remote server (only used when INFERENCE_MODE=remote)
+REMOTE_API_KEY = os.getenv('REMOTE_API_KEY', '')
+
+# =============================================================================
 # PUBLIC ENDPOINT / API SECURITY SETTINGS
 # =============================================================================
 

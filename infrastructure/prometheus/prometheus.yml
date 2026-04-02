@@ -1,0 +1,39 @@
+global:
+  scrape_interval: 15s       # how often Prometheus pulls metrics
+  evaluation_interval: 15s   # how often alert rules are evaluated
+
+# Alert rules files
+rule_files:
+  - "alert_rules.yml"
+
+# AlertManager connection
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ["alertmanager:9093"]
+
+# --- What Prometheus scrapes ---
+scrape_configs:
+
+  # ML Inference Server — /metrics endpoint auto-created by prometheus_fastapi_instrumentator
+  - job_name: "ml_server"
+    static_configs:
+      - targets: ["ml_server:8001"]
+    metrics_path: /metrics
+
+  # Caregiver API — also instrumented with prometheus_fastapi_instrumentator
+  - job_name: "caregiver_api"
+    static_configs:
+      - targets: ["caregiver_api:8002"]
+    metrics_path: /metrics
+
+  # Emergency service
+  - job_name: "emergency_svc"
+    static_configs:
+      - targets: ["emergency_svc:8003"]
+    metrics_path: /metrics
+
+  # Prometheus itself (useful for monitoring the monitor)
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]

@@ -1,0 +1,32 @@
+FROM python:3.11-slim
+
+# System deps for psycopg2, scipy, etc.
+RUN apt-get update && apt-get install -y \
+    curl \
+    build-essential \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+# Copy and install requirements first (cached layer)
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
+
+# Install additional packages for new services
+RUN pip install --no-cache-dir \
+    sqlalchemy>=2.0 \
+    psycopg2-binary \
+    alembic \
+    redis \
+    httpx \
+    prometheus-client \
+    prometheus-fastapi-instrumentator \
+    python-jose[cryptography] \
+    passlib[bcrypt] \
+    boto3 \
+    pandas \
+    python-multipart
+
+# Project root is mounted at runtime via volumes: [..:/app]
+# No COPY needed — everything comes from the bind mount

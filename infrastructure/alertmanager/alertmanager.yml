@@ -1,0 +1,39 @@
+global: {}
+
+# Default receiver for all alerts
+route:
+  receiver: "default"
+  # Group alerts with the same alertname into one notification
+  group_by: ["alertname"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+  # Route critical alerts faster
+  routes:
+    - match:
+        severity: critical
+      receiver: "critical"
+      group_wait: 10s
+
+receivers:
+  - name: "default"
+    # Add webhook_configs, email_configs, or slack_configs here.
+    # Example webhook (replace with your notification service URL):
+    # webhook_configs:
+    #   - url: "http://your-notification-service/alert"
+    #     send_resolved: true
+
+  - name: "critical"
+    # Example: POST to a webhook on critical alerts
+    # webhook_configs:
+    #   - url: "http://your-pager-service/alert"
+    #     send_resolved: true
+
+# Inhibition rules: suppress lower-severity alerts when higher ones fire
+inhibit_rules:
+  - source_match:
+      severity: critical
+    target_match:
+      severity: warning
+    equal: ["alertname"]

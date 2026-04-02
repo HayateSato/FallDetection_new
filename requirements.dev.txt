@@ -1,0 +1,44 @@
+# ============================================================
+# Development requirements — install this on your Windows laptop.
+# Covers ALL services: Flask client, ML server, caregiver API,
+# emergency service, and shared utilities.
+#
+# Usage (from project root, with your venv activated):
+#   pip install -r requirements.dev.txt
+# ============================================================
+
+# --- Original client (main.py / Flask) ---
+influxdb-client
+numpy
+pandas
+scikit-learn
+xgboost
+joblib
+Flask
+python-dotenv
+tqdm
+scipy
+
+# --- ML server (FastAPI / server.py) ---
+fastapi
+uvicorn[standard]
+requests
+
+# --- PostgreSQL (Phase 1) ---
+sqlalchemy>=2.0
+psycopg2-binary
+alembic
+
+# --- Prometheus metrics (Phase 2) ---
+prometheus-client
+prometheus-fastapi-instrumentator
+
+# --- Redis pub/sub (Phase 3) ---
+redis
+
+# --- JWT auth + password hashing ---
+python-jose[cryptography]
+passlib[bcrypt]
+
+# --- Emergency webhook channel ---
+httpx

@@ -1,0 +1,28 @@
+
+this system is used by 4 user types
+ 1. system operator 
+ 2. paetient user
+ 3. care-giver / medical partner 
+ 4. (optional) emergency 
+
+
+each user needs following components
+
+1. system operator 
+ - ml inferenrec server (fall detection model) (when a fall happened, it sends the notification to emegency dashboard)
+ - grafana & prometheus (ml monitoring tool - I never used them before and I do not know if I need them but i want to use them here to learn about them)
+ - database (i believe postgres should be used? to save the result of ml inference)
+ - operator dashabord (this not only allows operator to monitor the performance of the model but also switch models, inferece settings etc.)
+ - proxy (maybe i need a proxy so that i do not directly expose the postgres data to external?)
+
+2. paetient user
+ - wearable device (not in this project folder) collects IMU data from the user 
+ - Smartphon app (not in this project folder) sends the data to influx InfluxDB
+
+3. care-giver / medical partner 
+ - inluxDB (system operator could also host this but due to data protection, it should be hosted on medical partner's end)
+ - dashboard that lists up all the patients and allows medical partner to monitor if any fall is happenig or not - dashboard request data from Postgre via REST API
+
+
+4. (optional) emergency 
+ - it receives a notification when a fall is happened so that they can go to a help if required

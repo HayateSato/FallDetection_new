@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Operator Dashboard — Fall Detection System</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header>
+    <h1>System Operator Dashboard</h1>
+    <span id="server-status" class="badge badge-grey">Checking...</span>
+    <span id="uptime" class="meta"></span>
+    <div class="api-key-row">
+      <label for="api-key-input">API Key</label>
+      <input id="api-key-input" type="password" placeholder="Paste operator API key…" autocomplete="off">
+      <button onclick="saveApiKey()">Connect</button>
+      <span id="api-key-status" class="meta"></span>
+    </div>
+  </header>
+
+  <main>
+
+    <!-- Panel 1: Model Switcher -->
+    <section class="panel" id="panel-model">
+      <h2>Model Management</h2>
+      <div class="model-info">
+        <div>
+          <div class="label">Active Model</div>
+          <div id="active-model" class="value-large">—</div>
+        </div>
+        <div>
+          <div class="label">Features</div>
+          <div id="model-features" class="value-large">—</div>
+        </div>
+        <div>
+          <div class="label">Uses Barometer</div>
+          <div id="model-baro" class="value-large">—</div>
+        </div>
+      </div>
+
+      <div class="model-switch-row">
+        <label for="model-select">Switch to:</label>
+        <select id="model-select">
+          <option value="">Loading models...</option>
+        </select>
+        <button onclick="switchModel()">Switch Model</button>
+        <span id="switch-status" class="meta"></span>
+      </div>
+    </section>
+
+    <!-- Panel 2: Live Metrics (polls ml_server) -->
+    <section class="panel" id="panel-metrics">
+      <h2>Live Server Metrics</h2>
+      <div class="metrics-grid">
+        <div class="metric-box">
+          <div class="label">Status</div>
+          <div id="metric-status" class="value">—</div>
+        </div>
+        <div class="metric-box">
+          <div class="label">Uptime</div>
+          <div id="metric-uptime" class="value">—</div>
+        </div>
+        <div class="metric-box">
+          <div class="label">Model Version</div>
+          <div id="metric-version" class="value">—</div>
+        </div>
+      </div>
+      <p class="meta" style="margin-top:0.5rem">Auto-refreshes every 15s</p>
+    </section>
+
+    <!-- Panel 3: Grafana Embed -->
+    <section class="panel" id="panel-grafana">
+      <h2>ML Monitoring (Grafana)</h2>
+      <p class="meta">
+        Grafana dashboards are available at
+        <a href="/grafana" target="_blank">/grafana</a>.
+        Embed below (requires Grafana anonymous access or same-session auth):
+      </p>
+      <div class="grafana-links">
+        <a href="/grafana/d/fall-ml-overview" target="_blank" class="grafana-card">
+          <div class="grafana-title">ML Server Overview</div>
+          <div class="grafana-desc">Request rate, latency, error rate, uptime</div>
+        </a>
+        <a href="/grafana/d/fall-model-perf" target="_blank" class="grafana-card">
+          <div class="grafana-title">Model Performance</div>
+          <div class="grafana-desc">Confidence distribution, drift detection, fall rate</div>
+        </a>
+        <a href="/grafana/d/fall-events-timeline" target="_blank" class="grafana-card">
+          <div class="grafana-title">Fall Events Timeline</div>
+          <div class="grafana-desc">Patient fall history, confidence scatter, sessions</div>
+        </a>
+        <a href="model_comparison.html" class="grafana-card" style="border-color:#6bcb77;">
+          <div class="grafana-title" style="color:#6bcb77;">Model Comparison</div>
+          <div class="grafana-desc">Replay results: fall rate, confidence distribution, latency — interactive charts</div>
+        </a>
+        <a href="live_monitor.html" class="grafana-card" style="border-color:#4da6ff;">
+          <div class="grafana-title" style="color:#4da6ff;">Live Monitor</div>
+          <div class="grafana-desc">Start / stop main.py inference client — view terminal output in real time</div>
+        </a>
+      </div>
+    </section>
+
+    <!-- Panel 4: Processing Configuration -->
+    <section class="panel" id="panel-config">
+      <h2>Processing Configuration</h2>
+
+      <div class="config-grid">
+
+        <div class="config-group">
+          <div class="label">Time Window (seconds)</div>
+          <div class="config-row">
+            <input id="cfg-window" type="number" min="3" max="30" value="9" step="1">
+            <span id="cfg-window-hint" class="meta">9s = 450 samples @ 50Hz</span>
+          </div>
+        </div>
+
+        <div class="config-group">
+          <div class="label">Accelerometer Sensor Type</div>
+          <select id="cfg-sensor-type">
+            <option value="bosch">Bosch (25Hz, LSB ÷ 16384 → g)</option>
+            <option value="non_bosch">Non-Bosch (100Hz, different sensitivity)</option>
+          </select>
+        </div>
+
+        <div class="config-group">
+          <div class="label">Hardware Sample Rate (Hz)</div>
+          <select id="cfg-sample-rate">
+            <option value="25">25 Hz — Bosch default</option>
+            <option value="50">50 Hz — already at model rate</option>
+            <option value="100">100 Hz — Non-Bosch, downsampled</option>
+          </select>
+        </div>
+
+        <div class="config-group">
+          <div class="label">Resampling Method</div>
+          <select id="cfg-resample-method">
+            <option value="linear">Linear interpolation (default)</option>
+            <option value="decimate">Decimate (anti-alias filter)</option>
+            <option value="average">Average pooling</option>
+          </select>
+        </div>
+
+        <div class="config-group">
+          <div class="label">Data Source</div>
+          <div class="config-row">
+            <label class="radio-label">
+              <input type="radio" name="data-source" value="influx" checked
+                     onchange="onDataSourceChange('influx')"> Live InfluxDB
+            </label>
+            <label class="radio-label">
+              <input type="radio" name="data-source" value="csv"
+                     onchange="onDataSourceChange('csv')"> CSV / MinIO
+            </label>
+          </div>
+        </div>
+
+        <div class="config-group">
+          <div class="label">Apply</div>
+          <button onclick="applyConfig()" class="btn-apply">Apply Configuration</button>
+          <span id="config-status" class="meta" style="margin-left:0.8rem"></span>
+        </div>
+
+      </div>
+
+      <!-- CSV / MinIO panel — shown only when CSV radio is selected -->
+      <div id="csv-panel" style="display:none; margin-top:1.4rem; border-top:1px solid #2a2a2a; padding-top:1.2rem;">
+        <h3 style="font-size:0.95rem; color:#aaa; margin-bottom:1rem;">MinIO Datalake — Offline Replay</h3>
+
+        <div class="config-grid">
+
+          <div class="config-group">
+            <div class="label">Select Recording</div>
+            <div class="config-row" style="gap:0.6rem; flex-wrap:wrap;">
+              <select id="csv-file-select" style="min-width:260px;">
+                <option value="">— loading files… —</option>
+              </select>
+              <button onclick="loadFileList()" class="btn-apply">Refresh</button>
+            </div>
+            <p id="csv-file-meta" class="meta" style="margin-top:0.3rem;"></p>
+          </div>
+
+          <div class="config-group">
+            <div class="label">Step Between Windows (s)</div>
+            <div class="config-row">
+              <input id="cfg-step" type="number" min="0.5" max="30" value="3" step="0.5">
+              <span class="meta">Smaller = more windows, more overlap</span>
+            </div>
+          </div>
+
+          <div class="config-group">
+            <div class="label">Upload New CSV</div>
+            <div class="config-row" style="gap:0.6rem; flex-wrap:wrap;">
+              <input type="file" id="csv-upload-input" accept=".csv" style="color:#ccc;">
+              <button onclick="uploadCsv()" class="btn-apply">Upload to MinIO</button>
+            </div>
+            <span id="upload-status" class="meta" style="margin-top:0.3rem; display:block;"></span>
+          </div>
+
+          <div class="config-group">
+            <div class="label">Run Replay</div>
+            <button id="btn-replay" onclick="runReplay()" class="btn-apply" style="background:#1a6b3a;">
+              Run Predictions on Selected CSV
+            </button>
+            <span id="replay-status" class="meta" style="margin-left:0.8rem;"></span>
+          </div>
+
+        </div>
+
+        <!-- Replay results table -->
+        <div id="replay-results" style="display:none; margin-top:1.2rem;">
+          <p style="margin-bottom:0.6rem;">
+            <a href="model_comparison.html" class="btn-apply"
+               style="display:inline-block; text-decoration:none; background:#1a5c3a; font-size:0.85rem; padding:0.4rem 1rem;">
+              View Full Model Comparison →
+            </a>
+            <span class="meta" style="margin-left:0.6rem;">Compare all models side-by-side with interactive charts</span>
+          </p>
+          <h3 style="font-size:0.9rem; color:#aaa; margin-bottom:0.6rem;">
+            Replay Results — <span id="replay-summary"></span>
+          </h3>
+          <table id="replay-table">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Window Start</th>
+                <th>Fall?</th>
+                <th>Confidence</th>
+                <th>Latency</th>
+              </tr>
+            </thead>
+            <tbody id="replay-tbody"></tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- Panel 5: Recent Inference Log -->
+    <section class="panel" id="panel-log">
+      <h2>Recent Inferences</h2>
+      <p class="meta">Last 20 predictions from PostgreSQL. Auto-refreshes every 30s.</p>
+      <table id="log-table">
+        <thead>
+          <tr>
+            <th>Time</th>
+            <th>Patient / File</th>
+            <th>Source</th>
+            <th>Fall?</th>
+            <th>Confidence</th>
+            <th>Model</th>
+            <th>Latency</th>
+            <th>Window</th>
+          </tr>
+        </thead>
+        <tbody id="log-tbody">
+          <tr><td colspan="8" class="loading">Loading...</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
