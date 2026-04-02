@@ -82,13 +82,48 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Model (hot-swappable)
+# Model cache — one PipelineSelector per version, loaded on first use
 # ---------------------------------------------------------------------------
-_model_lock = threading.Lock()
-_current_model_version = MODEL_VERSION
-_inference_engine = PipelineSelector(MODEL_VERSION, MODEL_PATH)
-_model_info   = _inference_engine.get_model_info()
-_model_config = get_model_config(get_model_name(MODEL_VERSION))
+_model_cache_lock = threading.Lock()
+_model_cache: Dict[str, PipelineSelector] = {}   # version → engine
+
+# Default version (from .env) — pre-loaded at startup
+_default_model_version = MODEL_VERSION
+
+
+def _get_engine(version: str) -> tuple:
+    """
+    Return (engine, model_config, model_info) for `version`.
+    Loads and caches on first call; subsequent calls return cached object.
+    Thread-safe.
+    """
+    with _model_cache_lock:
+        if version not in _model_cache:
+            available = list_available_models()
+            if version not in available:
+                raise ValueError(f"Unknown model version '{version}'. Available: {list(available)}")
+            path = get_model_path(get_model_name(version))
+            engine = PipelineSelector(version, path)
+            _model_cache[version] = engine
+            logger.info(f"Model '{version}' loaded and cached.")
+        engine = _model_cache[version]
+    mc = get_model_config(get_model_name(version))
+    mi = engine.get_model_info()
+    return engine, mc, mi
+
+
+# Pre-warm cache at startup — load every model that has a .pkl file on disk.
+# This eliminates the cold-load penalty (100-500ms) on first client request.
+# Set PRELOAD_ALL_MODELS=false in .env to skip and only load on demand.
+_preload_all = os.getenv("PRELOAD_ALL_MODELS", "true").lower() != "false"
+if _preload_all:
+    for _v in list_available_models():
+        try:
+            _get_engine(_v)
+        except Exception as _e:
+            logger.warning(f"Could not preload model '{_v}': {_e}")
+else:
+    _get_engine(_default_model_version)
 
 # Runtime processing config (updated by POST /config)
 _window_size_seconds:  float = WINDOW_SIZE_SECONDS
@@ -96,11 +131,12 @@ _hardware_sample_rate: int   = HARDWARE_ACC_SAMPLE_RATE
 _resampling_method:    str   = RESAMPLING_METHOD
 _acc_sensor_type:      str   = ACC_SENSOR_TYPE
 
+_default_info = _model_cache[_default_model_version].get_model_info()
 logger.info("=" * 60)
 logger.info("Fall Detection Inference Server  [integration build]")
-logger.info(f"  Model:   {MODEL_VERSION.upper()}  ({_model_info['name']})")
-logger.info(f"  Baro:    {_model_info['uses_barometer']}")
-logger.info(f"  Window:  {WINDOW_SIZE_SECONDS}s @ {ACC_SAMPLE_RATE}Hz")
+logger.info(f"  Default model: {_default_model_version.upper()}  ({_default_info['name']})")
+logger.info(f"  All models loaded on first request (lazy cache)")
+logger.info(f"  Fixed pipeline:  {WINDOW_SIZE_SECONDS}s window @ {ACC_SAMPLE_RATE}Hz")
 logger.info("=" * 60)
 
 # ---------------------------------------------------------------------------
@@ -163,6 +199,7 @@ class PredictRequest(BaseModel):
     sample_rate:             Optional[float]       = Field(None, description="Hardware ACC rate Hz (overrides server .env)")
     acc_unit:                Optional[str]         = Field(None, description="'lsb' (default) or 'g'")
     participant:             Optional[str]         = Field(None, description="Subject/device ID (logged only)")
+    model_version:           Optional[str]         = Field(None, description="Model to use for this request (e.g. 'v3'). Defaults to server default.")
 
 
 class PredictResponse(BaseModel):
@@ -177,8 +214,6 @@ class PredictResponse(BaseModel):
     features:       Dict[str, float]
 
 
-class ModelSwitchRequest(BaseModel):
-    version: str = Field(..., description="Model version to load (e.g. 'v3')")
 
 
 class ConfigRequest(BaseModel):
@@ -218,42 +253,29 @@ async def health():
 
 
 @app.get("/model/info")
-async def get_model_info():
-    with _model_lock:
-        return _model_info
+async def get_model_info(version: Optional[str] = None):
+    """
+    Return metadata for a model version.
+    Pass ?version=v3 to query a specific version without loading it as default.
+    Omit to get info on the server's default model.
+    The key field for clients is `uses_barometer` — it tells the trigger client
+    whether barometer data needs to be fetched from InfluxDB for this model.
+    """
+    v = version or _default_model_version
+    try:
+        _, _, mi = _get_engine(v)
+        return mi
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
 
 
 @app.get("/model/list")
 async def list_models():
-    return {"available_versions": list_available_models()}
-
-
-@app.post("/model/switch", dependencies=[Depends(verify_api_key)])
-async def switch_model(req: ModelSwitchRequest):
-    """Hot-reload the inference engine with a different model version."""
-    global _inference_engine, _current_model_version, _model_info, _model_config
-
+    """List all model versions available on disk."""
     available = list_available_models()
-    if req.version not in available:
-        raise HTTPException(status_code=404,
-                            detail=f"Model '{req.version}' not found. Available: {available}")
-    previous = _current_model_version
-    try:
-        new_type   = get_model_name(req.version)
-        new_path   = get_model_path(new_type)
-        new_engine = PipelineSelector(req.version, new_path)
-        new_info   = new_engine.get_model_info()
-        new_config = get_model_config(new_type)
-        with _model_lock:
-            _inference_engine = new_engine
-            _current_model_version = req.version
-            _model_info   = new_info
-            _model_config = new_config
-        logger.info(f"Model switched: {previous} → {req.version}")
-        return {"success": True, "previous_version": previous, "new_version": req.version,
-                "model_name": new_info["name"], "num_features": new_info["num_features"]}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Model switch failed: {e}")
+    cached = list(_model_cache.keys())
+    return {"available_versions": list(available), "cached_versions": cached,
+            "default_version": _default_model_version}
 
 
 @app.get("/config")
@@ -299,15 +321,17 @@ async def predict(req: PredictRequest):
     if n == 0:
         raise HTTPException(status_code=422, detail="Sensor data arrays cannot be empty.")
 
-    logger.info(f"Predict: {n} samples  participant={req.participant}")
+    # Resolve which model to use for this request
+    requested_version = req.model_version or _default_model_version
+    logger.info(f"Predict: {n} samples  model={requested_version}  participant={req.participant}")
     t_start = time.monotonic()
 
     try:
-        with _model_lock:
-            engine = _inference_engine
-            mv     = _current_model_version
-            mc     = _model_config
-            mi     = _model_info
+        try:
+            engine, mc, mi = _get_engine(requested_version)
+        except ValueError as e:
+            raise HTTPException(status_code=404, detail=str(e))
+        mv = requested_version
 
         # 1. Build numpy arrays  (shape: 3 × N)
         acc_data = np.array([req.acc_x, req.acc_y, req.acc_z])

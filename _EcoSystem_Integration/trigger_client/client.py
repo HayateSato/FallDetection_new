@@ -89,15 +89,24 @@ class FallDetectionClient:
         on_result: Optional[Callable[[dict], None]] = None,
         server_url: Optional[str] = None,
         api_key: Optional[str] = None,
+        model_version: Optional[str] = None,
         interval_seconds: int = MONITORING_INTERVAL_SECONDS,
         lookback_seconds: int = MONITORING_LOOKBACK_SECONDS,
         window_seconds: Optional[float] = None,
         hardware_rate_hz: int = HARDWARE_ACC_SAMPLE_RATE,
         participant: Optional[str] = None,
     ):
+        """
+        model_version : which XGBoost model the server should use, e.g. 'v0', 'v3'.
+                        If None, the server uses its own default (MODEL_VERSION in .env).
+                        The client queries /model/info?version=<version> on startup to
+                        determine whether barometer data is needed — so this drives
+                        InfluxDB fetching automatically.
+        """
         self.on_result        = on_result or _default_result_handler
         self.server_url       = (server_url or REMOTE_SERVER_URL).rstrip("/")
         self.api_key          = api_key or REMOTE_API_KEY
+        self.model_version    = model_version   # None → server picks its default
         self.interval_seconds = interval_seconds
         self.lookback_seconds = lookback_seconds
         self.window_seconds   = window_seconds
@@ -111,11 +120,16 @@ class FallDetectionClient:
         _ws = window_seconds or WINDOW_SIZE_SECONDS
         self._required_acc_samples = int(_ws * ACC_SAMPLE_RATE)
 
-        # Fetch model info once on startup to know whether barometer is needed
-        self._uses_barometer = self._fetch_uses_barometer()
-
         if not self.server_url:
             raise ValueError("REMOTE_SERVER_URL must be set in .env or passed as server_url=")
+
+        # Query server to find out whether the chosen model needs barometer data.
+        # This drives InfluxDB fetching — barometer is only fetched when needed.
+        self._uses_barometer = self._fetch_uses_barometer()
+
+        logger.info(f"Client ready — model={self.model_version or 'server-default'} "
+                    f"baro={'yes' if self._uses_barometer else 'no'} "
+                    f"interval={self.interval_seconds}s")
 
     # ------------------------------------------------------------------
     # Public API
@@ -175,21 +189,21 @@ class FallDetectionClient:
 
         # 2. Build JSON payload
         payload: dict = {
-            "acc_x":        acc_data[0].tolist(),
-            "acc_y":        acc_data[1].tolist(),
-            "acc_z":        acc_data[2].tolist(),
+            "acc_x":         acc_data[0].tolist(),
+            "acc_y":         acc_data[1].tolist(),
+            "acc_z":         acc_data[2].tolist(),
             "timestamps_ms": acc_time.tolist(),
-            "acc_unit":     "lsb",
-            "sample_rate":  float(self.hardware_rate_hz),
+            "acc_unit":      "lsb",
+            "sample_rate":   float(self.hardware_rate_hz),
         }
+        if self.model_version:
+            payload["model_version"] = self.model_version
         if self.participant:
             payload["participant"] = self.participant
         if pressure is not None and len(pressure) > 0:
             payload["pressure"]               = pressure.tolist()
             payload["pressure_timestamps_ms"] = pressure_time.tolist()
         if self.window_seconds is not None:
-            # Tell the server which window size to use for this request
-            # (the server's POST /config can be used to change it permanently)
             payload["window_seconds"] = self.window_seconds
 
         # 3. POST to inference server
@@ -226,19 +240,24 @@ class FallDetectionClient:
     # ------------------------------------------------------------------
 
     def _fetch_uses_barometer(self) -> bool:
-        """Ask the server whether the loaded model needs barometer data."""
-        if not self.server_url:
-            return True
+        """
+        Ask the server whether the requested model version needs barometer data.
+        Uses GET /model/info?version=<version> so the server loads the model if needed.
+        Falls back to True (fetch barometer anyway) on any network error.
+        """
         try:
-            headers = {}
-            if self.api_key:
-                headers["X-API-Key"] = self.api_key
+            headers = {"X-API-Key": self.api_key} if self.api_key else {}
+            params  = {"version": self.model_version} if self.model_version else {}
             resp = requests.get(f"{self.server_url}/model/info",
-                                headers=headers, timeout=10)
+                                headers=headers, params=params, timeout=10)
             if resp.ok:
-                return bool(resp.json().get("uses_barometer", True))
+                info = resp.json()
+                uses = bool(info.get("uses_barometer", True))
+                logger.info(f"Model info: version={info.get('version')}  "
+                            f"name={info.get('name')}  uses_barometer={uses}")
+                return uses
         except Exception as exc:
-            logger.warning(f"Could not fetch model info ({exc}) — assuming barometer enabled")
+            logger.warning(f"Could not fetch model info ({exc}) — assuming barometer=True")
         return True
 
 
@@ -267,9 +286,10 @@ def _sigint_handler(sig, frame):
 if __name__ == "__main__":
     signal.signal(signal.SIGINT, _sigint_handler)
 
-    participant = os.getenv("PARTICIPANT_ID", None)
-
-    client = FallDetectionClient(participant=participant)
+    client = FallDetectionClient(
+        model_version=os.getenv("MODEL_VERSION", None),   # from .env or override
+        participant=os.getenv("PARTICIPANT_ID", None),
+    )
 
     logger.info("Press Ctrl+C to stop")
     client.start()   # blocking
