@@ -203,7 +203,6 @@ temp/
 
 
 # Project specific
-
 .claude
 results/
 test.py
@@ -211,3 +210,6 @@ api_key.txt
 _notUsed/
 _ignore/
 Docu/
+_before_refactoring/
+_EcoSystem_Integration/
+emergency/
