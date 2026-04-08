@@ -24,6 +24,12 @@ What i do not know:
  - my colleague are saying that they are using FHIR server but i do not know which one 
 
 
+What's still missing for later steps: 
+ - PostgreSQL history, 
+ - trigger client for InfluxDB polling, 
+ - Redis for real-time caregiver dashboard notification, 
+ - Docker Compose file for the FOCUS stack.
+
 
 what needs to be changed:
  - only select one model (clarify if the input is converted into g or left as LSB)
@@ -32,4 +38,9 @@ what needs to be changed:
  - FHIR format conversion 
  - user_name / device identifier implementation 
  - clarify the input/output of predict POST request 
- 
+ ======== NEW ===========================================
+ - create inference client who sends POST request to API server of the ineference component/system. Inference client should also poll from influxDB 
+ - for now suppose that inference client is the caregiver dashboard, when the carefgiver dashboard receives the resposne, the result of ML inference should be converted to FHIR
+ - inference client should also have a storage stack inside where it stores a history of which patient has fallen when and how many times 
+ - Redis real time event publisher from inference server component to event subscriber inside inference client = caregiver dashbaord 
+ - (skip dokcer compose we give out to the FOCUS stack for now)
