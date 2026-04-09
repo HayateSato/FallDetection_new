@@ -54,9 +54,16 @@ async def _shutdown() -> None:
 # JSON API
 # ---------------------------------------------------------------------------
 
+# Populated by client.py startup — maps patient_id → MAC address
+mac_map: dict = {}
+
+
 @app.get("/api/patients")
 def api_patients():
-    return {"patients": cdb.list_patients()}
+    patients = cdb.list_patients()
+    for p in patients:
+        p["mac_id"] = mac_map.get(p["patient_id"], "")
+    return {"patients": patients}
 
 
 @app.get("/api/falls")
@@ -65,7 +72,10 @@ def api_falls(
     only_falls: bool          = Query(True),
     limit:      int           = Query(200, ge=1, le=2000),
 ):
-    return {"falls": cdb.list_falls(patient_id=patient_id, only_falls=only_falls, limit=limit)}
+    falls = cdb.list_falls(patient_id=patient_id, only_falls=only_falls, limit=limit)
+    for f in falls:
+        f["mac_id"] = mac_map.get(f["patient_id"], "")
+    return {"falls": falls}
 
 
 @app.post("/api/falls/{fall_id}/confirm")

@@ -30,7 +30,8 @@ load_dotenv()
 from caregiver_client import db as cdb           # noqa: E402
 from caregiver_client.influx_poller import InfluxPoller  # noqa: E402
 from caregiver_client.inference_client import InferenceServerClient  # noqa: E402
-from caregiver_client.web import app, broker     # noqa: E402
+from caregiver_client import web as cweb          # noqa: E402
+from caregiver_client.web import app, broker      # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -58,16 +59,19 @@ logger = logging.getLogger("caregiver_client")
 
 PATIENT_IDS = [p.strip() for p in os.getenv("PATIENT_IDS", "").split(",") if p.strip()]
 
-# Optional comma-separated patient_id:device_id pairs
-DEVICE_MAP = {}
-for pair in os.getenv("PATIENT_DEVICE_MAP", "").split(","):
-    if ":" in pair:
-        pid, did = pair.split(":", 1)
-        DEVICE_MAP[pid.strip()] = did.strip()
+# Comma-separated MAC addresses, mapped 1:1 by position to PATIENT_IDS
+# e.g. PATIENT_IDS=p1,p2  MAC_IDS=6c:1d:eb:04:a9:e6,aa:bb:cc:dd:ee:ff
+_mac_list = [m.strip() for m in os.getenv("MAC_IDS", "").split(",") if m.strip()]
+MAC_MAP = {}
+for i, pid in enumerate(PATIENT_IDS):
+    if i < len(_mac_list):
+        MAC_MAP[pid] = _mac_list[i]
+
+# Share the MAC map with the web layer so API responses include MAC addresses
+cweb.mac_map = MAC_MAP
 
 POLL_INTERVAL_SECONDS = int(os.getenv("POLL_INTERVAL_SECONDS", "10"))
 POLL_LOOKBACK_SECONDS = int(os.getenv("POLL_LOOKBACK_SECONDS", "15"))
-INFLUX_PATIENT_TAG    = os.getenv("INFLUX_PATIENT_TAG", "").strip() or None
 
 WEB_HOST = os.getenv("CAREGIVER_HOST", "0.0.0.0")
 WEB_PORT = int(os.getenv("CAREGIVER_PORT", "8002"))
@@ -91,25 +95,23 @@ async def _start_poller() -> None:
     for pid in PATIENT_IDS:
         cdb.ensure_session(pid)
 
-    async def _on_fall(event: dict) -> None:
-        await broker.publish_local(event)
+    # Capture the running event loop NOW (we're inside an async startup hook)
+    import asyncio
+    _loop = asyncio.get_running_loop()
 
     def _on_fall_sync(event: dict) -> None:
-        # Called from the poller thread — schedule onto the event loop
+        # Called from the poller thread — schedule onto the main event loop
         try:
-            import asyncio
-            loop = asyncio.get_event_loop()
-            asyncio.run_coroutine_threadsafe(_on_fall(event), loop)
+            asyncio.run_coroutine_threadsafe(broker.publish_local(event), _loop)
         except Exception as exc:
             logger.warning(f"Could not forward poller fall to broker: {exc}")
 
     _poller = InfluxPoller(
         inference_client = inference,
         patient_ids      = PATIENT_IDS,
-        device_map       = DEVICE_MAP,
+        mac_map          = MAC_MAP,
         poll_interval    = POLL_INTERVAL_SECONDS,
         lookback_seconds = POLL_LOOKBACK_SECONDS,
-        patient_tag      = INFLUX_PATIENT_TAG,
         on_fall          = _on_fall_sync,
     )
     _poller.start()

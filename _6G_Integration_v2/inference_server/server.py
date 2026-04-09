@@ -458,8 +458,13 @@ async def predict(req: PredictRequest):
         threshold  = _model_config.threshold
         latency_ms = int((time.monotonic() - t_start) * 1000)
 
-        logger.info(f"  → fall={is_fall}  confidence={confidence:.3f}  "
-                    f"latency={latency_ms}ms")
+        if is_fall:
+            logger.info("")
+            logger.info(f"  *** FALL DETECTED ***  patient={req.patient_id}  "
+                        f"confidence={confidence:.3f}  latency={latency_ms}ms")
+            logger.info("")
+        else:
+            logger.info(f"  → no fall  confidence={confidence:.3f}  latency={latency_ms}ms")
 
         # 7. Human-readable label
         if is_fall:

@@ -51,8 +51,7 @@ def _build_query(
     bucket:           str,
     lookback_seconds: int,
     uses_barometer:   bool,
-    patient_tag:      Optional[str],
-    patient_id:       Optional[str],
+    mac_address:      Optional[str] = None,
 ) -> str:
     fields_filter = (
         f'r["_field"] == "{ACC_FIELD_X}" or '
@@ -64,10 +63,11 @@ def _build_query(
 
     q = f'''from(bucket: "{bucket}")
       |> range(start: -{lookback_seconds}s)
+      |> filter(fn: (r) => r["_measurement"] == "SMART_DATA")
       |> filter(fn: (r) => {fields_filter})
     '''
-    if patient_tag and patient_id:
-        q += f'  |> filter(fn: (r) => r["{patient_tag}"] == "{patient_id}")\n'
+    if mac_address:
+        q += f'  |> filter(fn: (r) => r["macAddress"] == "{mac_address}")\n'
     return q
 
 
@@ -75,7 +75,7 @@ def fetch_raw_window(
     patient_id:       str,
     lookback_seconds: int,
     uses_barometer:   bool,
-    patient_tag:      Optional[str] = None,
+    mac_address:      Optional[str] = None,
 ) -> Tuple[Optional[np.ndarray], Optional[np.ndarray], Optional[np.ndarray], Optional[np.ndarray]]:
     """
     Returns (acc_data[3,N], acc_time[N], pressure[M], pressure_time[M]).
@@ -83,7 +83,8 @@ def fetch_raw_window(
     Returns (None, None, None, None) on no data.
     """
     client = _get_influxdb_client()
-    query  = _build_query(INFLUXDB_BUCKET, lookback_seconds, uses_barometer, patient_tag, patient_id)
+    query  = _build_query(INFLUXDB_BUCKET, lookback_seconds, uses_barometer, mac_address)
+    logger.debug(f"InfluxDB query:\n{query.strip()}")
     try:
         tables = client.query_api().query(query)
     except Exception as exc:
@@ -91,6 +92,7 @@ def fetch_raw_window(
         return None, None, None, None
 
     flux_records = [rec for table in tables for rec in table.records]
+    logger.debug(f"InfluxDB returned {len(flux_records)} records for {patient_id}")
     if not flux_records:
         return None, None, None, None
 
@@ -125,19 +127,17 @@ class InfluxPoller(threading.Thread):
         self,
         inference_client: InferenceServerClient,
         patient_ids:      List[str],
-        device_map:       Optional[dict] = None,
+        mac_map:       Optional[dict] = None,
         poll_interval:    int = 10,
         lookback_seconds: int = 15,
-        patient_tag:      Optional[str] = None,
         on_fall=None,
     ):
         super().__init__(daemon=True, name="InfluxPoller")
         self.client            = inference_client
         self.patient_ids       = patient_ids
-        self.device_map        = device_map or {}
+        self.mac_map        = mac_map or {}
         self.poll_interval     = poll_interval
         self.lookback_seconds  = lookback_seconds
-        self.patient_tag       = patient_tag or None
         self.on_fall           = on_fall          # optional callback(fall_dict)
         self._stop             = threading.Event()
         self._uses_barometer:  Optional[bool] = None
@@ -156,17 +156,18 @@ class InfluxPoller(threading.Thread):
     # ------------------------------------------------------------------
     def _poll_one(self, patient_id: str) -> None:
         uses_baro = self._ensure_baro_known()
+        mac_address = self.mac_map.get(patient_id)
         acc_data, acc_time, pressure, pressure_time = fetch_raw_window(
             patient_id       = patient_id,
             lookback_seconds = self.lookback_seconds,
             uses_barometer   = uses_baro,
-            patient_tag      = self.patient_tag,
+            mac_address      = mac_address,
         )
         if acc_data is None:
-            logger.debug(f"No InfluxDB data for {patient_id}")
+            logger.info(f"No InfluxDB data for {patient_id} (lookback={self.lookback_seconds}s)")
             return
 
-        device_id = self.device_map.get(patient_id)
+        device_id = self.mac_map.get(patient_id)
         result = self.client.predict(
             patient_id    = patient_id,
             device_id     = device_id,
@@ -219,7 +220,7 @@ class InfluxPoller(threading.Thread):
         logger.info(
             f"InfluxPoller started  patients={self.patient_ids}  "
             f"interval={self.poll_interval}s  lookback={self.lookback_seconds}s  "
-            f"patient_tag={self.patient_tag or '(none — single-patient mode)'}"
+            f"mac_map={self.mac_map or '(none)'}"
         )
         while not self._stop.is_set():
             for pid in self.patient_ids:

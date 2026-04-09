@@ -40,7 +40,7 @@ async function loadPatients() {
     }
     list.innerHTML = data.patients.map((p) => `
       <div class="patient-card ${p.fall_count > 0 ? 'has-falls' : ''}">
-        <div class="patient-name">${escapeHtml(p.patient_id)}</div>
+        <div class="patient-name">${escapeHtml(p.mac_id || p.patient_id)}</div>
         <div class="patient-meta">
           <span class="badge">${p.fall_count} falls</span>
           ${p.session_active ? '<span class="badge badge-active">Active</span>' : ''}
@@ -69,7 +69,7 @@ async function loadHistory() {
 
   tbody.innerHTML = '<tr><td colspan="5" class="loading">Loading...</td></tr>';
 
-  const params = new URLSearchParams({ only_falls: 'false', limit: '500' });
+  const params = new URLSearchParams({ only_falls: 'true', limit: '500' });
   if (filter) params.append('patient_id', filter);
 
   try {
@@ -79,21 +79,18 @@ async function loadHistory() {
     if (conf) rows = rows.filter((r) => r.patient_confirmed === conf);
 
     if (rows.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" class="empty">No fall events.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="4" class="empty">No fall events.</td></tr>';
       return;
     }
 
     tbody.innerHTML = rows.map((r) => `
-      <tr class="${r.fall_detection ? 'row-fall' : ''}">
+      <tr class="row-fall">
         <td>${formatTime(r.detection_time)}</td>
-        <td>${escapeHtml(r.patient_id)}</td>
-        <td>${r.fall_detection ? '<span class="tag tag-fall">FALL</span>' : '<span class="tag">No</span>'}</td>
+        <td>${escapeHtml(r.mac_id || r.patient_id)}</td>
         <td>${formatConfirmed(r.patient_confirmed)}</td>
         <td>
-          ${r.fall_detection ? `
-            <button class="btn-mini" onclick="confirmFall(${r.id}, 'yes')">Yes</button>
-            <button class="btn-mini" onclick="confirmFall(${r.id}, 'no')">No</button>
-          ` : ''}
+          <button class="btn-mini" onclick="confirmFall(${r.id}, 'yes')">Yes</button>
+          <button class="btn-mini" onclick="confirmFall(${r.id}, 'no')">No</button>
         </td>
       </tr>
     `).join('');
