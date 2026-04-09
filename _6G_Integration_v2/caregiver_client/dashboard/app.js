@@ -151,7 +151,8 @@ function handleFallEvent(event) {
   console.log('Fall event:', event);
   const banner = document.getElementById('alert-banner');
   const text   = document.getElementById('alert-text');
-  text.textContent = `FALL DETECTED — ${event.patient_id || 'unknown patient'} (confidence ${event.confidence ?? '?'})`;
+  const label = event.mac_id || event.patient_id || 'unknown';
+  text.textContent = `FALL DETECTED — ${label} (confidence ${event.confidence ?? '?'})`;
   banner.classList.remove('hidden');
   // Refresh visible data
   if (currentTab === 'patients') loadPatients();
@@ -187,4 +188,7 @@ function escapeHtml(s) {
 // ---------------------------------------------------------------------------
 loadPatients();
 connectStream();
-setInterval(() => { if (currentTab === 'patients') loadPatients(); }, 15000);
+setInterval(() => {
+  if (currentTab === 'patients') loadPatients();
+  if (currentTab === 'history')  loadHistory();
+}, 15000);

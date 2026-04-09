@@ -203,9 +203,9 @@ class InfluxPoller(threading.Thread):
             if self.on_fall is not None:
                 try:
                     self.on_fall({
-                        "id":             fall_id,
+                        "fall_id":        fall_id,
                         "patient_id":     patient_id,
-                        "device_id":      device_id,
+                        "mac_id":         mac_address,
                         "fall_detected":  True,
                         "confidence":     inference.get("confidence"),
                         "model_version":  inference.get("model_version"),

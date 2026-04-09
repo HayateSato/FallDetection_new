@@ -103,6 +103,10 @@ async def _start_poller() -> None:
         # Called from the poller thread — schedule onto the main event loop
         try:
             asyncio.run_coroutine_threadsafe(broker.publish_local(event), _loop)
+            # Start server-side auto-confirm timer (10s)
+            fall_id = event.get("fall_id")
+            if fall_id is not None:
+                _loop.call_soon_threadsafe(cweb.start_auto_confirm_timer, fall_id)
         except Exception as exc:
             logger.warning(f"Could not forward poller fall to broker: {exc}")
 

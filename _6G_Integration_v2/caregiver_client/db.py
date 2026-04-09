@@ -39,7 +39,9 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./caregiver.db")
 # the FastAPI request handlers run in different threads.
 _engine_kwargs = {}
 if DATABASE_URL.startswith("sqlite"):
-    _engine_kwargs["connect_args"] = {"check_same_thread": False}
+    # check_same_thread=False: poller thread + FastAPI threads share the DB
+    # timeout=30: wait up to 30s for a lock instead of failing immediately
+    _engine_kwargs["connect_args"] = {"check_same_thread": False, "timeout": 30}
 
 engine = create_engine(DATABASE_URL, future=True, **_engine_kwargs)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
