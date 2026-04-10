@@ -44,3 +44,18 @@ what needs to be changed:
  - inference client should also have a storage stack inside where it stores a history of which patient has fallen when and how many times 
  - Redis real time event publisher from inference server component to event subscriber inside inference client = caregiver dashbaord 
  - (skip dokcer compose we give out to the FOCUS stack for now)
+
+
+
+ ---- WHAT I WILL NEED ----
+ - explanation about how the model is trained
+ - pipeline of the system 
+ - questions - what i will need to know to integreate this & what they might ask
+
+
+ Lets do this this afternoon
+-------------------------------
+- prep for presentation 
+- prep for meeting agenda
+- prep for the MLops part (who will monitor?)
+
