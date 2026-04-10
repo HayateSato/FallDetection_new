@@ -1,10 +1,10 @@
 # Meeting Agenda — Fall Detection Integration
-**With:** FOCUS (technical partner)  
+<!-- **With:** FOCUS (technical partner)  
 **Also involving:** Charite (medical trial operator)  
 **Prepared by:** Hayate Sato (Data Scientist)  
-**Duration suggested:** 60–90 minutes
+**Duration suggested:** 60–90 minutes -->
 
----
+<!-- --- -->
 
 ## Agenda Overview
 

@@ -84,12 +84,12 @@ SmarKo mobile app
     │  Wi-Fi / HTTPS
     ▼
 InfluxDB  [measurement: SMART_DATA, tag: macAddress]
-    │  Query: last 15–30 seconds, filtered by macAddress
+    │  Polled every 10s — fetches last 15–30 seconds of data per patient
     ▼
-Caregiver Client (influx_poller.py)
-    │  Build JSON payload with raw ACC arrays + timestamps
+Caregiver Client  [same machine: influx_poller.py + web.py + dashboard]
+    │  Builds JSON payload with raw ACC arrays + timestamps
     ▼
-POST /predict  (Inference Server, port 8001)
+POST /predict  (Inference Server — can be same or different machine)
     │
     ├── Resample: 25Hz → 50Hz (linear interpolation)
     ├── Convert: LSB integers → g units  (÷ 16384)
@@ -98,11 +98,26 @@ POST /predict  (Inference Server, port 8001)
     └── XGBoost: predict probability → threshold 0.5
     │
     ▼
-Response (FHIR R4 Observation JSON)
+Response (FHIR R4 Observation JSON)  ←── returned in the HTTP response body
+    │                                      (the caller — caregiver client — receives this)
     │
-    ├── If fall: publish to Redis → alert dashboard in real time
-    └── Always: store in local DB (SQLite or Postgres)
+    ├── [optional] Inference server also POSTs Observation to their FHIR server directly
+    │   (second outbound call from server; set FHIR_SERVER_URL in .env to enable)
+    │
+    ├── If fall: inference server publishes to Redis
+    │               │
+    │               └──► Caregiver Client (redis_listener.py) receives event
+    │                           │
+    │                           └──► SSE stream → browser dashboard (real-time alert)
+    │
+    └── Always: caregiver client stores result in local DB (SQLite or Postgres)
 ```
+
+**Note on "FHIR returned in response" vs "pushed to FHIR server":**
+These are two different destinations:
+- *In the response* = caregiver client receives the FHIR JSON and can do whatever it wants with it
+- *Pushed to FHIR server* = inference server separately POSTs to `https://their-fhir.de/fhir/Observation` — this registers the fall in the partner's FHIR database, bypassing the caregiver client entirely
+Both can be active at the same time.
 
 ### Key numbers to remember:
 - Sensor rate: 25 Hz (Bosch accelerometer in SmarKo)
@@ -173,16 +188,20 @@ Prepare to ask these in the meeting. Frame them as "we need these to configure t
 
 ### About their dashboard / monitoring system
 - [ ] How is it built? (React? Vue? Angular? Plain JS?)
-- [ ] How does it currently receive real-time updates? (WebSocket? Polling? SSE?)
-- [ ] Do they want to consume our Redis events directly, or should we expose an SSE endpoint they can subscribe to?
-- [ ] Do they want the fall history API, or will they read from our Postgres/their own DB?
+- [ ] How does it currently get real-time updates? Options:
+  - **Polling**: dashboard calls `GET /api/falls` every few seconds — simplest, works everywhere
+  - **SSE (Server-Sent Events)**: we expose `/api/stream`, they connect once and receive events as they happen — already implemented in our caregiver client
+  - **WebSocket**: bidirectional — more complex, only needed if they also send data to us in real time (unlikely)
+  - We recommend SSE if they have no preference — it is HTTP, works through proxies, and is already built
+- [ ] If SSE: can they add an `EventSource` call to their existing dashboard JavaScript?
+- [ ] Do they want the fall history via our REST API (`/api/falls`), or will they read directly from their own DB?
 
 ### About the deployment environment
-- [ ] Where will this run? (Their server? Cloud VM? On-premise?)
-- [ ] Docker is fine — do they have a specific Docker registry or do we just provide a `docker-compose.yml`?
-- [ ] What OS / architecture? (Linux x86? ARM?)
-- [ ] Network: can our container reach their InfluxDB? Is there a firewall/VPN?
-- [ ] Do they need the inference server to be publicly reachable (via ngrok/Cloudflare), or is everything on the same internal network?
+*(They are hosting on their own machine/cloud — confirmed. Questions focus on network and architecture.)*
+- [ ] Docker is confirmed — do they have a preferred Docker registry, or do we give them source + Dockerfile?
+- [ ] What CPU architecture? (x86_64 / AMD64 is standard; ARM if AWS Graviton or Apple Silicon)
+- [ ] Network: is our Docker container on the same server/network as their InfluxDB? If yes, no firewall issue. If InfluxDB is on a different host, their IT may need to allow outbound connections from our container.
+- [ ] Do we get one machine/service slot (inference server only), or can we run our full two-container stack alongside their services?
 
 ### About the trial
 - [ ] How many patients will be monitored simultaneously?
@@ -269,7 +288,7 @@ REDIS_URL=redis://localhost:6379/0
 
 ### "How do we add new patients?"
 
-> "Add their patient ID and MAC address to the `PATIENT_IDS` and `MAC_IDS` environment variables (comma-separated, same position), then restart the caregiver client. That's it — new polling loops start automatically."
+> "Add their patient ID and MAC address to the `PATIENT_IDS` and `MAC_IDS` environment variables (comma-separated, same position), then restart the caregiver client. No extra containers or folders needed — the same single process polls all patients sequentially in one loop. For example: `PATIENT_IDS=Patient/001,Patient/002,Patient/003` and `MAC_IDS=aa:bb:...,11:22:...,77:88:...`. The system scales within a single process up to the point where the total polling time per cycle approaches the interval — for a medical trial with up to ~20 patients at 10-second polling, this is not a concern."
 
 ### "Why are you polling every 10 seconds? Can we get real-time alerts?"
 
@@ -281,7 +300,36 @@ REDIS_URL=redis://localhost:6379/0
 
 ### "What FHIR version and which resources do you support?"
 
-> "We output FHIR R4 Observation resources. The coding uses SNOMED CT (217082002 = Fall event), LOINC (72514-3 = severity), and SNOMED CT (246075003 = confidence). If they need a different coding system or a different resource type (e.g. QuestionnaireResponse for patient feedback), we can adjust that — it's just a configuration in our converter."
+> "We output FHIR R4 Observation resources. Here is an example of the actual JSON returned for a fall detection result:"
+
+```json
+{
+  "resourceType": "Observation",
+  "id": "<uuid>",
+  "status": "final",
+  "category": [{ "coding": [{ "system": "http://terminology.hl7.org/CodeSystem/observation-category", "code": "activity" }] }],
+  "code": {
+    "coding": [{ "system": "http://snomed.info/sct", "code": "217082002", "display": "Fall (event)" }],
+    "text": "Fall detection"
+  },
+  "subject": { "reference": "Patient/test_patient-001" },
+  "effectiveDateTime": "2026-04-10T10:00:00+00:00",
+  "valueBoolean": true,
+  "component": [
+    {
+      "code": { "coding": [{ "system": "http://loinc.org", "code": "72514-3", "display": "Fall risk assessment score" }] },
+      "valueQuantity": { "value": 0.994, "unit": "probability" }
+    },
+    {
+      "code": { "coding": [{ "system": "http://snomed.info/sct", "code": "246075003", "display": "Causative agent" }] },
+      "valueString": "SmarKo-FallDetection-v0"
+    }
+  ],
+  "device": { "reference": "Device/6c:1d:eb:04:a9:e6" }
+}
+```
+
+> "If they need a different coding system, additional fields, or a different resource type, we can adjust the converter — it is one Python file. One thing worth checking with their FHIR team: we use LOINC 72514-3 ('Fall risk assessment score') for the confidence value, which is technically a repurposed code. A strict FHIR validator may flag it. We can discuss the right code choice with them."
 
 ### "How do we update the ML model if we retrain it?"
 
