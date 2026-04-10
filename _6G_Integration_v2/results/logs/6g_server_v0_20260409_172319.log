@@ -1,0 +1,50 @@
+2026-04-09 17:23:20,265 [INFO] ============================================================
+2026-04-09 17:23:20,265 [INFO] Fall Detection Server  [6G / Charite Integration]
+2026-04-09 17:23:20,266 [INFO]   Model:            V0  (V0)
+2026-04-09 17:23:20,266 [INFO]   Uses barometer:   False
+2026-04-09 17:23:20,266 [INFO]   Features:         16
+2026-04-09 17:23:20,266 [INFO]   Sensor type:      bosch  (25 Hz → 50 Hz)
+2026-04-09 17:23:20,266 [INFO]   Window:           9s × 50Hz = 450 samples
+2026-04-09 17:23:20,266 [INFO]   FHIR server:      (not configured — results not pushed)
+2026-04-09 17:23:20,267 [INFO]   Redis fall pub:   redis://localhost:6379/0
+2026-04-09 17:23:20,267 [INFO] ============================================================
+2026-04-09 17:23:20,307 [INFO] Connected to Redis at redis://localhost:6379/0  channel=fall_events
+2026-04-09 17:23:26,599 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=303
+2026-04-09 17:23:26,600 [INFO]   Resampled 25Hz → 50Hz (606 samples)
+2026-04-09 17:23:26,603 [INFO]   → no fall  confidence=0.003  latency=3ms
+2026-04-09 17:23:38,799 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=242
+2026-04-09 17:23:38,800 [INFO]   Resampled 25Hz → 50Hz (484 samples)
+2026-04-09 17:23:38,803 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 17:23:50,993 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=321
+2026-04-09 17:23:50,994 [INFO]   Resampled 25Hz → 50Hz (642 samples)
+2026-04-09 17:23:50,997 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 17:24:03,493 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=259
+2026-04-09 17:24:03,493 [INFO]   Resampled 25Hz → 50Hz (518 samples)
+2026-04-09 17:24:03,496 [INFO]   → no fall  confidence=0.003  latency=3ms
+2026-04-09 17:24:15,712 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=321
+2026-04-09 17:24:15,713 [INFO]   Resampled 25Hz → 50Hz (642 samples)
+2026-04-09 17:24:15,716 [INFO]   → no fall  confidence=0.095  latency=3ms
+2026-04-09 17:24:27,904 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=269
+2026-04-09 17:24:27,905 [INFO]   Resampled 25Hz → 50Hz (538 samples)
+2026-04-09 17:24:27,908 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 17:24:40,174 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=339
+2026-04-09 17:24:40,175 [INFO]   Resampled 25Hz → 50Hz (678 samples)
+2026-04-09 17:24:40,177 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 17:24:52,358 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=261
+2026-04-09 17:24:52,358 [INFO]   Resampled 25Hz → 50Hz (522 samples)
+2026-04-09 17:24:52,361 [INFO]   → no fall  confidence=0.001  latency=3ms
+2026-04-09 17:25:04,526 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=330
+2026-04-09 17:25:04,528 [INFO]   Resampled 25Hz → 50Hz (660 samples)
+2026-04-09 17:25:04,530 [INFO]   → no fall  confidence=0.003  latency=4ms
+2026-04-09 17:25:16,713 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=282
+2026-04-09 17:25:16,714 [INFO]   Resampled 25Hz → 50Hz (564 samples)
+2026-04-09 17:25:16,717 [INFO] 
+2026-04-09 17:25:16,717 [INFO]   *** FALL DETECTED ***  patient=test_patient-001  confidence=0.865  latency=3ms
+2026-04-09 17:25:16,717 [INFO] 
+2026-04-09 17:25:16,719 [INFO] Redis publish OK  channel=fall_events  patient=test_patient-001
+2026-04-09 17:25:28,911 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=225
+2026-04-09 17:25:28,911 [INFO]   Resampled 25Hz → 50Hz (450 samples)
+2026-04-09 17:25:28,914 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 17:25:41,172 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=282
+2026-04-09 17:25:41,173 [INFO]   Resampled 25Hz → 50Hz (564 samples)
+2026-04-09 17:25:41,177 [INFO]   → no fall  confidence=0.002  latency=4ms

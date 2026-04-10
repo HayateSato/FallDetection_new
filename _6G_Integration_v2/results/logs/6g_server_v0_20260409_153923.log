@@ -1,0 +1,247 @@
+2026-04-09 15:39:23,965 [INFO] ============================================================
+2026-04-09 15:39:23,966 [INFO] Fall Detection Server  [6G / Charite Integration]
+2026-04-09 15:39:23,966 [INFO]   Model:            V0  (V0)
+2026-04-09 15:39:23,966 [INFO]   Uses barometer:   False
+2026-04-09 15:39:23,966 [INFO]   Features:         16
+2026-04-09 15:39:23,966 [INFO]   Sensor type:      bosch  (25 Hz → 50 Hz)
+2026-04-09 15:39:23,966 [INFO]   Window:           9s × 50Hz = 450 samples
+2026-04-09 15:39:23,966 [INFO]   FHIR server:      (not configured — results not pushed)
+2026-04-09 15:39:23,967 [INFO]   Redis fall pub:   (not configured — no Redis publishing)
+2026-04-09 15:39:23,967 [INFO] ============================================================
+2026-04-09 15:39:30,184 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=273
+2026-04-09 15:39:30,185 [INFO]   Resampled 25Hz → 50Hz (546 samples)
+2026-04-09 15:39:30,189 [INFO]   → no fall  confidence=0.002  latency=5ms
+2026-04-09 15:39:42,343 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=335
+2026-04-09 15:39:42,343 [INFO]   Resampled 25Hz → 50Hz (670 samples)
+2026-04-09 15:39:42,345 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 15:39:54,533 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=284
+2026-04-09 15:39:54,533 [INFO]   Resampled 25Hz → 50Hz (568 samples)
+2026-04-09 15:39:54,537 [INFO]   → no fall  confidence=0.002  latency=4ms
+2026-04-09 15:40:06,706 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=355
+2026-04-09 15:40:06,706 [INFO]   Resampled 25Hz → 50Hz (710 samples)
+2026-04-09 15:40:06,709 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:40:18,943 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=298
+2026-04-09 15:40:18,944 [INFO]   Resampled 25Hz → 50Hz (596 samples)
+2026-04-09 15:40:18,947 [INFO]   → no fall  confidence=0.002  latency=4ms
+2026-04-09 15:40:31,148 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=248
+2026-04-09 15:40:31,148 [INFO]   Resampled 25Hz → 50Hz (496 samples)
+2026-04-09 15:40:31,152 [INFO]   → no fall  confidence=0.013  latency=3ms
+2026-04-09 15:40:43,345 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=313
+2026-04-09 15:40:43,346 [INFO]   Resampled 25Hz → 50Hz (626 samples)
+2026-04-09 15:40:43,348 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:40:55,514 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=265
+2026-04-09 15:40:55,514 [INFO]   Resampled 25Hz → 50Hz (530 samples)
+2026-04-09 15:40:55,517 [INFO] 
+2026-04-09 15:40:55,518 [INFO]   *** FALL DETECTED ***  patient=charite-patient-001  confidence=0.980  latency=3ms
+2026-04-09 15:40:55,518 [INFO] 
+2026-04-09 15:41:07,799 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=329
+2026-04-09 15:41:07,800 [INFO]   Resampled 25Hz → 50Hz (658 samples)
+2026-04-09 15:41:07,802 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 15:41:20,304 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=271
+2026-04-09 15:41:20,304 [INFO]   Resampled 25Hz → 50Hz (542 samples)
+2026-04-09 15:41:20,307 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:41:32,681 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=336
+2026-04-09 15:41:32,682 [INFO]   Resampled 25Hz → 50Hz (672 samples)
+2026-04-09 15:41:32,685 [INFO]   → no fall  confidence=0.002  latency=4ms
+2026-04-09 15:41:44,965 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=284
+2026-04-09 15:41:44,966 [INFO]   Resampled 25Hz → 50Hz (568 samples)
+2026-04-09 15:41:44,969 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:41:57,229 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=347
+2026-04-09 15:41:57,230 [INFO]   Resampled 25Hz → 50Hz (694 samples)
+2026-04-09 15:41:57,232 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:42:09,437 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=288
+2026-04-09 15:42:09,438 [INFO]   Resampled 25Hz → 50Hz (576 samples)
+2026-04-09 15:42:09,440 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 15:42:21,663 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=230
+2026-04-09 15:42:21,664 [INFO]   Resampled 25Hz → 50Hz (460 samples)
+2026-04-09 15:42:21,666 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 15:42:33,897 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=312
+2026-04-09 15:42:33,898 [INFO]   Resampled 25Hz → 50Hz (624 samples)
+2026-04-09 15:42:33,900 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 15:42:46,117 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=253
+2026-04-09 15:42:46,119 [INFO]   Resampled 25Hz → 50Hz (506 samples)
+2026-04-09 15:42:46,122 [INFO]   → no fall  confidence=0.002  latency=4ms
+2026-04-09 15:42:58,383 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=318
+2026-04-09 15:42:58,384 [INFO]   Resampled 25Hz → 50Hz (636 samples)
+2026-04-09 15:42:58,387 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:43:10,590 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=258
+2026-04-09 15:43:10,591 [INFO]   Resampled 25Hz → 50Hz (516 samples)
+2026-04-09 15:43:10,593 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:43:22,949 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=324
+2026-04-09 15:43:22,949 [INFO]   Resampled 25Hz → 50Hz (648 samples)
+2026-04-09 15:43:22,951 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 15:43:35,147 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=275
+2026-04-09 15:43:35,148 [INFO]   Resampled 25Hz → 50Hz (550 samples)
+2026-04-09 15:43:35,150 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:43:47,348 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=349
+2026-04-09 15:43:47,349 [INFO]   Resampled 25Hz → 50Hz (698 samples)
+2026-04-09 15:43:47,351 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:43:59,564 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=292
+2026-04-09 15:43:59,565 [INFO]   Resampled 25Hz → 50Hz (584 samples)
+2026-04-09 15:43:59,568 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:44:11,753 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=236
+2026-04-09 15:44:11,754 [INFO]   Resampled 25Hz → 50Hz (472 samples)
+2026-04-09 15:44:11,756 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:44:24,011 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=305
+2026-04-09 15:44:24,012 [INFO]   Resampled 25Hz → 50Hz (610 samples)
+2026-04-09 15:44:24,015 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:44:36,206 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=254
+2026-04-09 15:44:36,207 [INFO]   Resampled 25Hz → 50Hz (508 samples)
+2026-04-09 15:44:36,210 [INFO]   → no fall  confidence=0.002  latency=4ms
+2026-04-09 15:44:48,407 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=323
+2026-04-09 15:44:48,408 [INFO]   Resampled 25Hz → 50Hz (646 samples)
+2026-04-09 15:44:48,410 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 15:45:00,579 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=268
+2026-04-09 15:45:00,579 [INFO]   Resampled 25Hz → 50Hz (536 samples)
+2026-04-09 15:45:00,582 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:45:12,919 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=336
+2026-04-09 15:45:12,920 [INFO]   Resampled 25Hz → 50Hz (672 samples)
+2026-04-09 15:45:12,922 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 15:45:25,094 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=278
+2026-04-09 15:45:25,095 [INFO]   Resampled 25Hz → 50Hz (556 samples)
+2026-04-09 15:45:25,097 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:45:37,297 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=353
+2026-04-09 15:45:37,298 [INFO]   Resampled 25Hz → 50Hz (706 samples)
+2026-04-09 15:45:37,300 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:45:49,654 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=297
+2026-04-09 15:45:49,655 [INFO]   Resampled 25Hz → 50Hz (594 samples)
+2026-04-09 15:45:49,658 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:46:01,850 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=242
+2026-04-09 15:46:01,850 [INFO]   Resampled 25Hz → 50Hz (484 samples)
+2026-04-09 15:46:01,853 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:46:14,081 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=310
+2026-04-09 15:46:14,081 [INFO]   Resampled 25Hz → 50Hz (620 samples)
+2026-04-09 15:46:14,084 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:46:26,381 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=252
+2026-04-09 15:46:26,382 [INFO]   Resampled 25Hz → 50Hz (504 samples)
+2026-04-09 15:46:26,385 [INFO]   → no fall  confidence=0.002  latency=4ms
+2026-04-09 15:46:38,583 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=335
+2026-04-09 15:46:38,584 [INFO]   Resampled 25Hz → 50Hz (670 samples)
+2026-04-09 15:46:38,588 [INFO]   → no fall  confidence=0.002  latency=4ms
+2026-04-09 15:46:50,758 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=265
+2026-04-09 15:46:50,758 [INFO]   Resampled 25Hz → 50Hz (530 samples)
+2026-04-09 15:46:50,761 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:47:03,032 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=338
+2026-04-09 15:47:03,033 [INFO]   Resampled 25Hz → 50Hz (676 samples)
+2026-04-09 15:47:03,035 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 15:47:15,201 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=280
+2026-04-09 15:47:15,202 [INFO]   Resampled 25Hz → 50Hz (560 samples)
+2026-04-09 15:47:15,204 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 15:47:27,484 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=352
+2026-04-09 15:47:27,485 [INFO]   Resampled 25Hz → 50Hz (704 samples)
+2026-04-09 15:47:27,488 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:47:39,665 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=298
+2026-04-09 15:47:39,665 [INFO]   Resampled 25Hz → 50Hz (596 samples)
+2026-04-09 15:47:39,668 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:47:51,855 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=247
+2026-04-09 15:47:51,855 [INFO]   Resampled 25Hz → 50Hz (494 samples)
+2026-04-09 15:47:51,858 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:48:04,241 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=307
+2026-04-09 15:48:04,242 [INFO]   Resampled 25Hz → 50Hz (614 samples)
+2026-04-09 15:48:04,244 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 15:48:16,405 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=253
+2026-04-09 15:48:16,407 [INFO]   Resampled 25Hz → 50Hz (506 samples)
+2026-04-09 15:48:16,409 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:48:28,619 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=322
+2026-04-09 15:48:28,620 [INFO]   Resampled 25Hz → 50Hz (644 samples)
+2026-04-09 15:48:28,622 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 15:48:40,795 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=278
+2026-04-09 15:48:40,795 [INFO]   Resampled 25Hz → 50Hz (556 samples)
+2026-04-09 15:48:40,798 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:48:53,013 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=341
+2026-04-09 15:48:53,014 [INFO]   Resampled 25Hz → 50Hz (682 samples)
+2026-04-09 15:48:53,018 [INFO]   → no fall  confidence=0.002  latency=4ms
+2026-04-09 15:49:05,174 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=284
+2026-04-09 15:49:05,175 [INFO]   Resampled 25Hz → 50Hz (568 samples)
+2026-04-09 15:49:05,177 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:49:17,320 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=236
+2026-04-09 15:49:17,320 [INFO]   Resampled 25Hz → 50Hz (472 samples)
+2026-04-09 15:49:17,323 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:49:29,501 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=299
+2026-04-09 15:49:29,502 [INFO]   Resampled 25Hz → 50Hz (598 samples)
+2026-04-09 15:49:29,505 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:49:41,812 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=256
+2026-04-09 15:49:41,813 [INFO]   Resampled 25Hz → 50Hz (512 samples)
+2026-04-09 15:49:41,815 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 15:49:53,990 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=327
+2026-04-09 15:49:53,991 [INFO]   Resampled 25Hz → 50Hz (654 samples)
+2026-04-09 15:49:53,993 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 15:50:06,203 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=270
+2026-04-09 15:50:06,204 [INFO]   Resampled 25Hz → 50Hz (540 samples)
+2026-04-09 15:50:06,207 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:50:18,413 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=339
+2026-04-09 15:50:18,413 [INFO]   Resampled 25Hz → 50Hz (678 samples)
+2026-04-09 15:50:18,416 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 15:50:30,612 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=292
+2026-04-09 15:50:30,612 [INFO]   Resampled 25Hz → 50Hz (584 samples)
+2026-04-09 15:50:30,614 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 15:50:42,787 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=237
+2026-04-09 15:50:42,788 [INFO]   Resampled 25Hz → 50Hz (474 samples)
+2026-04-09 15:50:42,790 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:50:54,994 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=303
+2026-04-09 15:50:54,995 [INFO]   Resampled 25Hz → 50Hz (606 samples)
+2026-04-09 15:50:54,997 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:51:07,170 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=296
+2026-04-09 15:51:07,170 [INFO]   Resampled 25Hz → 50Hz (592 samples)
+2026-04-09 15:51:07,173 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 15:51:19,499 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=241
+2026-04-09 15:51:19,500 [INFO]   Resampled 25Hz → 50Hz (482 samples)
+2026-04-09 15:51:19,502 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:51:31,684 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=298
+2026-04-09 15:51:31,685 [INFO]   Resampled 25Hz → 50Hz (596 samples)
+2026-04-09 15:51:31,688 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:51:43,861 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=234
+2026-04-09 15:51:43,862 [INFO]   Resampled 25Hz → 50Hz (468 samples)
+2026-04-09 15:51:43,864 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:51:56,069 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=302
+2026-04-09 15:51:56,070 [INFO]   Resampled 25Hz → 50Hz (604 samples)
+2026-04-09 15:51:56,072 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 15:52:08,243 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=251
+2026-04-09 15:52:08,244 [INFO]   Resampled 25Hz → 50Hz (502 samples)
+2026-04-09 15:52:08,246 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 15:52:20,407 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=316
+2026-04-09 15:52:20,407 [INFO]   Resampled 25Hz → 50Hz (632 samples)
+2026-04-09 15:52:20,410 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:52:32,686 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=270
+2026-04-09 15:52:32,687 [INFO]   Resampled 25Hz → 50Hz (540 samples)
+2026-04-09 15:52:32,693 [INFO]   → no fall  confidence=0.002  latency=6ms
+2026-04-09 15:52:44,886 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=207
+2026-04-09 15:52:44,886 [INFO]   Resampled 25Hz → 50Hz (414 samples)
+2026-04-09 15:52:57,079 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=282
+2026-04-09 15:52:57,080 [INFO]   Resampled 25Hz → 50Hz (564 samples)
+2026-04-09 15:52:57,082 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 15:53:09,261 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=225
+2026-04-09 15:53:09,261 [INFO]   Resampled 25Hz → 50Hz (450 samples)
+2026-04-09 15:53:09,264 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:53:21,438 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=297
+2026-04-09 15:53:21,439 [INFO]   Resampled 25Hz → 50Hz (594 samples)
+2026-04-09 15:53:21,441 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:53:33,624 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=246
+2026-04-09 15:53:33,625 [INFO]   Resampled 25Hz → 50Hz (492 samples)
+2026-04-09 15:53:33,627 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 15:53:45,804 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=317
+2026-04-09 15:53:45,805 [INFO]   Resampled 25Hz → 50Hz (634 samples)
+2026-04-09 15:53:45,811 [INFO]   → no fall  confidence=0.002  latency=7ms
+2026-04-09 15:53:57,998 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=254
+2026-04-09 15:53:57,999 [INFO]   Resampled 25Hz → 50Hz (508 samples)
+2026-04-09 15:53:58,002 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:54:10,253 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=202
+2026-04-09 15:54:10,253 [INFO]   Resampled 25Hz → 50Hz (404 samples)
+2026-04-09 15:54:22,422 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=272
+2026-04-09 15:54:22,423 [INFO]   Resampled 25Hz → 50Hz (544 samples)
+2026-04-09 15:54:22,425 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:54:34,593 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=246
+2026-04-09 15:54:34,594 [INFO]   Resampled 25Hz → 50Hz (492 samples)
+2026-04-09 15:54:34,596 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 15:54:46,779 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=323
+2026-04-09 15:54:46,780 [INFO]   Resampled 25Hz → 50Hz (646 samples)
+2026-04-09 15:54:46,782 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:54:58,947 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=272
+2026-04-09 15:54:58,948 [INFO]   Resampled 25Hz → 50Hz (544 samples)
+2026-04-09 15:54:58,950 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:55:11,117 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=342
+2026-04-09 15:55:11,118 [INFO]   Resampled 25Hz → 50Hz (684 samples)
+2026-04-09 15:55:11,120 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:55:23,281 [INFO] Predict: patient=charite-patient-001  device=smarko-wearable-01  n_samples=285
+2026-04-09 15:55:23,282 [INFO]   Resampled 25Hz → 50Hz (570 samples)
+2026-04-09 15:55:23,285 [INFO]   → no fall  confidence=0.002  latency=3ms

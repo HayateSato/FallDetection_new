@@ -1,0 +1,498 @@
+2026-02-19 16:58:53,358 - trainer_integerVer - INFO - Extracting INTEGER features for v0...
+2026-02-19 16:58:53,396 - trainer_integerVer - INFO - Extracted 16 integer features from 918 samples
+2026-02-19 16:58:53,397 - trainer_integerVer - INFO - Feature names: ['acc_x_min', 'acc_x_max', 'acc_x_mean', 'acc_x_var', 'acc_y_min', 'acc_y_max', 'acc_y_mean', 'acc_y_var', 'acc_z_min', 'acc_z_max', 'acc_z_mean', 'acc_z_var', 'acc_mag_min', 'acc_mag_max', 'acc_mag_mean', 'acc_mag_var']
+2026-02-19 16:58:53,397 - trainer_integerVer - INFO - Feature dtype: int64
+2026-02-19 16:58:53,397 - trainer_integerVer - INFO - Feature value ranges:
+2026-02-19 16:58:53,397 - trainer_integerVer - INFO -   acc_x_min: [-32768, -438] mean=-14396
+2026-02-19 16:58:53,406 - trainer_integerVer - INFO -   acc_x_max: [-3746, 24184] mean=5803
+2026-02-19 16:58:53,407 - trainer_integerVer - INFO -   acc_x_mean: [-6148, 2214] mean=-2059
+2026-02-19 16:58:53,407 - trainer_integerVer - INFO -   acc_x_var: [566, 23350870] mean=5971851
+2026-02-19 16:58:53,407 - trainer_integerVer - INFO -   acc_y_min: [-32768, -1512] mean=-12455
+2026-02-19 16:58:53,407 - trainer_integerVer - INFO -   acc_y_max: [-2971, 32765] mean=7892
+2026-02-19 16:58:53,407 - trainer_integerVer - INFO -   acc_y_mean: [-3868, 3270] mean=-1591
+2026-02-19 16:58:53,407 - trainer_integerVer - INFO -   acc_y_var: [2186, 16859206] mean=3833469
+2026-02-19 16:58:53,407 - trainer_integerVer - INFO -   acc_z_min: [-32768, 2323] mean=-9330
+2026-02-19 16:58:53,407 - trainer_integerVer - INFO -   acc_z_max: [-727, 32749] mean=10068
+2026-02-19 16:58:53,407 - trainer_integerVer - INFO -   acc_z_mean: [-3810, 3580] mean=104
+2026-02-19 16:58:53,407 - trainer_integerVer - INFO -   acc_z_var: [1052, 19272466] mean=4004688
+2026-02-19 16:58:53,408 - trainer_integerVer - INFO -   acc_mag_min: [188, 4003] mean=1611
+2026-02-19 16:58:53,408 - trainer_integerVer - INFO -   acc_mag_max: [4185, 56726] mean=21956
+2026-02-19 16:58:53,408 - trainer_integerVer - INFO -   acc_mag_mean: [4013, 7371] mean=4563
+2026-02-19 16:58:53,408 - trainer_integerVer - INFO -   acc_mag_var: [410, 24976485] mean=5032973
+2026-02-19 16:58:53,408 - trainer_integerVer - INFO - Starting training for v0 at 20260219_165853
+2026-02-19 16:58:53,408 - trainer_integerVer - INFO - Dataset: 918 samples (420 FALL, 498 ADL)
+2026-02-19 16:58:53,411 - trainer_integerVer - INFO - Train set:      642 samples
+2026-02-19 16:58:53,411 - trainer_integerVer - INFO - Validation set: 92 samples
+2026-02-19 16:58:53,411 - trainer_integerVer - INFO - Test set:       184 samples
+2026-02-19 16:58:53,411 - trainer_integerVer - INFO - XGBoost parameters: {
+  "n_estimators": 100,
+  "max_depth": 6,
+  "min_child_weight": 1,
+  "learning_rate": 0.1,
+  "subsample": 0.8,
+  "colsample_bytree": 0.8,
+  "reg_alpha": 0.0,
+  "reg_lambda": 1.0,
+  "objective": "binary:logistic",
+  "eval_metric": "logloss",
+  "random_state": 42,
+  "n_jobs": -1,
+  "use_label_encoder": false
+}
+2026-02-19 16:58:53,573 - trainer_integerVer - INFO - Training metrics:   {'accuracy': 1.0, 'precision': 1.0, 'recall': 1.0, 'f1': 1.0}
+2026-02-19 16:58:53,573 - trainer_integerVer - INFO - Validation metrics: {'accuracy': 0.967391304347826, 'precision': 0.9534883720930233, 'recall': 0.9761904761904762, 'f1': 0.9647058823529412}
+2026-02-19 16:58:53,573 - trainer_integerVer - INFO - Validation AUC: 0.9981
+2026-02-19 16:58:53,573 - trainer_integerVer - INFO - Test metrics: {'accuracy': 0.9836956521739131, 'precision': 0.9879518072289156, 'recall': 0.9761904761904762, 'f1': 0.9820359281437125}
+2026-02-19 16:58:53,573 - trainer_integerVer - INFO - Test AUC: 0.9950
+2026-02-19 16:58:53,754 - trainer_integerVer - INFO - CV F1 scores: [1.0, 0.9882352941176471, 1.0, 0.9940119760479041, 0.9940119760479041]
+2026-02-19 16:58:53,754 - trainer_integerVer - INFO - CV F1 mean: 0.9953 (+/- 0.0044)
+2026-02-19 16:58:53,756 - trainer_integerVer - INFO - Confusion matrix:
+[[99  1]
+ [ 2 82]]
+2026-02-19 16:58:53,756 - trainer_integerVer - INFO - Feature importance: {
+  "acc_mag_max": 0.2764665186405182,
+  "acc_x_max": 0.2502375543117523,
+  "acc_y_min": 0.08942834287881851,
+  "acc_y_max": 0.07903368026018143,
+  "acc_mag_var": 0.053867049515247345,
+  "acc_x_mean": 0.05076970160007477,
+  "acc_z_max": 0.048758555203676224,
+  "acc_mag_mean": 0.04252729192376137,
+  "acc_y_mean": 0.018836595118045807,
+  "acc_x_min": 0.017666788771748543,
+  "acc_z_min": 0.016350839287042618,
+  "acc_mag_min": 0.016300614923238754,
+  "acc_z_mean": 0.013418986462056637,
+  "acc_y_var": 0.011014964431524277,
+  "acc_x_var": 0.00918391440063715,
+  "acc_z_var": 0.006138605996966362
+}
+2026-02-19 16:58:53,761 - trainer_integerVer - INFO - Classification report:
+              precision    recall  f1-score   support
+
+           0       0.98      0.99      0.99       100
+           1       0.99      0.98      0.98        84
+
+    accuracy                           0.98       184
+   macro avg       0.98      0.98      0.98       184
+weighted avg       0.98      0.98      0.98       184
+
+2026-02-19 16:58:53,763 - trainer_integerVer - INFO - Model saved to C:\Users\hayat\Documents\6G\FD_Model_Training\FD_ACCBARO\model_training_intgerVer\model_v0_int\model_v0_int_xgboost.pkl
+2026-02-19 16:58:53,764 - trainer_integerVer - INFO - Results saved to C:\Users\hayat\Documents\6G\FD_Model_Training\FD_ACCBARO\model_training_intgerVer\model_v0_int\training_results.json
+2026-02-19 16:58:53,765 - trainer_integerVer - INFO - Extracting INTEGER features for v1...
+2026-02-19 16:58:55,034 - trainer_integerVer - INFO - Extracted 22 integer features from 918 samples
+2026-02-19 16:58:55,035 - trainer_integerVer - INFO - Feature names: ['acc_x_min', 'acc_x_max', 'acc_x_mean', 'acc_x_var', 'acc_y_min', 'acc_y_max', 'acc_y_mean', 'acc_y_var', 'acc_z_min', 'acc_z_max', 'acc_z_mean', 'acc_z_var', 'acc_mag_min', 'acc_mag_max', 'acc_mag_mean', 'acc_mag_var', 'delta_h_min', 'delta_h_max', 'delta_h_mean', 'delta_h_var', 'delta_h_range', 'delta_h_slope']
+2026-02-19 16:58:55,035 - trainer_integerVer - INFO - Feature dtype: int64
+2026-02-19 16:58:55,035 - trainer_integerVer - INFO - Feature value ranges:
+2026-02-19 16:58:55,036 - trainer_integerVer - INFO -   acc_x_min: [-32768, -438] mean=-14396
+2026-02-19 16:58:55,036 - trainer_integerVer - INFO -   acc_x_max: [-3746, 24184] mean=5803
+2026-02-19 16:58:55,036 - trainer_integerVer - INFO -   acc_x_mean: [-6148, 2214] mean=-2059
+2026-02-19 16:58:55,037 - trainer_integerVer - INFO -   acc_x_var: [566, 23350870] mean=5971851
+2026-02-19 16:58:55,037 - trainer_integerVer - INFO -   acc_y_min: [-32768, -1512] mean=-12455
+2026-02-19 16:58:55,037 - trainer_integerVer - INFO -   acc_y_max: [-2971, 32765] mean=7892
+2026-02-19 16:58:55,037 - trainer_integerVer - INFO -   acc_y_mean: [-3868, 3270] mean=-1591
+2026-02-19 16:58:55,038 - trainer_integerVer - INFO -   acc_y_var: [2186, 16859206] mean=3833469
+2026-02-19 16:58:55,038 - trainer_integerVer - INFO -   acc_z_min: [-32768, 2323] mean=-9330
+2026-02-19 16:58:55,038 - trainer_integerVer - INFO -   acc_z_max: [-727, 32749] mean=10068
+2026-02-19 16:58:55,038 - trainer_integerVer - INFO -   acc_z_mean: [-3810, 3580] mean=104
+2026-02-19 16:58:55,038 - trainer_integerVer - INFO -   acc_z_var: [1052, 19272466] mean=4004688
+2026-02-19 16:58:55,038 - trainer_integerVer - INFO -   acc_mag_min: [188, 4003] mean=1611
+2026-02-19 16:58:55,038 - trainer_integerVer - INFO -   acc_mag_max: [4185, 56726] mean=21956
+2026-02-19 16:58:55,038 - trainer_integerVer - INFO -   acc_mag_mean: [4013, 7371] mean=4563
+2026-02-19 16:58:55,038 - trainer_integerVer - INFO -   acc_mag_var: [410, 24976485] mean=5032973
+2026-02-19 16:58:55,038 - trainer_integerVer - INFO -   delta_h_min: [-1827, 0] mean=-404
+2026-02-19 16:58:55,039 - trainer_integerVer - INFO -   delta_h_max: [0, 1847] mean=527
+2026-02-19 16:58:55,039 - trainer_integerVer - INFO -   delta_h_mean: [-763, 1058] mean=146
+2026-02-19 16:58:55,039 - trainer_integerVer - INFO -   delta_h_var: [571, 426948] mean=95209
+2026-02-19 16:58:55,039 - trainer_integerVer - INFO -   delta_h_range: [111, 2264] mean=931
+2026-02-19 16:58:55,039 - trainer_integerVer - INFO -   delta_h_slope: [-740, 841] mean=223
+2026-02-19 16:58:55,039 - trainer_integerVer - INFO - Starting training for v1 at 20260219_165855
+2026-02-19 16:58:55,039 - trainer_integerVer - INFO - Dataset: 918 samples (420 FALL, 498 ADL)
+2026-02-19 16:58:55,040 - trainer_integerVer - INFO - Train set:      642 samples
+2026-02-19 16:58:55,040 - trainer_integerVer - INFO - Validation set: 92 samples
+2026-02-19 16:58:55,040 - trainer_integerVer - INFO - Test set:       184 samples
+2026-02-19 16:58:55,040 - trainer_integerVer - INFO - XGBoost parameters: {
+  "n_estimators": 100,
+  "max_depth": 6,
+  "min_child_weight": 1,
+  "learning_rate": 0.1,
+  "subsample": 0.8,
+  "colsample_bytree": 0.8,
+  "reg_alpha": 0.0,
+  "reg_lambda": 1.0,
+  "objective": "binary:logistic",
+  "eval_metric": "logloss",
+  "random_state": 42,
+  "n_jobs": -1,
+  "use_label_encoder": false
+}
+2026-02-19 16:58:55,106 - trainer_integerVer - INFO - Training metrics:   {'accuracy': 1.0, 'precision': 1.0, 'recall': 1.0, 'f1': 1.0}
+2026-02-19 16:58:55,106 - trainer_integerVer - INFO - Validation metrics: {'accuracy': 1.0, 'precision': 1.0, 'recall': 1.0, 'f1': 1.0}
+2026-02-19 16:58:55,106 - trainer_integerVer - INFO - Validation AUC: 1.0000
+2026-02-19 16:58:55,106 - trainer_integerVer - INFO - Test metrics: {'accuracy': 0.9836956521739131, 'precision': 1.0, 'recall': 0.9642857142857143, 'f1': 0.9818181818181818}
+2026-02-19 16:58:55,106 - trainer_integerVer - INFO - Test AUC: 0.9960
+2026-02-19 16:58:55,270 - trainer_integerVer - INFO - CV F1 scores: [1.0, 0.9940828402366864, 0.9940119760479041, 0.9880952380952381, 0.9882352941176471]
+2026-02-19 16:58:55,271 - trainer_integerVer - INFO - CV F1 mean: 0.9929 (+/- 0.0044)
+2026-02-19 16:58:55,272 - trainer_integerVer - INFO - Confusion matrix:
+[[100   0]
+ [  3  81]]
+2026-02-19 16:58:55,272 - trainer_integerVer - INFO - Feature importance: {
+  "acc_mag_max": 0.3797141909599304,
+  "acc_x_max": 0.21817544102668762,
+  "acc_z_max": 0.058824267238378525,
+  "delta_h_max": 0.04166681692004204,
+  "acc_x_mean": 0.03739531710743904,
+  "acc_mag_mean": 0.037213969975709915,
+  "delta_h_mean": 0.028256818652153015,
+  "acc_y_min": 0.026568954810500145,
+  "delta_h_slope": 0.02329476736485958,
+  "acc_x_min": 0.02158196084201336,
+  "acc_z_min": 0.020056162029504776,
+  "acc_mag_var": 0.018584391102194786,
+  "delta_h_range": 0.013701149262487888,
+  "acc_y_max": 0.012550786137580872,
+  "acc_y_var": 0.010973361320793629,
+  "acc_x_var": 0.010463520884513855,
+  "acc_mag_min": 0.009897484444081783,
+  "acc_y_mean": 0.009580854326486588,
+  "delta_h_min": 0.00659990543499589,
+  "acc_z_mean": 0.005998009350150824,
+  "delta_h_var": 0.0058226147666573524,
+  "acc_z_var": 0.0030793442856520414
+}
+2026-02-19 16:58:55,276 - trainer_integerVer - INFO - Classification report:
+              precision    recall  f1-score   support
+
+           0       0.97      1.00      0.99       100
+           1       1.00      0.96      0.98        84
+
+    accuracy                           0.98       184
+   macro avg       0.99      0.98      0.98       184
+weighted avg       0.98      0.98      0.98       184
+
+2026-02-19 16:58:55,278 - trainer_integerVer - INFO - Model saved to C:\Users\hayat\Documents\6G\FD_Model_Training\FD_ACCBARO\model_training_intgerVer\model_v1_int\model_v1_int_xgboost.pkl
+2026-02-19 16:58:55,289 - trainer_integerVer - INFO - Results saved to C:\Users\hayat\Documents\6G\FD_Model_Training\FD_ACCBARO\model_training_intgerVer\model_v1_int\training_results.json
+2026-02-19 16:58:55,290 - trainer_integerVer - INFO - Extracting INTEGER features for v2...
+2026-02-19 16:58:55,460 - trainer_integerVer - INFO - Extracted 10 integer features from 918 samples
+2026-02-19 16:58:55,460 - trainer_integerVer - INFO - Feature names: ['acc_mag_max', 'acc_mag_mean', 'acc_mag_var', 'impact_count', 'max_impact_g', 'has_high_impact', 'pressure_shift', 'middle_slope', 'post_fall_slope', 'filtered_pressure_var']
+2026-02-19 16:58:55,460 - trainer_integerVer - INFO - Feature dtype: int64
+2026-02-19 16:58:55,460 - trainer_integerVer - INFO - Feature value ranges:
+2026-02-19 16:58:55,460 - trainer_integerVer - INFO -   acc_mag_max: [4185, 56726] mean=21956
+2026-02-19 16:58:55,461 - trainer_integerVer - INFO -   acc_mag_mean: [4013, 7371] mean=4563
+2026-02-19 16:58:55,461 - trainer_integerVer - INFO -   acc_mag_var: [410, 24976485] mean=5032973
+2026-02-19 16:58:55,461 - trainer_integerVer - INFO -   impact_count: [0, 2] mean=1
+2026-02-19 16:58:55,461 - trainer_integerVer - INFO -   max_impact_g: [0, 56726] mean=17475
+2026-02-19 16:58:55,461 - trainer_integerVer - INFO -   has_high_impact: [0, 1] mean=1
+2026-02-19 16:58:55,461 - trainer_integerVer - INFO -   pressure_shift: [-13, 13] mean=3
+2026-02-19 16:58:55,462 - trainer_integerVer - INFO -   middle_slope: [-345, 548] mean=6
+2026-02-19 16:58:55,462 - trainer_integerVer - INFO -   post_fall_slope: [-178, 248] mean=6
+2026-02-19 16:58:55,462 - trainer_integerVer - INFO -   filtered_pressure_var: [0, 47] mean=11
+2026-02-19 16:58:55,463 - trainer_integerVer - INFO - Starting training for v2 at 20260219_165855
+2026-02-19 16:58:55,463 - trainer_integerVer - INFO - Dataset: 918 samples (420 FALL, 498 ADL)
+2026-02-19 16:58:55,464 - trainer_integerVer - INFO - Train set:      642 samples
+2026-02-19 16:58:55,464 - trainer_integerVer - INFO - Validation set: 92 samples
+2026-02-19 16:58:55,464 - trainer_integerVer - INFO - Test set:       184 samples
+2026-02-19 16:58:55,464 - trainer_integerVer - INFO - XGBoost parameters: {
+  "n_estimators": 100,
+  "max_depth": 6,
+  "min_child_weight": 1,
+  "learning_rate": 0.1,
+  "subsample": 0.8,
+  "colsample_bytree": 0.8,
+  "reg_alpha": 0.0,
+  "reg_lambda": 1.0,
+  "objective": "binary:logistic",
+  "eval_metric": "logloss",
+  "random_state": 42,
+  "n_jobs": -1,
+  "use_label_encoder": false
+}
+2026-02-19 16:58:55,519 - trainer_integerVer - INFO - Training metrics:   {'accuracy': 1.0, 'precision': 1.0, 'recall': 1.0, 'f1': 1.0}
+2026-02-19 16:58:55,519 - trainer_integerVer - INFO - Validation metrics: {'accuracy': 0.967391304347826, 'precision': 0.9534883720930233, 'recall': 0.9761904761904762, 'f1': 0.9647058823529412}
+2026-02-19 16:58:55,520 - trainer_integerVer - INFO - Validation AUC: 0.9986
+2026-02-19 16:58:55,520 - trainer_integerVer - INFO - Test metrics: {'accuracy': 0.9619565217391305, 'precision': 0.963855421686747, 'recall': 0.9523809523809523, 'f1': 0.9580838323353293}
+2026-02-19 16:58:55,520 - trainer_integerVer - INFO - Test AUC: 0.9900
+2026-02-19 16:58:55,661 - trainer_integerVer - INFO - CV F1 scores: [0.9820359281437125, 0.9651162790697675, 0.9879518072289156, 0.963855421686747, 0.9882352941176471]
+2026-02-19 16:58:55,661 - trainer_integerVer - INFO - CV F1 mean: 0.9774 (+/- 0.0108)
+2026-02-19 16:58:55,662 - trainer_integerVer - INFO - Confusion matrix:
+[[97  3]
+ [ 4 80]]
+2026-02-19 16:58:55,662 - trainer_integerVer - INFO - Feature importance: {
+  "impact_count": 0.8189864754676819,
+  "max_impact_g": 0.1061960905790329,
+  "acc_mag_max": 0.039166029542684555,
+  "pressure_shift": 0.01213581021875143,
+  "acc_mag_mean": 0.007221480365842581,
+  "filtered_pressure_var": 0.006387190893292427,
+  "acc_mag_var": 0.006209664978086948,
+  "post_fall_slope": 0.0021919449791312218,
+  "middle_slope": 0.0015053740935400128,
+  "has_high_impact": 0.0
+}
+2026-02-19 16:58:55,667 - trainer_integerVer - INFO - Classification report:
+              precision    recall  f1-score   support
+
+           0       0.96      0.97      0.97       100
+           1       0.96      0.95      0.96        84
+
+    accuracy                           0.96       184
+   macro avg       0.96      0.96      0.96       184
+weighted avg       0.96      0.96      0.96       184
+
+2026-02-19 16:58:55,669 - trainer_integerVer - INFO - Model saved to C:\Users\hayat\Documents\6G\FD_Model_Training\FD_ACCBARO\model_training_intgerVer\model_v2_int\model_v2_int_xgboost.pkl
+2026-02-19 16:58:55,671 - trainer_integerVer - INFO - Results saved to C:\Users\hayat\Documents\6G\FD_Model_Training\FD_ACCBARO\model_training_intgerVer\model_v2_int\training_results.json
+2026-02-19 16:58:55,673 - trainer_integerVer - INFO - Extracting INTEGER features for v3...
+2026-02-19 16:58:55,862 - trainer_integerVer - INFO - Extracted 20 integer features from 918 samples
+2026-02-19 16:58:55,862 - trainer_integerVer - INFO - Feature names: ['acc_x_min', 'acc_x_max', 'acc_x_mean', 'acc_x_var', 'acc_y_min', 'acc_y_max', 'acc_y_mean', 'acc_y_var', 'acc_z_min', 'acc_z_max', 'acc_z_mean', 'acc_z_var', 'acc_mag_min', 'acc_mag_max', 'acc_mag_mean', 'acc_mag_var', 'pressure_shift', 'middle_slope', 'post_fall_slope', 'filtered_pressure_var']
+2026-02-19 16:58:55,862 - trainer_integerVer - INFO - Feature dtype: int64
+2026-02-19 16:58:55,863 - trainer_integerVer - INFO - Feature value ranges:
+2026-02-19 16:58:55,863 - trainer_integerVer - INFO -   acc_x_min: [-32768, -438] mean=-14396
+2026-02-19 16:58:55,864 - trainer_integerVer - INFO -   acc_x_max: [-3746, 24184] mean=5803
+2026-02-19 16:58:55,864 - trainer_integerVer - INFO -   acc_x_mean: [-6148, 2214] mean=-2059
+2026-02-19 16:58:55,864 - trainer_integerVer - INFO -   acc_x_var: [566, 23350870] mean=5971851
+2026-02-19 16:58:55,864 - trainer_integerVer - INFO -   acc_y_min: [-32768, -1512] mean=-12455
+2026-02-19 16:58:55,865 - trainer_integerVer - INFO -   acc_y_max: [-2971, 32765] mean=7892
+2026-02-19 16:58:55,865 - trainer_integerVer - INFO -   acc_y_mean: [-3868, 3270] mean=-1591
+2026-02-19 16:58:55,865 - trainer_integerVer - INFO -   acc_y_var: [2186, 16859206] mean=3833469
+2026-02-19 16:58:55,865 - trainer_integerVer - INFO -   acc_z_min: [-32768, 2323] mean=-9330
+2026-02-19 16:58:55,865 - trainer_integerVer - INFO -   acc_z_max: [-727, 32749] mean=10068
+2026-02-19 16:58:55,865 - trainer_integerVer - INFO -   acc_z_mean: [-3810, 3580] mean=104
+2026-02-19 16:58:55,865 - trainer_integerVer - INFO -   acc_z_var: [1052, 19272466] mean=4004688
+2026-02-19 16:58:55,866 - trainer_integerVer - INFO -   acc_mag_min: [188, 4003] mean=1611
+2026-02-19 16:58:55,866 - trainer_integerVer - INFO -   acc_mag_max: [4185, 56726] mean=21956
+2026-02-19 16:58:55,866 - trainer_integerVer - INFO -   acc_mag_mean: [4013, 7371] mean=4563
+2026-02-19 16:58:55,866 - trainer_integerVer - INFO -   acc_mag_var: [410, 24976485] mean=5032973
+2026-02-19 16:58:55,866 - trainer_integerVer - INFO -   pressure_shift: [-13, 13] mean=3
+2026-02-19 16:58:55,866 - trainer_integerVer - INFO -   middle_slope: [-345, 548] mean=6
+2026-02-19 16:58:55,866 - trainer_integerVer - INFO -   post_fall_slope: [-178, 248] mean=6
+2026-02-19 16:58:55,866 - trainer_integerVer - INFO -   filtered_pressure_var: [0, 47] mean=11
+2026-02-19 16:58:55,866 - trainer_integerVer - INFO - Starting training for v3 at 20260219_165855
+2026-02-19 16:58:55,866 - trainer_integerVer - INFO - Dataset: 918 samples (420 FALL, 498 ADL)
+2026-02-19 16:58:55,868 - trainer_integerVer - INFO - Train set:      642 samples
+2026-02-19 16:58:55,868 - trainer_integerVer - INFO - Validation set: 92 samples
+2026-02-19 16:58:55,868 - trainer_integerVer - INFO - Test set:       184 samples
+2026-02-19 16:58:55,868 - trainer_integerVer - INFO - XGBoost parameters: {
+  "n_estimators": 100,
+  "max_depth": 6,
+  "min_child_weight": 1,
+  "learning_rate": 0.1,
+  "subsample": 0.8,
+  "colsample_bytree": 0.8,
+  "reg_alpha": 0.0,
+  "reg_lambda": 1.0,
+  "objective": "binary:logistic",
+  "eval_metric": "logloss",
+  "random_state": 42,
+  "n_jobs": -1,
+  "use_label_encoder": false
+}
+2026-02-19 16:58:55,946 - trainer_integerVer - INFO - Training metrics:   {'accuracy': 1.0, 'precision': 1.0, 'recall': 1.0, 'f1': 1.0}
+2026-02-19 16:58:55,946 - trainer_integerVer - INFO - Validation metrics: {'accuracy': 1.0, 'precision': 1.0, 'recall': 1.0, 'f1': 1.0}
+2026-02-19 16:58:55,946 - trainer_integerVer - INFO - Validation AUC: 1.0000
+2026-02-19 16:58:55,946 - trainer_integerVer - INFO - Test metrics: {'accuracy': 0.9836956521739131, 'precision': 1.0, 'recall': 0.9642857142857143, 'f1': 0.9818181818181818}
+2026-02-19 16:58:55,946 - trainer_integerVer - INFO - Test AUC: 0.9958
+2026-02-19 16:58:56,109 - trainer_integerVer - INFO - CV F1 scores: [1.0, 0.9824561403508771, 0.9879518072289156, 0.9940119760479041, 0.9880952380952381]
+2026-02-19 16:58:56,110 - trainer_integerVer - INFO - CV F1 mean: 0.9905 (+/- 0.0060)
+2026-02-19 16:58:56,111 - trainer_integerVer - INFO - Confusion matrix:
+[[100   0]
+ [  3  81]]
+2026-02-19 16:58:56,111 - trainer_integerVer - INFO - Feature importance: {
+  "acc_mag_max": 0.38391053676605225,
+  "acc_x_max": 0.18703411519527435,
+  "acc_z_max": 0.06133878231048584,
+  "acc_x_mean": 0.05885238200426102,
+  "acc_y_max": 0.045364782214164734,
+  "acc_z_min": 0.04197588562965393,
+  "pressure_shift": 0.03695351630449295,
+  "acc_y_min": 0.03693518787622452,
+  "acc_mag_var": 0.027378015220165253,
+  "filtered_pressure_var": 0.020901525393128395,
+  "acc_mag_min": 0.01670709438621998,
+  "acc_y_var": 0.015967978164553642,
+  "acc_z_var": 0.014080950058996677,
+  "acc_mag_mean": 0.013837066479027271,
+  "acc_y_mean": 0.013345727697014809,
+  "acc_x_min": 0.012927125208079815,
+  "acc_x_var": 0.004366215318441391,
+  "acc_z_mean": 0.0029293859843164682,
+  "middle_slope": 0.002736227121204138,
+  "post_fall_slope": 0.0024576508440077305
+}
+2026-02-19 16:58:56,115 - trainer_integerVer - INFO - Classification report:
+              precision    recall  f1-score   support
+
+           0       0.97      1.00      0.99       100
+           1       1.00      0.96      0.98        84
+
+    accuracy                           0.98       184
+   macro avg       0.99      0.98      0.98       184
+weighted avg       0.98      0.98      0.98       184
+
+2026-02-19 16:58:56,117 - trainer_integerVer - INFO - Model saved to C:\Users\hayat\Documents\6G\FD_Model_Training\FD_ACCBARO\model_training_intgerVer\model_v3_int\model_v3_int_xgboost.pkl
+2026-02-19 16:58:56,118 - trainer_integerVer - INFO - Results saved to C:\Users\hayat\Documents\6G\FD_Model_Training\FD_ACCBARO\model_training_intgerVer\model_v3_int\training_results.json
+2026-02-19 16:58:56,119 - trainer_integerVer - INFO - Extracting INTEGER features for v4...
+2026-02-19 16:58:57,369 - trainer_integerVer - INFO - Extracted 12 integer features from 918 samples
+2026-02-19 16:58:57,369 - trainer_integerVer - INFO - Feature names: ['acc_mag_max', 'acc_mag_mean', 'acc_mag_var', 'impact_count', 'max_impact_g', 'has_high_impact', 'delta_h_min', 'delta_h_max', 'delta_h_mean', 'delta_h_var', 'delta_h_range', 'delta_h_slope']
+2026-02-19 16:58:57,369 - trainer_integerVer - INFO - Feature dtype: int64
+2026-02-19 16:58:57,369 - trainer_integerVer - INFO - Feature value ranges:
+2026-02-19 16:58:57,370 - trainer_integerVer - INFO -   acc_mag_max: [4185, 56726] mean=21956
+2026-02-19 16:58:57,370 - trainer_integerVer - INFO -   acc_mag_mean: [4013, 7371] mean=4563
+2026-02-19 16:58:57,371 - trainer_integerVer - INFO -   acc_mag_var: [410, 24976485] mean=5032973
+2026-02-19 16:58:57,371 - trainer_integerVer - INFO -   impact_count: [0, 2] mean=1
+2026-02-19 16:58:57,371 - trainer_integerVer - INFO -   max_impact_g: [0, 56726] mean=17475
+2026-02-19 16:58:57,371 - trainer_integerVer - INFO -   has_high_impact: [0, 1] mean=1
+2026-02-19 16:58:57,371 - trainer_integerVer - INFO -   delta_h_min: [-1827, 0] mean=-404
+2026-02-19 16:58:57,371 - trainer_integerVer - INFO -   delta_h_max: [0, 1847] mean=527
+2026-02-19 16:58:57,371 - trainer_integerVer - INFO -   delta_h_mean: [-763, 1058] mean=146
+2026-02-19 16:58:57,371 - trainer_integerVer - INFO -   delta_h_var: [571, 426948] mean=95209
+2026-02-19 16:58:57,372 - trainer_integerVer - INFO -   delta_h_range: [111, 2264] mean=931
+2026-02-19 16:58:57,372 - trainer_integerVer - INFO -   delta_h_slope: [-740, 841] mean=223
+2026-02-19 16:58:57,372 - trainer_integerVer - INFO - Starting training for v4 at 20260219_165857
+2026-02-19 16:58:57,372 - trainer_integerVer - INFO - Dataset: 918 samples (420 FALL, 498 ADL)
+2026-02-19 16:58:57,373 - trainer_integerVer - INFO - Train set:      642 samples
+2026-02-19 16:58:57,373 - trainer_integerVer - INFO - Validation set: 92 samples
+2026-02-19 16:58:57,374 - trainer_integerVer - INFO - Test set:       184 samples
+2026-02-19 16:58:57,374 - trainer_integerVer - INFO - XGBoost parameters: {
+  "n_estimators": 100,
+  "max_depth": 6,
+  "min_child_weight": 1,
+  "learning_rate": 0.1,
+  "subsample": 0.8,
+  "colsample_bytree": 0.8,
+  "reg_alpha": 0.0,
+  "reg_lambda": 1.0,
+  "objective": "binary:logistic",
+  "eval_metric": "logloss",
+  "random_state": 42,
+  "n_jobs": -1,
+  "use_label_encoder": false
+}
+2026-02-19 16:58:57,442 - trainer_integerVer - INFO - Training metrics:   {'accuracy': 1.0, 'precision': 1.0, 'recall': 1.0, 'f1': 1.0}
+2026-02-19 16:58:57,443 - trainer_integerVer - INFO - Validation metrics: {'accuracy': 0.9782608695652174, 'precision': 0.9761904761904762, 'recall': 0.9761904761904762, 'f1': 0.9761904761904762}
+2026-02-19 16:58:57,443 - trainer_integerVer - INFO - Validation AUC: 0.9990
+2026-02-19 16:58:57,443 - trainer_integerVer - INFO - Test metrics: {'accuracy': 0.9836956521739131, 'precision': 1.0, 'recall': 0.9642857142857143, 'f1': 0.9818181818181818}
+2026-02-19 16:58:57,443 - trainer_integerVer - INFO - Test AUC: 0.9923
+2026-02-19 16:58:57,600 - trainer_integerVer - INFO - CV F1 scores: [0.9940828402366864, 0.9824561403508771, 0.9818181818181818, 0.9575757575757575, 0.9940828402366864]
+2026-02-19 16:58:57,601 - trainer_integerVer - INFO - CV F1 mean: 0.9820 (+/- 0.0133)
+2026-02-19 16:58:57,602 - trainer_integerVer - INFO - Confusion matrix:
+[[100   0]
+ [  3  81]]
+2026-02-19 16:58:57,602 - trainer_integerVer - INFO - Feature importance: {
+  "impact_count": 0.5461141467094421,
+  "acc_mag_max": 0.17460483312606812,
+  "max_impact_g": 0.11992675811052322,
+  "delta_h_max": 0.042473722249269485,
+  "acc_mag_mean": 0.026652565225958824,
+  "delta_h_mean": 0.022020017728209496,
+  "delta_h_slope": 0.021255556493997574,
+  "acc_mag_var": 0.019818725064396858,
+  "delta_h_var": 0.010800528340041637,
+  "delta_h_min": 0.008687573485076427,
+  "delta_h_range": 0.007645567413419485,
+  "has_high_impact": 0.0
+}
+2026-02-19 16:58:57,606 - trainer_integerVer - INFO - Classification report:
+              precision    recall  f1-score   support
+
+           0       0.97      1.00      0.99       100
+           1       1.00      0.96      0.98        84
+
+    accuracy                           0.98       184
+   macro avg       0.99      0.98      0.98       184
+weighted avg       0.98      0.98      0.98       184
+
+2026-02-19 16:58:57,617 - trainer_integerVer - INFO - Model saved to C:\Users\hayat\Documents\6G\FD_Model_Training\FD_ACCBARO\model_training_intgerVer\model_v4_int\model_v4_int_xgboost.pkl
+2026-02-19 16:58:57,618 - trainer_integerVer - INFO - Results saved to C:\Users\hayat\Documents\6G\FD_Model_Training\FD_ACCBARO\model_training_intgerVer\model_v4_int\training_results.json
+2026-02-19 16:58:57,620 - trainer_integerVer - INFO - Extracting INTEGER features for v5...
+2026-02-19 16:58:57,714 - trainer_integerVer - INFO - Extracted 22 integer features from 918 samples
+2026-02-19 16:58:57,714 - trainer_integerVer - INFO - Feature names: ['raw_acc_x_min', 'raw_acc_x_max', 'raw_acc_x_mean', 'raw_acc_x_var', 'raw_acc_y_min', 'raw_acc_y_max', 'raw_acc_y_mean', 'raw_acc_y_var', 'raw_acc_z_min', 'raw_acc_z_max', 'raw_acc_z_mean', 'raw_acc_z_var', 'raw_acc_mag_min', 'raw_acc_mag_max', 'raw_acc_mag_mean', 'raw_acc_mag_var', 'raw_pressure_min', 'raw_pressure_max', 'raw_pressure_mean', 'raw_pressure_var', 'raw_pressure_range', 'raw_pressure_slope']
+2026-02-19 16:58:57,715 - trainer_integerVer - INFO - Feature dtype: int64
+2026-02-19 16:58:57,715 - trainer_integerVer - INFO - Feature value ranges:
+2026-02-19 16:58:57,716 - trainer_integerVer - INFO -   raw_acc_x_min: [-32768, -438] mean=-14396
+2026-02-19 16:58:57,716 - trainer_integerVer - INFO -   raw_acc_x_max: [-3746, 24184] mean=5803
+2026-02-19 16:58:57,716 - trainer_integerVer - INFO -   raw_acc_x_mean: [-6148, 2214] mean=-2059
+2026-02-19 16:58:57,716 - trainer_integerVer - INFO -   raw_acc_x_var: [566, 23350870] mean=5971851
+2026-02-19 16:58:57,716 - trainer_integerVer - INFO -   raw_acc_y_min: [-32768, -1512] mean=-12455
+2026-02-19 16:58:57,716 - trainer_integerVer - INFO -   raw_acc_y_max: [-2971, 32765] mean=7892
+2026-02-19 16:58:57,717 - trainer_integerVer - INFO -   raw_acc_y_mean: [-3868, 3270] mean=-1591
+2026-02-19 16:58:57,717 - trainer_integerVer - INFO -   raw_acc_y_var: [2186, 16859206] mean=3833469
+2026-02-19 16:58:57,717 - trainer_integerVer - INFO -   raw_acc_z_min: [-32768, 2323] mean=-9330
+2026-02-19 16:58:57,717 - trainer_integerVer - INFO -   raw_acc_z_max: [-727, 32749] mean=10068
+2026-02-19 16:58:57,717 - trainer_integerVer - INFO -   raw_acc_z_mean: [-3810, 3580] mean=104
+2026-02-19 16:58:57,718 - trainer_integerVer - INFO -   raw_acc_z_var: [1052, 19272466] mean=4004688
+2026-02-19 16:58:57,718 - trainer_integerVer - INFO -   raw_acc_mag_min: [188, 4003] mean=1611
+2026-02-19 16:58:57,718 - trainer_integerVer - INFO -   raw_acc_mag_max: [4185, 56726] mean=21956
+2026-02-19 16:58:57,718 - trainer_integerVer - INFO -   raw_acc_mag_mean: [4013, 7371] mean=4563
+2026-02-19 16:58:57,718 - trainer_integerVer - INFO -   raw_acc_mag_var: [410, 24976485] mean=5032973
+2026-02-19 16:58:57,718 - trainer_integerVer - INFO -   raw_pressure_min: [100568, 100980] mean=100813
+2026-02-19 16:58:57,718 - trainer_integerVer - INFO -   raw_pressure_max: [100598, 101008] mean=100836
+2026-02-19 16:58:57,718 - trainer_integerVer - INFO -   raw_pressure_mean: [100591, 100989] mean=100824
+2026-02-19 16:58:57,719 - trainer_integerVer - INFO -   raw_pressure_var: [1, 69] mean=17
+2026-02-19 16:58:57,719 - trainer_integerVer - INFO -   raw_pressure_range: [6, 99] mean=23
+2026-02-19 16:58:57,719 - trainer_integerVer - INFO -   raw_pressure_slope: [-9, 9] mean=2
+2026-02-19 16:58:57,719 - trainer_integerVer - INFO - Starting training for v5 at 20260219_165857
+2026-02-19 16:58:57,719 - trainer_integerVer - INFO - Dataset: 918 samples (420 FALL, 498 ADL)
+2026-02-19 16:58:57,720 - trainer_integerVer - INFO - Train set:      642 samples
+2026-02-19 16:58:57,720 - trainer_integerVer - INFO - Validation set: 92 samples
+2026-02-19 16:58:57,721 - trainer_integerVer - INFO - Test set:       184 samples
+2026-02-19 16:58:57,721 - trainer_integerVer - INFO - XGBoost parameters: {
+  "n_estimators": 100,
+  "max_depth": 6,
+  "min_child_weight": 1,
+  "learning_rate": 0.1,
+  "subsample": 0.8,
+  "colsample_bytree": 0.8,
+  "reg_alpha": 0.0,
+  "reg_lambda": 1.0,
+  "objective": "binary:logistic",
+  "eval_metric": "logloss",
+  "random_state": 42,
+  "n_jobs": -1,
+  "use_label_encoder": false
+}
+2026-02-19 16:58:57,774 - trainer_integerVer - INFO - Training metrics:   {'accuracy': 1.0, 'precision': 1.0, 'recall': 1.0, 'f1': 1.0}
+2026-02-19 16:58:57,774 - trainer_integerVer - INFO - Validation metrics: {'accuracy': 0.9782608695652174, 'precision': 0.9545454545454546, 'recall': 1.0, 'f1': 0.9767441860465116}
+2026-02-19 16:58:57,774 - trainer_integerVer - INFO - Validation AUC: 1.0000
+2026-02-19 16:58:57,774 - trainer_integerVer - INFO - Test metrics: {'accuracy': 0.9782608695652174, 'precision': 0.9878048780487805, 'recall': 0.9642857142857143, 'f1': 0.9759036144578314}
+2026-02-19 16:58:57,774 - trainer_integerVer - INFO - Test AUC: 0.9952
+2026-02-19 16:58:57,930 - trainer_integerVer - INFO - CV F1 scores: [1.0, 0.9882352941176471, 0.9940119760479041, 0.9940119760479041, 0.9940119760479041]
+2026-02-19 16:58:57,930 - trainer_integerVer - INFO - CV F1 mean: 0.9941 (+/- 0.0037)
+2026-02-19 16:58:57,931 - trainer_integerVer - INFO - Confusion matrix:
+[[99  1]
+ [ 3 81]]
+2026-02-19 16:58:57,931 - trainer_integerVer - INFO - Feature importance: {
+  "raw_acc_mag_max": 0.34375008940696716,
+  "raw_acc_x_max": 0.18140092492103577,
+  "raw_acc_z_max": 0.06760582327842712,
+  "raw_acc_x_mean": 0.06743869185447693,
+  "raw_acc_mag_mean": 0.0392470508813858,
+  "raw_acc_x_min": 0.03723169490695,
+  "raw_acc_y_max": 0.03501512110233307,
+  "raw_acc_z_min": 0.03484015911817551,
+  "raw_pressure_var": 0.02758970856666565,
+  "raw_pressure_max": 0.022309042513370514,
+  "raw_acc_mag_var": 0.021980924531817436,
+  "raw_pressure_range": 0.021599579602479935,
+  "raw_pressure_slope": 0.020104099065065384,
+  "raw_pressure_min": 0.019096937030553818,
+  "raw_pressure_mean": 0.017779171466827393,
+  "raw_acc_y_min": 0.016382887959480286,
+  "raw_acc_mag_min": 0.008790555410087109,
+  "raw_acc_y_mean": 0.007097126916050911,
+  "raw_acc_z_mean": 0.0035485313273966312,
+  "raw_acc_x_var": 0.003350888378918171,
+  "raw_acc_z_var": 0.0032276541460305452,
+  "raw_acc_y_var": 0.0006133571150712669
+}
+2026-02-19 16:58:57,936 - trainer_integerVer - INFO - Classification report:
+              precision    recall  f1-score   support
+
+           0       0.97      0.99      0.98       100
+           1       0.99      0.96      0.98        84
+
+    accuracy                           0.98       184
+   macro avg       0.98      0.98      0.98       184
+weighted avg       0.98      0.98      0.98       184
+
+2026-02-19 16:58:57,937 - trainer_integerVer - INFO - Model saved to C:\Users\hayat\Documents\6G\FD_Model_Training\FD_ACCBARO\model_training_intgerVer\model_v5_int\model_v5_int_xgboost.pkl
+2026-02-19 16:58:57,947 - trainer_integerVer - INFO - Results saved to C:\Users\hayat\Documents\6G\FD_Model_Training\FD_ACCBARO\model_training_intgerVer\model_v5_int\training_results.json

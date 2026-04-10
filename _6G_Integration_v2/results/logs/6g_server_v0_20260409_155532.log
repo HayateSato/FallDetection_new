@@ -1,0 +1,187 @@
+2026-04-09 15:55:32,959 [INFO] ============================================================
+2026-04-09 15:55:32,959 [INFO] Fall Detection Server  [6G / Charite Integration]
+2026-04-09 15:55:32,959 [INFO]   Model:            V0  (V0)
+2026-04-09 15:55:32,959 [INFO]   Uses barometer:   False
+2026-04-09 15:55:32,959 [INFO]   Features:         16
+2026-04-09 15:55:32,960 [INFO]   Sensor type:      bosch  (25 Hz → 50 Hz)
+2026-04-09 15:55:32,960 [INFO]   Window:           9s × 50Hz = 450 samples
+2026-04-09 15:55:32,960 [INFO]   FHIR server:      (not configured — results not pushed)
+2026-04-09 15:55:32,960 [INFO]   Redis fall pub:   (not configured — no Redis publishing)
+2026-04-09 15:55:32,960 [INFO] ============================================================
+2026-04-09 15:57:13,146 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=286
+2026-04-09 15:57:13,147 [INFO]   Resampled 25Hz → 50Hz (572 samples)
+2026-04-09 15:57:13,150 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:57:25,309 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=235
+2026-04-09 15:57:25,310 [INFO]   Resampled 25Hz → 50Hz (470 samples)
+2026-04-09 15:57:25,312 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:57:37,535 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=310
+2026-04-09 15:57:37,536 [INFO]   Resampled 25Hz → 50Hz (620 samples)
+2026-04-09 15:57:37,539 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:57:49,707 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=255
+2026-04-09 15:57:49,709 [INFO]   Resampled 25Hz → 50Hz (510 samples)
+2026-04-09 15:57:49,713 [INFO]   → no fall  confidence=0.002  latency=5ms
+2026-04-09 15:58:01,891 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=324
+2026-04-09 15:58:01,892 [INFO]   Resampled 25Hz → 50Hz (648 samples)
+2026-04-09 15:58:01,895 [INFO] 
+2026-04-09 15:58:01,895 [INFO]   *** FALL DETECTED ***  patient=test_patient-001  confidence=0.993  latency=3ms
+2026-04-09 15:58:01,895 [INFO] 
+2026-04-09 15:58:14,162 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=269
+2026-04-09 15:58:14,163 [INFO]   Resampled 25Hz → 50Hz (538 samples)
+2026-04-09 15:58:14,166 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:58:26,380 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=336
+2026-04-09 15:58:26,381 [INFO]   Resampled 25Hz → 50Hz (672 samples)
+2026-04-09 15:58:26,384 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:58:38,587 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=284
+2026-04-09 15:58:38,587 [INFO]   Resampled 25Hz → 50Hz (568 samples)
+2026-04-09 15:58:38,590 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 15:58:50,901 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=353
+2026-04-09 15:58:50,902 [INFO]   Resampled 25Hz → 50Hz (706 samples)
+2026-04-09 15:58:50,904 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:59:03,148 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=305
+2026-04-09 15:59:03,148 [INFO]   Resampled 25Hz → 50Hz (610 samples)
+2026-04-09 15:59:03,151 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:59:15,513 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=261
+2026-04-09 15:59:15,514 [INFO]   Resampled 25Hz → 50Hz (522 samples)
+2026-04-09 15:59:15,517 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:59:27,741 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=304
+2026-04-09 15:59:27,742 [INFO]   Resampled 25Hz → 50Hz (608 samples)
+2026-04-09 15:59:27,744 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 15:59:39,966 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=252
+2026-04-09 15:59:39,967 [INFO]   Resampled 25Hz → 50Hz (504 samples)
+2026-04-09 15:59:39,970 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 15:59:52,654 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=308
+2026-04-09 15:59:52,655 [INFO]   Resampled 25Hz → 50Hz (616 samples)
+2026-04-09 15:59:52,659 [INFO]   → no fall  confidence=0.002  latency=4ms
+2026-04-09 16:00:04,849 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=253
+2026-04-09 16:00:04,850 [INFO]   Resampled 25Hz → 50Hz (506 samples)
+2026-04-09 16:00:04,853 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 16:00:17,049 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=321
+2026-04-09 16:00:17,050 [INFO]   Resampled 25Hz → 50Hz (642 samples)
+2026-04-09 16:00:17,053 [INFO]   → no fall  confidence=0.002  latency=4ms
+2026-04-09 16:00:29,259 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=269
+2026-04-09 16:00:29,259 [INFO]   Resampled 25Hz → 50Hz (538 samples)
+2026-04-09 16:00:29,261 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 16:00:41,474 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=340
+2026-04-09 16:00:41,475 [INFO]   Resampled 25Hz → 50Hz (680 samples)
+2026-04-09 16:00:41,477 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 16:00:53,754 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=284
+2026-04-09 16:00:53,754 [INFO]   Resampled 25Hz → 50Hz (568 samples)
+2026-04-09 16:00:53,757 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 16:01:05,961 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=351
+2026-04-09 16:01:05,963 [INFO]   Resampled 25Hz → 50Hz (702 samples)
+2026-04-09 16:01:05,967 [INFO]   → no fall  confidence=0.002  latency=5ms
+2026-04-09 16:01:18,181 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=313
+2026-04-09 16:01:18,182 [INFO]   Resampled 25Hz → 50Hz (626 samples)
+2026-04-09 16:01:18,184 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 16:01:30,378 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=243
+2026-04-09 16:01:30,379 [INFO]   Resampled 25Hz → 50Hz (486 samples)
+2026-04-09 16:01:30,381 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 16:01:42,576 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=314
+2026-04-09 16:01:42,577 [INFO]   Resampled 25Hz → 50Hz (628 samples)
+2026-04-09 16:01:42,579 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 16:01:54,725 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=262
+2026-04-09 16:01:54,725 [INFO]   Resampled 25Hz → 50Hz (524 samples)
+2026-04-09 16:01:54,728 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 16:02:06,928 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=332
+2026-04-09 16:02:06,929 [INFO]   Resampled 25Hz → 50Hz (664 samples)
+2026-04-09 16:02:06,934 [INFO]   → no fall  confidence=0.002  latency=5ms
+2026-04-09 16:02:19,118 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=276
+2026-04-09 16:02:19,119 [INFO]   Resampled 25Hz → 50Hz (552 samples)
+2026-04-09 16:02:19,121 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 16:02:31,312 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=345
+2026-04-09 16:02:31,313 [INFO]   Resampled 25Hz → 50Hz (690 samples)
+2026-04-09 16:02:31,315 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 16:02:43,519 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=296
+2026-04-09 16:02:43,520 [INFO]   Resampled 25Hz → 50Hz (592 samples)
+2026-04-09 16:02:43,524 [INFO]   → no fall  confidence=0.002  latency=5ms
+2026-04-09 16:02:55,686 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=239
+2026-04-09 16:02:55,687 [INFO]   Resampled 25Hz → 50Hz (478 samples)
+2026-04-09 16:02:55,690 [INFO]   → no fall  confidence=0.290  latency=3ms
+2026-04-09 16:03:07,977 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=305
+2026-04-09 16:03:07,978 [INFO]   Resampled 25Hz → 50Hz (610 samples)
+2026-04-09 16:03:07,980 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 16:03:20,161 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=251
+2026-04-09 16:03:20,162 [INFO]   Resampled 25Hz → 50Hz (502 samples)
+2026-04-09 16:03:20,164 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 16:03:33,027 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=309
+2026-04-09 16:03:33,028 [INFO]   Resampled 25Hz → 50Hz (618 samples)
+2026-04-09 16:03:33,030 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 16:03:45,216 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=255
+2026-04-09 16:03:45,217 [INFO]   Resampled 25Hz → 50Hz (510 samples)
+2026-04-09 16:03:45,220 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 16:03:57,436 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=323
+2026-04-09 16:03:57,437 [INFO]   Resampled 25Hz → 50Hz (646 samples)
+2026-04-09 16:03:57,439 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 16:04:09,605 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=265
+2026-04-09 16:04:09,606 [INFO]   Resampled 25Hz → 50Hz (530 samples)
+2026-04-09 16:04:09,608 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 16:04:21,845 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=330
+2026-04-09 16:04:21,846 [INFO]   Resampled 25Hz → 50Hz (660 samples)
+2026-04-09 16:04:21,849 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 16:04:34,052 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=258
+2026-04-09 16:04:34,053 [INFO]   Resampled 25Hz → 50Hz (516 samples)
+2026-04-09 16:04:34,056 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 16:04:46,258 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=329
+2026-04-09 16:04:46,259 [INFO]   Resampled 25Hz → 50Hz (658 samples)
+2026-04-09 16:04:46,262 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 16:04:58,446 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=278
+2026-04-09 16:04:58,447 [INFO]   Resampled 25Hz → 50Hz (556 samples)
+2026-04-09 16:04:58,449 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 16:05:10,609 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=217
+2026-04-09 16:05:10,609 [INFO]   Resampled 25Hz → 50Hz (434 samples)
+2026-04-09 16:05:22,867 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=292
+2026-04-09 16:05:22,868 [INFO]   Resampled 25Hz → 50Hz (584 samples)
+2026-04-09 16:05:22,871 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 16:05:35,085 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=235
+2026-04-09 16:05:35,085 [INFO]   Resampled 25Hz → 50Hz (470 samples)
+2026-04-09 16:05:35,088 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 16:05:47,276 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=303
+2026-04-09 16:05:47,277 [INFO]   Resampled 25Hz → 50Hz (606 samples)
+2026-04-09 16:05:47,280 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 16:05:59,458 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=251
+2026-04-09 16:05:59,459 [INFO]   Resampled 25Hz → 50Hz (502 samples)
+2026-04-09 16:05:59,461 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 16:06:12,141 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=305
+2026-04-09 16:06:12,142 [INFO]   Resampled 25Hz → 50Hz (610 samples)
+2026-04-09 16:06:12,144 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 16:06:24,324 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=253
+2026-04-09 16:06:24,324 [INFO]   Resampled 25Hz → 50Hz (506 samples)
+2026-04-09 16:06:24,327 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 16:06:36,495 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=330
+2026-04-09 16:06:36,496 [INFO]   Resampled 25Hz → 50Hz (660 samples)
+2026-04-09 16:06:36,533 [INFO]   → no fall  confidence=0.002  latency=38ms
+2026-04-09 16:06:48,713 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=269
+2026-04-09 16:06:48,714 [INFO]   Resampled 25Hz → 50Hz (538 samples)
+2026-04-09 16:06:48,717 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 16:07:00,874 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=217
+2026-04-09 16:07:00,875 [INFO]   Resampled 25Hz → 50Hz (434 samples)
+2026-04-09 16:07:13,039 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=293
+2026-04-09 16:07:13,039 [INFO]   Resampled 25Hz → 50Hz (586 samples)
+2026-04-09 16:07:13,042 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 16:07:25,223 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=232
+2026-04-09 16:07:25,223 [INFO]   Resampled 25Hz → 50Hz (464 samples)
+2026-04-09 16:07:25,226 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 16:07:42,929 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=302
+2026-04-09 16:07:42,930 [INFO]   Resampled 25Hz → 50Hz (604 samples)
+2026-04-09 16:07:42,932 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 16:08:00,612 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=236
+2026-04-09 16:08:00,613 [INFO]   Resampled 25Hz → 50Hz (472 samples)
+2026-04-09 16:08:00,616 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 16:08:18,323 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=287
+2026-04-09 16:08:18,324 [INFO]   Resampled 25Hz → 50Hz (574 samples)
+2026-04-09 16:08:18,327 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 16:08:36,038 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=249
+2026-04-09 16:08:36,039 [INFO]   Resampled 25Hz → 50Hz (498 samples)
+2026-04-09 16:08:36,042 [INFO]   → no fall  confidence=0.002  latency=3ms
+2026-04-09 16:08:53,727 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=302
+2026-04-09 16:08:53,728 [INFO]   Resampled 25Hz → 50Hz (604 samples)
+2026-04-09 16:08:53,730 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 16:09:11,411 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=234
+2026-04-09 16:09:11,412 [INFO]   Resampled 25Hz → 50Hz (468 samples)
+2026-04-09 16:09:11,414 [INFO]   → no fall  confidence=0.002  latency=2ms
+2026-04-09 16:09:29,110 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=291
+2026-04-09 16:09:29,111 [INFO]   Resampled 25Hz → 50Hz (582 samples)
+2026-04-09 16:09:29,113 [INFO]   → no fall  confidence=0.004  latency=3ms
+2026-04-09 16:09:46,832 [INFO] Predict: patient=test_patient-001  device=6c:1d:eb:04:a9:e6  n_samples=351
+2026-04-09 16:09:46,833 [INFO]   Resampled 25Hz → 50Hz (702 samples)
+2026-04-09 16:09:46,836 [INFO]   → no fall  confidence=0.002  latency=3ms
