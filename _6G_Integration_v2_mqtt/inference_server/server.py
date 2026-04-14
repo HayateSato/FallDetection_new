@@ -48,11 +48,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 try:
-    import paho.mqtt.client as mqtt
-except ImportError:
-    mqtt = None
-
-try:
     from prometheus_fastapi_instrumentator import Instrumentator
     _PROMETHEUS_ENABLED = True
 except ImportError:
@@ -118,16 +113,6 @@ FHIR_AUTH_TOKEN = os.getenv("FHIR_AUTH_TOKEN", "")   # Bearer token if required
 FHIR_PUSH_ON_FALL_ONLY = os.getenv("FHIR_PUSH_ON_FALL_ONLY", "true").lower() != "false"
 
 # ---------------------------------------------------------------------------
-# MQTT config (optional — publish fall events for live dashboards / mobile app)
-# ---------------------------------------------------------------------------
-MQTT_BROKER_HOST   = os.getenv("MQTT_BROKER_HOST", "").strip()
-MQTT_BROKER_PORT   = int(os.getenv("MQTT_BROKER_PORT", "1883"))
-MQTT_FALL_TOPIC    = os.getenv("MQTT_FALL_TOPIC", "fall/events")
-MQTT_USERNAME      = os.getenv("MQTT_USERNAME", "").strip()
-MQTT_PASSWORD      = os.getenv("MQTT_PASSWORD", "").strip()
-_mqtt_client = None  # populated on startup if MQTT_BROKER_HOST set
-
-# ---------------------------------------------------------------------------
 # Model — hot-swappable via POST /model/switch
 # All reads/writes to these globals must hold _model_lock.
 # ---------------------------------------------------------------------------
@@ -148,7 +133,6 @@ logger.info(f"  Sensor type:      {ACC_SENSOR_TYPE}  ({HARDWARE_ACC_SAMPLE_RATE}
 logger.info(f"  Window:           {WINDOW_SIZE_SECONDS}s × {ACC_SAMPLE_RATE}Hz = "
             f"{int(WINDOW_SIZE_SECONDS * ACC_SAMPLE_RATE)} samples")
 logger.info(f"  FHIR server:      {FHIR_SERVER_URL or '(not configured — results not pushed)'}")
-logger.info(f"  MQTT broker:      {f'{MQTT_BROKER_HOST}:{MQTT_BROKER_PORT}  topic={MQTT_FALL_TOPIC}' if MQTT_BROKER_HOST else '(not configured — no MQTT publishing)'}")
 logger.info(f"  Prometheus:       {'enabled  (/metrics)' if _PROMETHEUS_ENABLED else 'disabled (pip install prometheus-fastapi-instrumentator)'}")
 logger.info("=" * 60)
 
@@ -209,40 +193,6 @@ app.add_middleware(
 if _PROMETHEUS_ENABLED:
     Instrumentator().instrument(app).expose(app)  # adds GET /metrics
 
-
-@app.on_event("startup")
-async def _connect_mqtt():
-    """Connect to MQTT broker at startup if MQTT_BROKER_HOST is configured."""
-    global _mqtt_client
-    if not MQTT_BROKER_HOST:
-        return
-    if mqtt is None:
-        logger.warning("MQTT_BROKER_HOST is set but 'paho-mqtt' is not installed — "
-                       "skipping MQTT publishing. `pip install paho-mqtt`.")
-        return
-    try:
-        client = mqtt.Client(client_id="fall-detection-server")
-        if MQTT_USERNAME:
-            client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD or None)
-        client.connect(MQTT_BROKER_HOST, MQTT_BROKER_PORT, keepalive=60)
-        client.loop_start()  # background thread handles network I/O
-        _mqtt_client = client
-        logger.info(f"Connected to MQTT broker at {MQTT_BROKER_HOST}:{MQTT_BROKER_PORT}"
-                    f"  topic={MQTT_FALL_TOPIC}")
-    except Exception as exc:
-        logger.warning(f"Could not connect to MQTT broker "
-                       f"({MQTT_BROKER_HOST}:{MQTT_BROKER_PORT}): {exc}")
-        _mqtt_client = None
-
-
-@app.on_event("shutdown")
-async def _disconnect_mqtt():
-    if _mqtt_client is not None:
-        try:
-            _mqtt_client.loop_stop()
-            _mqtt_client.disconnect()
-        except Exception:
-            pass
 
 # ---------------------------------------------------------------------------
 # Pydantic schemas
@@ -334,29 +284,6 @@ class ModelSwitchResponse(BaseModel):
 # ---------------------------------------------------------------------------
 # FHIR push helper
 # ---------------------------------------------------------------------------
-
-async def _publish_fall_event(payload: dict) -> bool:
-    """
-    Publish a fall event to the MQTT broker so dashboards and the mobile app
-    can react in real time.  Never raises — MQTT failures must not break inference.
-    """
-    if _mqtt_client is None:
-        return False
-    try:
-        import json as _json
-        topic   = f"{MQTT_FALL_TOPIC}/{payload.get('patient_id', 'unknown')}"
-        message = _json.dumps(payload, default=str)
-        result  = _mqtt_client.publish(topic, message)
-        if result.rc != mqtt.MQTT_ERR_SUCCESS:
-            logger.warning(f"MQTT publish returned error code {result.rc}  topic={topic}")
-            return False
-        logger.info(f"MQTT publish OK  topic={topic}  "
-                    f"patient={payload.get('patient_id')}")
-        return True
-    except Exception as exc:
-        logger.warning(f"MQTT publish error: {exc}")
-        return False
-
 
 async def _push_to_fhir_server(observation: dict) -> bool:
     """
@@ -550,19 +477,6 @@ async def predict(req: PredictRequest):
         if FHIR_SERVER_URL:
             if is_fall or not FHIR_PUSH_ON_FALL_ONLY:
                 fhir_pushed = await _push_to_fhir_server(fhir_obs)
-
-        # 10. Publish to MQTT broker — caregiver dashboards and mobile app subscribe to this
-        if is_fall:
-            await _publish_fall_event({
-                "patient_id":       req.patient_id,
-                "device_id":        req.device_id,
-                "timestamp":        timestamp,
-                "fall_detected":    True,
-                "confidence":       round(float(confidence), 4),
-                "model_version":    model_version,
-                "observation_id":   obs_id,
-                "fhir_observation": fhir_obs,
-            })
 
         return PredictResponse(
             patient_id=req.patient_id,
