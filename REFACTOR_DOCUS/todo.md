@@ -191,10 +191,58 @@ The `_OLD` server has the full implementation.
 
 ---
 
+## Step 11 — MLflow: Retraining on Charite Data (H)
+
+**Why MLflow?**
+Prometheus + Grafana (Step 6) monitors the live system. MLflow tracks experiments:
+which hyperparameters, which dataset split, which feature set produced the best model —
+and manages the registry of model versions (staging → production → retired).
+
+**Pre-condition:** Charite data sharing agreement must be in place before any patient
+sensor data can be used for retraining.
+
+### 11a — MLflow tracking server
+
+- [ ] 11.1 Add MLflow to requirements: `mlflow`
+- [ ] 11.2 Decide where to run the MLflow server:
+  - Local dev: `mlflow ui` (SQLite backend, local artifact store)
+  - Production: add as a pod in the Helm chart with Postgres backend + S3/MinIO artifact store
+- [ ] 11.3 Set `MLFLOW_TRACKING_URI` in `.env`
+
+### 11b — Instrument the training script
+
+- [ ] 11.4 Wrap the existing training script with an `mlflow.start_run()` context
+- [ ] 11.5 Log parameters: `window_seconds`, `sample_rate`, `model_version`, `threshold`, `feature_set`
+- [ ] 11.6 Log metrics: `accuracy`, `precision`, `recall`, `f1`, `auc`, confusion matrix values
+- [ ] 11.7 Log the trained `.pkl` as an MLflow artifact (`mlflow.sklearn.log_model` or `mlflow.xgboost.log_model`)
+- [ ] 11.8 Tag runs with `dataset=charite` vs `dataset=original` to compare across datasets
+
+### 11c — Model registry
+
+- [ ] 11.9 Register the best Charite-trained model in the MLflow Model Registry
+- [ ] 11.10 Use registry stages: `Staging` → run evaluation → `Production`
+- [ ] 11.11 Wire `POST /model/switch` (already implemented in Step 7) to load a registered
+            MLflow model by name/stage instead of by local file path
+
+### 11d — Retraining data pipeline
+
+- [ ] 11.12 Decide data source for retraining:
+  - Option A: Export InfluxDB windows to CSV → train offline
+  - Option B: Use fall_history DB rows (confirmed falls from caregiver) as labels → active learning loop
+- [ ] 11.13 Write `retrain.py` script that:
+  - Loads labelled windows (confirmed falls + ADL negatives)
+  - Runs the same feature extraction pipeline (`PipelineSelector.extract_features`)
+  - Trains XGBoost with same hyperparameters as original
+  - Logs everything to MLflow
+- [ ] 11.14 Define retraining trigger: manual (run script) vs scheduled (cron) vs threshold-based
+            (trigger when Prometheus `model_confidence` histogram shifts toward 0.5)
+
+---
+
 ## Summary by Owner
 
 ### Hayate (H)
-Steps 0–7, Step 9, backend API for Step 8, Step 10 verification.  
+Steps 0–7, Step 9, backend API for Step 8, Step 10 verification, Step 11 (MLflow retraining).  
 **First action:** Send questions from Step 0 to Isa and FOCUS DevOps — everything else is blocked until those are answered.
 
 ### Isa (I)
@@ -211,3 +259,4 @@ Step 10.5 — dashboard alert test.
 | Step 7 (model hot-swap endpoint) | Copy from `_OLD` — no external dependencies |
 | Step 6b (Postgres log) — optional | Only if confirmed needed; requires deciding on DB |
 | Step 8.1–8.3 (document API for Isa) | Write up current endpoints |
+| Step 11a (MLflow tracking server) | Self-contained — blocked only on data sharing agreement with Charite |

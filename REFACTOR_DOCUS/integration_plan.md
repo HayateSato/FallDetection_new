@@ -134,19 +134,20 @@ This separation also makes the Helm chart cleaner — each component can be its 
 
 ### Step 5 — Configure InfluxDB connection with confirmed field names
 
-**File:** `_6G_Integration_v2/.env`
+**Status: SKIPPED — current `.env` settings are kept as-is**
 
-Once Isa provides the field names, update:
+The existing `.env` already has working InfluxDB credentials and field names
+from the test setup (`fd_test` bucket, `bosch_acc_x/y/z` fields, `25Hz`).
+These will be left unchanged until Isa confirms the production values.
+No code changes are needed at this stage.
+
+When Isa provides confirmed values, update `_6G_Integration_v2_mqtt/.env`:
 ```env
-# Currently assumed — confirm with Isa:
-INFLUXDB_BUCKET=fd_test          # → update to their bucket name
-ACC_FIELD_X=bosch_acc_x          # → update if different
-ACC_FIELD_Y=bosch_acc_y          # → update if different
-ACC_FIELD_Z=bosch_acc_z          # → update if different
-HARDWARE_ACC_SAMPLE_RATE=25      # → update if 100Hz
-
-# Confirm macAddress tag name is still correct:
-# (currently hardcoded in _build_query() in influx_poller.py)
+INFLUXDB_BUCKET=<confirmed>
+ACC_FIELD_X=<confirmed>
+ACC_FIELD_Y=<confirmed>
+ACC_FIELD_Z=<confirmed>
+HARDWARE_ACC_SAMPLE_RATE=<confirmed>
 ```
 
 ---
@@ -230,6 +231,7 @@ From the original meeting agenda that were not answered yet:
 
 - [ ] Bucket name + measurement name + ACC field names → **Isa**
 - [ ] FHIR server: does it exist, is it required? → **FOCUS**
+- [ ] Any other DB for dashbaord → **Isa**
 - [ ] MQTT broker: host, port, topic convention, auth → **FOCUS DevOps** --> we decide this
 - [ ] Patient ID + MacAddress format in dashboard → **Isa**
 - [ ] Is Andreea the dashboard developer? → **FOCUS**
