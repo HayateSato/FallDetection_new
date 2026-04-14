@@ -52,10 +52,9 @@ Key points to cover:
 *This is the most important part of the meeting. Ask, listen, take notes.*
 
 ### 3a. Sensor + Data Storage
-- [ ] Which wearable sensor are they using? Is it SmarKo, or different hardware?
 - [ ] What is the accelerometer sample rate? (We assume 25Hz Bosch)
 - [ ] Is barometer data available? Do they want to use it?
-- [ ] Where is raw sensor data stored? (Their InfluxDB?)
+- [ ] Where is raw sensor data stored? (InfluxDB?)
   - Bucket name? Measurement name?
   - What tag identifies each patient/device? (We use `macAddress`)
   - What field names for ACC axes? (We use `bosch_acc_x/y/z`)
