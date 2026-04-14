@@ -16,8 +16,8 @@ uvicorn[standard]
 # Async HTTP client (for pushing observations to FHIR server)
 httpx
 
-# Redis pub/sub (publishes fall_events for caregiver dashboards)
-redis>=5.0
+# MQTT pub/sub (publishes fall events for caregiver dashboards and mobile app)
+paho-mqtt>=2.0
 
 # Configuration
 python-dotenv

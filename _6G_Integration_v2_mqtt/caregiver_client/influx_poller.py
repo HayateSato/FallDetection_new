@@ -6,7 +6,7 @@ For each registered patient:
   2. Convert FluxRecord → raw numpy arrays (NO resampling — server does that)
   3. POST to the inference server's /predict endpoint
   4. On the response, write a fall_history row to the local DB
-  5. (Server publishes the fall to Redis itself; this poller does NOT touch Redis)
+  5. (Server publishes the fall to MQTT itself; this poller does NOT touch MQTT)
 
 Patient identification:
   - PATIENT_IDS env var: comma-separated list of patient IDs

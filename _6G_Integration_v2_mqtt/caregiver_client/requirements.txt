@@ -13,8 +13,8 @@ sqlalchemy>=2.0
 # Sync HTTP client (used to call the inference server)
 requests
 
-# Async Redis client (subscribes to fall_events)
-redis>=5.0
+# MQTT client (subscribes to fall events from MQTT broker)
+paho-mqtt>=2.0
 
 # InfluxDB v2 client (poller queries the time-series store)
 influxdb-client

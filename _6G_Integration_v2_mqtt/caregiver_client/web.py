@@ -8,7 +8,7 @@ Caregiver dashboard web layer (FastAPI).
   POST /api/falls/{id}/confirm    → set patient_confirmed = yes | no | not_answered
   GET  /api/stream                → Server-Sent Events feed of live fall events
 
-The fall stream is fed by FallEventBroker (subscribes to Redis fall_events).
+The fall stream is fed by FallEventBroker (subscribes to MQTT broker).
 """
 
 import asyncio
@@ -23,7 +23,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from caregiver_client import db as cdb
-from caregiver_client.redis_listener import FallEventBroker
+from caregiver_client.mqtt_listener import FallEventBroker
 
 logger = logging.getLogger(__name__)
 

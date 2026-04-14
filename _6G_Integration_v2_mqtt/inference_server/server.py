@@ -14,7 +14,7 @@ What is fixed (not configurable at runtime):
 
 What is NOT included (compared to full system):
   - No model switching UI / /model/switch endpoint
-  - No Redis / patient feedback / emergency service
+  - No MQTT patient feedback / emergency service
   - No Prometheus metrics / Grafana
   - No MinIO datalake / CSV replay
   - No operator or caregiver dashboards
@@ -47,9 +47,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
 try:
-    import redis.asyncio as aioredis
+    import paho.mqtt.client as mqtt
 except ImportError:
-    aioredis = None
+    mqtt = None
 
 # ---------------------------------------------------------------------------
 # Shared pipeline imports  (app/ and config/ live in _6G_Integration/)
@@ -105,11 +105,14 @@ FHIR_AUTH_TOKEN = os.getenv("FHIR_AUTH_TOKEN", "")   # Bearer token if required
 FHIR_PUSH_ON_FALL_ONLY = os.getenv("FHIR_PUSH_ON_FALL_ONLY", "true").lower() != "false"
 
 # ---------------------------------------------------------------------------
-# Redis config (optional — publish fall events for live dashboards)
+# MQTT config (optional — publish fall events for live dashboards / mobile app)
 # ---------------------------------------------------------------------------
-REDIS_URL          = os.getenv("REDIS_URL", "").strip()
-REDIS_FALL_CHANNEL = os.getenv("REDIS_FALL_CHANNEL", "fall_events")
-_redis_client = None  # populated on startup if REDIS_URL set
+MQTT_BROKER_HOST   = os.getenv("MQTT_BROKER_HOST", "").strip()
+MQTT_BROKER_PORT   = int(os.getenv("MQTT_BROKER_PORT", "1883"))
+MQTT_FALL_TOPIC    = os.getenv("MQTT_FALL_TOPIC", "fall/events")
+MQTT_USERNAME      = os.getenv("MQTT_USERNAME", "").strip()
+MQTT_PASSWORD      = os.getenv("MQTT_PASSWORD", "").strip()
+_mqtt_client = None  # populated on startup if MQTT_BROKER_HOST set
 
 # ---------------------------------------------------------------------------
 # Load model — single fixed version, loaded once at startup
@@ -129,7 +132,7 @@ logger.info(f"  Sensor type:      {ACC_SENSOR_TYPE}  ({HARDWARE_ACC_SAMPLE_RATE}
 logger.info(f"  Window:           {WINDOW_SIZE_SECONDS}s × {ACC_SAMPLE_RATE}Hz = "
             f"{int(WINDOW_SIZE_SECONDS * ACC_SAMPLE_RATE)} samples")
 logger.info(f"  FHIR server:      {FHIR_SERVER_URL or '(not configured — results not pushed)'}")
-logger.info(f"  Redis fall pub:   {REDIS_URL or '(not configured — no Redis publishing)'}")
+logger.info(f"  MQTT broker:      {f'{MQTT_BROKER_HOST}:{MQTT_BROKER_PORT}  topic={MQTT_FALL_TOPIC}' if MQTT_BROKER_HOST else '(not configured — no MQTT publishing)'}")
 logger.info("=" * 60)
 
 # ---------------------------------------------------------------------------
@@ -188,29 +191,36 @@ app.add_middleware(
 
 
 @app.on_event("startup")
-async def _connect_redis():
-    """Lazily connect to Redis at startup if REDIS_URL is configured."""
-    global _redis_client
-    if not REDIS_URL:
+async def _connect_mqtt():
+    """Connect to MQTT broker at startup if MQTT_BROKER_HOST is configured."""
+    global _mqtt_client
+    if not MQTT_BROKER_HOST:
         return
-    if aioredis is None:
-        logger.warning("REDIS_URL is set but the 'redis' package is not installed — "
-                       "skipping Redis publishing. `pip install redis`.")
+    if mqtt is None:
+        logger.warning("MQTT_BROKER_HOST is set but 'paho-mqtt' is not installed — "
+                       "skipping MQTT publishing. `pip install paho-mqtt`.")
         return
     try:
-        _redis_client = aioredis.from_url(REDIS_URL, decode_responses=True)
-        await _redis_client.ping()
-        logger.info(f"Connected to Redis at {REDIS_URL}  channel={REDIS_FALL_CHANNEL}")
+        client = mqtt.Client(client_id="fall-detection-server")
+        if MQTT_USERNAME:
+            client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD or None)
+        client.connect(MQTT_BROKER_HOST, MQTT_BROKER_PORT, keepalive=60)
+        client.loop_start()  # background thread handles network I/O
+        _mqtt_client = client
+        logger.info(f"Connected to MQTT broker at {MQTT_BROKER_HOST}:{MQTT_BROKER_PORT}"
+                    f"  topic={MQTT_FALL_TOPIC}")
     except Exception as exc:
-        logger.warning(f"Could not connect to Redis ({REDIS_URL}): {exc}")
-        _redis_client = None
+        logger.warning(f"Could not connect to MQTT broker "
+                       f"({MQTT_BROKER_HOST}:{MQTT_BROKER_PORT}): {exc}")
+        _mqtt_client = None
 
 
 @app.on_event("shutdown")
-async def _disconnect_redis():
-    if _redis_client is not None:
+async def _disconnect_mqtt():
+    if _mqtt_client is not None:
         try:
-            await _redis_client.close()
+            _mqtt_client.loop_stop()
+            _mqtt_client.disconnect()
         except Exception:
             pass
 
@@ -294,19 +304,24 @@ class PredictResponse(BaseModel):
 
 async def _publish_fall_event(payload: dict) -> bool:
     """
-    Publish a fall event to Redis so live dashboards can react in real time.
-    Never raises — Redis failures must not break inference.
+    Publish a fall event to the MQTT broker so dashboards and the mobile app
+    can react in real time.  Never raises — MQTT failures must not break inference.
     """
-    if _redis_client is None:
+    if _mqtt_client is None:
         return False
     try:
         import json as _json
-        await _redis_client.publish(REDIS_FALL_CHANNEL, _json.dumps(payload, default=str))
-        logger.info(f"Redis publish OK  channel={REDIS_FALL_CHANNEL}  "
+        topic   = f"{MQTT_FALL_TOPIC}/{payload.get('patient_id', 'unknown')}"
+        message = _json.dumps(payload, default=str)
+        result  = _mqtt_client.publish(topic, message)
+        if result.rc != mqtt.MQTT_ERR_SUCCESS:
+            logger.warning(f"MQTT publish returned error code {result.rc}  topic={topic}")
+            return False
+        logger.info(f"MQTT publish OK  topic={topic}  "
                     f"patient={payload.get('patient_id')}")
         return True
     except Exception as exc:
-        logger.warning(f"Redis publish error: {exc}")
+        logger.warning(f"MQTT publish error: {exc}")
         return False
 
 
@@ -493,7 +508,7 @@ async def predict(req: PredictRequest):
             if is_fall or not FHIR_PUSH_ON_FALL_ONLY:
                 fhir_pushed = await _push_to_fhir_server(fhir_obs)
 
-        # 10. Publish to Redis fall_events channel — caregiver dashboards subscribe to this
+        # 10. Publish to MQTT broker — caregiver dashboards and mobile app subscribe to this
         if is_fall:
             await _publish_fall_event({
                 "patient_id":       req.patient_id,

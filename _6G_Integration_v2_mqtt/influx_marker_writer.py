@@ -1,9 +1,9 @@
 """
-InfluxDB Fall Marker Writer — Redis Subscriber
-================================================
+InfluxDB Fall Marker Writer — MQTT Subscriber
+==============================================
 
-Standalone script that subscribes to the Redis `fall_events` channel and
-writes a `fall_marker=1` point to InfluxDB whenever a fall is detected.
+Standalone script that subscribes to the MQTT fall topic and writes a
+`fall_marker=1` point to InfluxDB whenever a fall is detected.
 
 The marker is written to the same measurement (SMART_DATA) and tagged with
 the same macAddress so it appears alongside the sensor data in InfluxDB
@@ -12,8 +12,12 @@ queries and dashboards.
 Usage:
     python influx_marker_writer.py
 
-Requires REDIS_URL, INFLUXDB_URL, INFLUXDB_TOKEN, INFLUXDB_ORG, INFLUXDB_BUCKET
-to be set in .env (same file as the other components).
+Requires MQTT_BROKER_HOST, INFLUXDB_URL, INFLUXDB_TOKEN, INFLUXDB_ORG,
+INFLUXDB_BUCKET to be set in .env (same file as the other components).
+
+Topic subscription:
+    Subscribes to  <MQTT_FALL_TOPIC>/#  (default: fall/events/#)
+    The inference server publishes to   fall/events/<patient_id>
 """
 
 import json
@@ -39,15 +43,18 @@ logger = logging.getLogger("influx_marker_writer")
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
-REDIS_URL      = os.getenv("REDIS_URL", "").strip()
-REDIS_CHANNEL  = os.getenv("REDIS_FALL_CHANNEL", "fall_events")
-INFLUXDB_URL   = os.getenv("INFLUXDB_URL", "")
-INFLUXDB_TOKEN = os.getenv("INFLUXDB_TOKEN", "")
-INFLUXDB_ORG   = os.getenv("INFLUXDB_ORG", "")
-INFLUXDB_BUCKET = os.getenv("INFLUXDB_BUCKET", "")
+MQTT_BROKER_HOST = os.getenv("MQTT_BROKER_HOST", "").strip()
+MQTT_BROKER_PORT = int(os.getenv("MQTT_BROKER_PORT", "1883"))
+MQTT_FALL_TOPIC  = os.getenv("MQTT_FALL_TOPIC", "fall/events")
+MQTT_USERNAME    = os.getenv("MQTT_USERNAME", "").strip()
+MQTT_PASSWORD    = os.getenv("MQTT_PASSWORD", "").strip()
+INFLUXDB_URL     = os.getenv("INFLUXDB_URL", "")
+INFLUXDB_TOKEN   = os.getenv("INFLUXDB_TOKEN", "")
+INFLUXDB_ORG     = os.getenv("INFLUXDB_ORG", "")
+INFLUXDB_BUCKET  = os.getenv("INFLUXDB_BUCKET", "")
 
-if not REDIS_URL:
-    logger.error("REDIS_URL is not set in .env — cannot subscribe.")
+if not MQTT_BROKER_HOST:
+    logger.error("MQTT_BROKER_HOST is not set in .env — cannot subscribe.")
     sys.exit(1)
 if not INFLUXDB_URL:
     logger.error("INFLUXDB_URL is not set in .env — cannot write markers.")
@@ -69,10 +76,10 @@ _write_api = _influx_client.write_api(write_options=SYNCHRONOUS)
 
 def write_fall_marker(event: dict) -> None:
     """Write a fall_marker=1 point to InfluxDB."""
-    mac_id      = event.get("mac_id") or event.get("device_id") or ""
-    patient_id  = event.get("patient_id", "unknown")
-    confidence  = event.get("confidence", 0.0)
-    timestamp   = event.get("timestamp") or event.get("detection_time")
+    mac_id     = event.get("mac_id") or event.get("device_id") or ""
+    patient_id = event.get("patient_id", "unknown")
+    confidence = event.get("confidence", 0.0)
+    timestamp  = event.get("timestamp") or event.get("detection_time")
 
     # Parse timestamp
     try:
@@ -101,43 +108,53 @@ def write_fall_marker(event: dict) -> None:
 
 
 # ---------------------------------------------------------------------------
-# Redis subscriber loop
+# MQTT subscriber
 # ---------------------------------------------------------------------------
 def main() -> None:
-    import redis
+    import paho.mqtt.client as mqtt
+
+    subscribe_topic = f"{MQTT_FALL_TOPIC}/#"
 
     logger.info("=" * 60)
     logger.info("  InfluxDB Fall Marker Writer")
-    logger.info(f"  Redis:    {REDIS_URL}  channel={REDIS_CHANNEL}")
+    logger.info(f"  MQTT:     {MQTT_BROKER_HOST}:{MQTT_BROKER_PORT}  topic={subscribe_topic}")
     logger.info(f"  InfluxDB: {INFLUXDB_URL}  bucket={INFLUXDB_BUCKET}")
     logger.info("=" * 60)
 
-    r = redis.from_url(REDIS_URL, decode_responses=True)
-    pubsub = r.pubsub()
-    pubsub.subscribe(REDIS_CHANNEL)
-    logger.info(f"Subscribed to '{REDIS_CHANNEL}' — waiting for fall events...")
+    def on_connect(client, userdata, flags, rc):
+        if rc == 0:
+            client.subscribe(subscribe_topic)
+            logger.info(f"Subscribed to '{subscribe_topic}' — waiting for fall events...")
+        else:
+            logger.error(f"MQTT connect failed  rc={rc}")
+
+    def on_message(client, userdata, msg):
+        try:
+            event = json.loads(msg.payload.decode("utf-8"))
+        except Exception:
+            logger.warning(f"Bad message on {msg.topic!r}: {msg.payload!r}")
+            return
+
+        if not event.get("fall_detected", False):
+            return
+
+        logger.info(f"Fall event received: patient={event.get('patient_id')}  "
+                    f"confidence={event.get('confidence')}")
+        write_fall_marker(event)
+
+    client = mqtt.Client(client_id="influx-marker-writer")
+    if MQTT_USERNAME:
+        client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD or None)
+    client.on_connect = on_connect
+    client.on_message = on_message
 
     try:
-        for msg in pubsub.listen():
-            if msg.get("type") != "message":
-                continue
-            try:
-                event = json.loads(msg["data"])
-            except Exception:
-                logger.warning(f"Bad message: {msg['data']!r}")
-                continue
-
-            if not event.get("fall_detected", False):
-                continue
-
-            logger.info(f"Fall event received: patient={event.get('patient_id')}  "
-                        f"confidence={event.get('confidence')}")
-            write_fall_marker(event)
+        client.connect(MQTT_BROKER_HOST, MQTT_BROKER_PORT, keepalive=60)
+        client.loop_forever()  # blocks; handles reconnects automatically
     except KeyboardInterrupt:
         logger.info("Shutting down...")
     finally:
-        pubsub.close()
-        r.close()
+        client.disconnect()
         _influx_client.close()
 
 

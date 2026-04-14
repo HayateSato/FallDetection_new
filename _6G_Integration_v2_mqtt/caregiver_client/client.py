@@ -4,7 +4,7 @@ Caregiver client entry point.
 Starts three things in one process:
   1. The InfluxDB poller (background thread)
   2. The FastAPI web server (uvicorn) serving the dashboard + JSON API
-  3. The Redis subscriber (started inside FastAPI's startup hook)
+  3. The MQTT subscriber (started inside FastAPI's startup hook)
 
 Run from `_6G_Integration/` as the working directory:
 
@@ -139,7 +139,10 @@ def _banner() -> None:
     print(f"  Patients:         {PATIENT_IDS or '(none configured)'}")
     print(f"  Poll interval:    {POLL_INTERVAL_SECONDS}s")
     print(f"  DB URL:           {os.getenv('DATABASE_URL', 'sqlite:///./caregiver.db')}")
-    print(f"  Redis URL:        {os.getenv('REDIS_URL', '(not set — no live SSE)')}")
+    _mqtt_host = os.getenv("MQTT_BROKER_HOST", "")
+    _mqtt_info = (f"{_mqtt_host}:{os.getenv('MQTT_BROKER_PORT', '1883')}"
+                  if _mqtt_host else "(not set — no live SSE)")
+    print(f"  MQTT broker:      {_mqtt_info}")
     print("=" * 64)
 
 

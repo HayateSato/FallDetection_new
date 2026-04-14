@@ -215,9 +215,8 @@ MODEL_PATH = get_model_path()
 # Format: postgresql://user:password@host:5432/dbname
 DATABASE_URL = os.getenv('DATABASE_URL', '')
 
-# Redis connection string — used for fall event pub/sub
-# Format: redis://host:6379/0
-REDIS_URL = os.getenv('REDIS_URL', '')
+# MQTT broker host — used for fall event pub/sub
+MQTT_BROKER_HOST = os.getenv('MQTT_BROKER_HOST', '')
 
 # JWT secret key — used by operator and caregiver dashboards
 # Generate: python -c "import secrets; print(secrets.token_urlsafe(32))"
