@@ -74,6 +74,9 @@
       "Bash(curl.exe -s --max-time 5 -D - http://localhost/api/ml/patient/stream)",
       "Bash(curl.exe -s --max-time 20 http://localhost/api/ml/patient/stream)",
       "Bash(python -m py_compile inference_server/server.py caregiver_client/db.py caregiver_client/inference_client.py caregiver_client/influx_poller.py caregiver_client/redis_listener.py caregiver_client/web.py caregiver_client/client.py)"
+    ],
+    "additionalDirectories": [
+      "c:\\Users\\hayat\\.claude\\projects\\c--Users-hayat-Documents-6G-FallDetection-new\\memory"
     ]
   }
 }

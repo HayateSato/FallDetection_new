@@ -34,6 +34,7 @@ Run (from _6G_Integration/ as working directory):
 import logging
 import os
 import sys
+import threading
 import time
 import uuid
 from datetime import datetime, timezone
@@ -51,11 +52,23 @@ try:
 except ImportError:
     mqtt = None
 
+try:
+    from prometheus_fastapi_instrumentator import Instrumentator
+    _PROMETHEUS_ENABLED = True
+except ImportError:
+    _PROMETHEUS_ENABLED = False
+
+try:
+    from inference_server.services.metrics_collector import record_prediction as _record_prediction
+except ImportError:
+    def _record_prediction(*args, **kwargs):
+        pass
+
 # ---------------------------------------------------------------------------
 # Shared pipeline imports  (app/ and config/ live in _6G_Integration/)
 # ---------------------------------------------------------------------------
 from app.core.inference_engine import PipelineSelector
-from app.core.model_registry import get_model_config, get_model_name, get_model_path
+from app.core.model_registry import get_model_config, get_model_name, get_model_path, list_available_models
 from app.data_input.accelerometer_processor.acc_resampler import AccelerometerResampler
 from app.data_input.data_converter import (
     compose_detection_window,
@@ -115,13 +128,16 @@ MQTT_PASSWORD      = os.getenv("MQTT_PASSWORD", "").strip()
 _mqtt_client = None  # populated on startup if MQTT_BROKER_HOST set
 
 # ---------------------------------------------------------------------------
-# Load model — single fixed version, loaded once at startup
+# Model — hot-swappable via POST /model/switch
+# All reads/writes to these globals must hold _model_lock.
 # ---------------------------------------------------------------------------
-_model_type   = get_model_name(MODEL_VERSION)
-_model_path   = MODEL_PATH
-_engine       = PipelineSelector(MODEL_VERSION, _model_path)
-_model_config = get_model_config(_model_type)
-_model_info   = _engine.get_model_info()
+_model_lock            = threading.Lock()
+_current_model_version = MODEL_VERSION
+_model_type            = get_model_name(MODEL_VERSION)
+_model_path            = MODEL_PATH
+_engine                = PipelineSelector(MODEL_VERSION, _model_path)
+_model_config          = get_model_config(_model_type)
+_model_info            = _engine.get_model_info()
 
 logger.info("=" * 60)
 logger.info("Fall Detection Server  [6G / Charite Integration]")
@@ -133,6 +149,7 @@ logger.info(f"  Window:           {WINDOW_SIZE_SECONDS}s × {ACC_SAMPLE_RATE}Hz 
             f"{int(WINDOW_SIZE_SECONDS * ACC_SAMPLE_RATE)} samples")
 logger.info(f"  FHIR server:      {FHIR_SERVER_URL or '(not configured — results not pushed)'}")
 logger.info(f"  MQTT broker:      {f'{MQTT_BROKER_HOST}:{MQTT_BROKER_PORT}  topic={MQTT_FALL_TOPIC}' if MQTT_BROKER_HOST else '(not configured — no MQTT publishing)'}")
+logger.info(f"  Prometheus:       {'enabled  (/metrics)' if _PROMETHEUS_ENABLED else 'disabled (pip install prometheus-fastapi-instrumentator)'}")
 logger.info("=" * 60)
 
 # ---------------------------------------------------------------------------
@@ -188,6 +205,9 @@ app.add_middleware(
     allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["Content-Type", "X-API-Key"],
 )
+
+if _PROMETHEUS_ENABLED:
+    Instrumentator().instrument(app).expose(app)  # adds GET /metrics
 
 
 @app.on_event("startup")
@@ -298,6 +318,19 @@ class PredictResponse(BaseModel):
     fhir_observation: dict    # FHIR R4 Observation resource
     fhir_pushed:      bool    # True if server successfully POSTed to FHIR_SERVER_URL
 
+
+class ModelSwitchRequest(BaseModel):
+    version: str = Field(..., description="Model version to load (e.g. 'v3')")
+
+
+class ModelSwitchResponse(BaseModel):
+    success:          bool
+    previous_version: str
+    new_version:      str
+    model_name:       str
+    num_features:     int
+    uses_barometer:   bool
+
 # ---------------------------------------------------------------------------
 # FHIR push helper
 # ---------------------------------------------------------------------------
@@ -400,6 +433,13 @@ async def predict(req: PredictRequest):
     `fhir_observation`. If `FHIR_SERVER_URL` is configured in `.env`,
     the server also POSTs the observation to your FHIR server automatically.
     """
+    # Snapshot model state under lock so a hot-swap mid-request is safe
+    with _model_lock:
+        engine       = _engine
+        model_config = _model_config
+        model_info   = _model_info
+        model_version = _current_model_version
+
     n = len(req.acc_x)
     if len(req.acc_y) != n or len(req.acc_z) != n or len(req.timestamps_ms) != n:
         raise HTTPException(status_code=422,
@@ -408,11 +448,11 @@ async def predict(req: PredictRequest):
         raise HTTPException(status_code=422, detail="Sensor data arrays cannot be empty.")
 
     # Barometer required check
-    if _model_info["uses_barometer"] and not req.pressure:
+    if model_info["uses_barometer"] and not req.pressure:
         raise HTTPException(
             status_code=422,
             detail=(
-                f"Model '{MODEL_VERSION}' requires barometer data. "
+                f"Model '{model_version}' requires barometer data. "
                 "Provide 'pressure' and 'pressure_timestamps_ms' in the request body."
             ),
         )
@@ -441,7 +481,7 @@ async def predict(req: PredictRequest):
                         f"({acc_data.shape[1]} samples)")
 
         # 3. LSB → g  (skip for models that expect raw LSB)
-        if not _model_config.acc_in_lsb:
+        if not model_config.acc_in_lsb:
             acc_data = convert_lsb_to_g(acc_data)
 
         # 4. DataFrame
@@ -466,12 +506,15 @@ async def predict(req: PredictRequest):
             )
 
         # 6. XGBoost inference
-        result     = _engine.predict(window_df, pressure=window_pressure,
-                                     pressure_timestamps=window_pressure_time)
+        result     = engine.predict(window_df, pressure=window_pressure,
+                                    pressure_timestamps=window_pressure_time)
         is_fall    = result["is_fall"]
         confidence = result["confidence"]
-        threshold  = _model_config.threshold
+        threshold  = model_config.threshold
         latency_ms = int((time.monotonic() - t_start) * 1000)
+
+        # 6a. Prometheus metrics (best-effort — never blocks inference)
+        _record_prediction(model_version, is_fall, float(confidence), latency_ms / 1000)
 
         if is_fall:
             logger.info("")
@@ -494,7 +537,7 @@ async def predict(req: PredictRequest):
         fhir_obs = build_fhir_observation(
             fall_detected=is_fall,
             confidence=confidence,
-            model_version=MODEL_VERSION,
+            model_version=model_version,
             patient_id=req.patient_id,
             device_id=req.device_id,
             timestamp=timestamp,
@@ -516,7 +559,7 @@ async def predict(req: PredictRequest):
                 "timestamp":        timestamp,
                 "fall_detected":    True,
                 "confidence":       round(float(confidence), 4),
-                "model_version":    MODEL_VERSION,
+                "model_version":    model_version,
                 "observation_id":   obs_id,
                 "fhir_observation": fhir_obs,
             })
@@ -530,7 +573,7 @@ async def predict(req: PredictRequest):
                 confidence=round(float(confidence), 4),
                 threshold=float(threshold),
                 result=label,
-                model_version=MODEL_VERSION,
+                model_version=model_version,
                 window_size=len(window_df),
             ),
             fhir_observation=fhir_obs,
@@ -544,6 +587,64 @@ async def predict(req: PredictRequest):
     except Exception as e:
         logger.error(f"Prediction error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Prediction failed: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Model management endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/model/list")
+async def model_list():
+    """Return all model versions available on disk."""
+    return {"available_versions": list_available_models()}
+
+
+@app.post("/model/switch", response_model=ModelSwitchResponse,
+          dependencies=[Depends(verify_api_key)])
+async def model_switch(req: ModelSwitchRequest):
+    """
+    Hot-swap the loaded model without restarting the server.
+
+    Uses a threading lock so any in-flight /predict calls complete before
+    the switch takes effect.  The new model is used for all subsequent
+    /predict calls.
+    """
+    global _engine, _current_model_version, _model_info, _model_config
+
+    new_version = req.version.strip()
+    available   = list_available_models()
+    if new_version not in available:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Model '{new_version}' not found. Available: {available}",
+        )
+
+    previous = _current_model_version
+    try:
+        new_type   = get_model_name(new_version)
+        new_path   = get_model_path(new_type)
+        new_engine = PipelineSelector(new_version, new_path)
+        new_info   = new_engine.get_model_info()
+        new_config = get_model_config(new_type)
+
+        with _model_lock:
+            _engine                = new_engine
+            _current_model_version = new_version
+            _model_info            = new_info
+            _model_config          = new_config
+
+        logger.info(f"Model switched: {previous} → {new_version}  ({new_info['name']})")
+        return ModelSwitchResponse(
+            success=True,
+            previous_version=previous,
+            new_version=new_version,
+            model_name=new_info["name"],
+            num_features=new_info["num_features"],
+            uses_barometer=new_info["uses_barometer"],
+        )
+    except Exception as exc:
+        logger.error(f"Model switch failed: {exc}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Model switch failed: {exc}")
 
 
 # ---------------------------------------------------------------------------

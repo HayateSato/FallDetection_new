@@ -19,5 +19,9 @@ httpx
 # MQTT pub/sub (publishes fall events for caregiver dashboards and mobile app)
 paho-mqtt>=2.0
 
+# MLOps — Prometheus metrics (optional — server still works without these)
+prometheus-client
+prometheus-fastapi-instrumentator
+
 # Configuration
 python-dotenv
