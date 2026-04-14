@@ -5,12 +5,15 @@ Starts two things in one process:
   1. The MQTT subscriber (started inside FastAPI's startup hook)
   2. The FastAPI web server (uvicorn) serving the dashboard + JSON API
 
-The mock_app (or eventually the real mobile app) is now responsible for
-fetching sensor data and calling the inference server. This client only:
-  - Listens to MQTT for fall events published by the inference server
-  - Writes each fall to the local DB
+The mock_app (or eventually the real mobile app) is now responsible for:
+  - Fetching sensor data and calling the inference server
+  - Showing the patient confirmation popup (10s timeout)
+  - Publishing fall/alert/<patient_id> to MQTT after patient confirms or times out
+
+This client only:
+  - Listens to MQTT fall/alert/# (confirmed alerts from the mobile app)
+  - Writes each confirmed fall to the local DB
   - Fans the event out to connected dashboard browsers via SSE
-  - Manages the 10-second auto-confirm timer for patient feedback
 
 Run from _6G_Integration_v2_mqtt/ as working directory:
 
@@ -66,7 +69,7 @@ WEB_PORT = int(os.getenv("CAREGIVER_PORT", "8002"))
 cweb.mac_map = MAC_MAP
 
 # ---------------------------------------------------------------------------
-# Wire MQTT → DB + SSE + auto-confirm timer
+# Wire MQTT → DB + SSE
 # ---------------------------------------------------------------------------
 
 @app.on_event("startup")
@@ -83,12 +86,15 @@ async def _start_mqtt_with_callback() -> None:
 
     def _on_fall_mqtt(event: dict) -> None:
         """
-        Called from paho's background thread on every fall event.
-        Writes the fall to the local DB, adds fall_id to the event dict,
-        fans out to SSE clients, and starts the 10-second auto-confirm timer.
+        Called from paho's background thread on every confirmed fall alert
+        (published by mock_app after patient confirmation / timeout).
+
+        The patient confirmation step already happened in the mobile app before
+        this alert was published — no auto-confirm timer needed here.
         """
-        patient_id = event.get("patient_id", "unknown")
-        ts         = event.get("timestamp")
+        patient_id        = event.get("patient_id", "unknown")
+        ts                = event.get("timestamp")
+        patient_confirmed = event.get("patient_confirmed", "not_answered")
         try:
             det_time = datetime.fromisoformat(ts) if ts else datetime.now(timezone.utc)
         except Exception:
@@ -99,15 +105,13 @@ async def _start_mqtt_with_callback() -> None:
             patient_id        = patient_id,
             fall_detected     = True,
             detection_time    = det_time,
-            patient_confirmed = "not_answered",
+            patient_confirmed = patient_confirmed,
         )
         event["fall_id"] = fall_id
 
         asyncio.run_coroutine_threadsafe(broker.publish_local(event), _loop)
-        if fall_id is not None:
-            _loop.call_soon_threadsafe(cweb.start_auto_confirm_timer, fall_id)
 
-        logger.info(f"Fall recorded  patient={patient_id}  fall_id={fall_id}")
+        logger.info(f"Fall recorded  patient={patient_id}  fall_id={fall_id}  confirmed={patient_confirmed}")
 
     broker.on_fall = _on_fall_mqtt
     await broker.start()

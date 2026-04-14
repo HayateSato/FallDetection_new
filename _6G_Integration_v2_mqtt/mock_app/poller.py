@@ -4,18 +4,25 @@ MockAppPoller — simulates the mobile app's sensor-to-inference loop.
 What the real mobile app will do:
   1. Read a 9-second ACC window directly from the SmarKo wearable (BLE)
   2. POST the raw LSB arrays to the inference server's /predict endpoint
-  3. The inference server returns the result (and publishes to MQTT if a fall)
-  4. The app shows a local notification if a fall is detected
+  3. If fall_detected=True → show "Did you fall? / Do you need help?" popup (10s timeout)
+  4. If patient confirms OR no answer within timeout → publish fall/alert/<patient_id> to MQTT
+  5. Caregiver dashboard subscribes to fall/alert/# and shows the alert
 
-What this mock does instead of step 1:
-  - Fetches the same data from InfluxDB (where the wearable writes it in real time)
+What this mock does:
+  - Step 1: fetches from InfluxDB instead of BLE wearable
+  - Step 3: simulates patient response by waiting MOCK_PATIENT_RESPONSE_TIMEOUT seconds
+  - Step 4: always publishes alert after timeout (mock: no patient input)
 
-Everything from step 2 onward is identical to the real app behaviour.
-No database writes happen here — the caregiver_client handles that via MQTT.
+MQTT topics:
+  fall/events/<patient_id>  — published by inference server (fall detected)
+  fall/alert/<patient_id>   — published by THIS mock (patient confirmed or timed out)
 """
 
+import json
 import logging
 import threading
+import time
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from mock_app.influx_fetcher import fetch_raw_window
@@ -26,29 +33,38 @@ logger = logging.getLogger(__name__)
 
 class MockAppPoller(threading.Thread):
     """
-    Background thread: loops over configured patients, fetches the latest
-    sensor window from InfluxDB, and POSTs it to the inference server.
+    Background thread: loops over patients, fetches sensor data, calls inference.
 
-    The inference server publishes to MQTT on fall detection — this class
-    does not handle that; it's the caregiver_client's responsibility.
+    On fall detection: opens a patient confirmation window (MOCK_PATIENT_RESPONSE_TIMEOUT
+    seconds). After the window closes, publishes a fall/alert to the MQTT broker so
+    the caregiver dashboard can show the alert.
+
+    The caregiver is only notified AFTER the patient confirmation step — not immediately
+    on fall detection.
     """
 
     def __init__(
         self,
-        inference_client: InferenceServerClient,
-        patient_ids:      List[str],
-        mac_map:          Optional[dict] = None,
-        poll_interval:    int = 10,
-        lookback_seconds: int = 15,
+        inference_client:      InferenceServerClient,
+        patient_ids:           List[str],
+        mqtt_publisher,                           # paho mqtt.Client (connected)
+        mac_map:               Optional[dict] = None,
+        poll_interval:         int = 10,
+        lookback_seconds:      int = 15,
+        alert_topic:           str = "fall/alert",
+        confirmation_timeout:  int = 10,
     ):
         super().__init__(daemon=True, name="MockAppPoller")
-        self.client          = inference_client
-        self.patient_ids     = patient_ids
-        self.mac_map         = mac_map or {}
-        self.poll_interval   = poll_interval
-        self.lookback_seconds = lookback_seconds
-        self._stop           = threading.Event()
-        self._uses_barometer: Optional[bool] = None
+        self.client               = inference_client
+        self.patient_ids          = patient_ids
+        self._mqtt                = mqtt_publisher
+        self.mac_map              = mac_map or {}
+        self.poll_interval        = poll_interval
+        self.lookback_seconds     = lookback_seconds
+        self._alert_topic         = alert_topic
+        self._confirmation_timeout = confirmation_timeout
+        self._stop                = threading.Event()
+        self._uses_barometer:     Optional[bool] = None
 
     # ------------------------------------------------------------------
     def stop(self) -> None:
@@ -60,6 +76,44 @@ class MockAppPoller(threading.Thread):
             self._uses_barometer = self.client.uses_barometer()
             logger.info(f"Server uses_barometer = {self._uses_barometer}")
         return self._uses_barometer
+
+    # ------------------------------------------------------------------
+    def _simulate_patient_confirmation(self, patient_id: str, event: dict) -> None:
+        """
+        Runs in a daemon thread, simulating the patient seeing the confirmation popup.
+
+        Real mobile app behaviour:
+          - Screen wakes up, shows: "Did you fall? (Yes/No)" with 10s countdown
+          - If Yes: second popup "Do you need help? (Yes/No)"
+          - If Yes or timeout: publish fall/alert → caregiver is notified
+          - If No at first popup: no alert sent to caregiver
+
+        Mock behaviour:
+          - Waits MOCK_PATIENT_RESPONSE_TIMEOUT seconds (no user input)
+          - Treats timeout as "not_answered" → publishes alert anyway (conservative)
+        """
+        logger.info(
+            f"[Patient confirmation window open — {self._confirmation_timeout}s]  "
+            f"patient={patient_id}"
+        )
+        time.sleep(self._confirmation_timeout)
+
+        alert_payload = {
+            **event,
+            "alert_time":       datetime.now(timezone.utc).isoformat(),
+            "patient_confirmed": "not_answered",  # mock always times out
+            "needs_help":        True,            # conservative: assume help needed on timeout
+        }
+
+        topic = f"{self._alert_topic}/{patient_id}"
+        try:
+            result = self._mqtt.publish(topic, json.dumps(alert_payload, default=str))
+            logger.info(
+                f"*** ALERT published  topic={topic}  patient={patient_id}  "
+                f"(no patient response after {self._confirmation_timeout}s)"
+            )
+        except Exception as exc:
+            logger.warning(f"Alert publish failed for {patient_id}: {exc}")
 
     # ------------------------------------------------------------------
     def _poll_one(self, patient_id: str) -> None:
@@ -93,20 +147,42 @@ class MockAppPoller(threading.Thread):
         is_fall    = bool(inference.get("fall_detected", False))
         confidence = inference.get("confidence", 0.0)
 
-        if is_fall:
-            logger.info(
-                f"*** FALL — patient={patient_id}  confidence={confidence:.3f}  "
-                f"(inference server will publish to MQTT)"
-            )
-        else:
+        if not is_fall:
             logger.info(f"no fall — patient={patient_id}  confidence={confidence:.3f}")
+            return
+
+        logger.info(
+            f"FALL DETECTED — patient={patient_id}  confidence={confidence:.3f}  "
+            f"opening patient confirmation window ({self._confirmation_timeout}s)..."
+        )
+
+        # Build the event payload that will eventually reach the caregiver
+        event = {
+            "patient_id":       patient_id,
+            "device_id":        mac_address,
+            "timestamp":        result.get("timestamp"),
+            "fall_detected":    True,
+            "confidence":       round(float(confidence), 4),
+            "model_version":    inference.get("model_version"),
+            "fhir_observation": result.get("fhir_observation"),
+        }
+
+        # Open patient confirmation in background — poller continues polling other patients
+        t = threading.Thread(
+            target=self._simulate_patient_confirmation,
+            args=(patient_id, event),
+            daemon=True,
+            name=f"PatientConfirm-{patient_id}",
+        )
+        t.start()
 
     # ------------------------------------------------------------------
     def run(self) -> None:
         logger.info(
             f"MockAppPoller started  patients={self.patient_ids}  "
             f"interval={self.poll_interval}s  lookback={self.lookback_seconds}s  "
-            f"mac_map={self.mac_map or '(none)'}"
+            f"confirmation_timeout={self._confirmation_timeout}s  "
+            f"alert_topic={self._alert_topic}/#"
         )
         while not self._stop.is_set():
             for pid in self.patient_ids:

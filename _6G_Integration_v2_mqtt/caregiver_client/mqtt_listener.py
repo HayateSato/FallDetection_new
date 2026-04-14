@@ -1,21 +1,16 @@
 """
-MQTT subscriber — listens on the inference server's fall topic and forwards
-each message to in-process SSE subscribers (the dashboard).
-
-The poller already writes fall_history rows directly when /predict returns.
-MQTT is used purely as the live notification path: as soon as the server
-detects a fall it publishes; this listener picks it up and pushes the event
-to every connected dashboard browser via Server-Sent Events.
-
-Why both paths (DB write from poller AND MQTT live push)?
-  - DB write happens whenever the response comes back from /predict (durable history)
-  - MQTT push is the real-time channel — decoupled from the HTTP roundtrip,
-    so future producers (e.g. the mobile app) can also feed the dashboard
+MQTT subscriber — listens for confirmed fall alerts from the mobile app
+and forwards them to in-process SSE subscribers (the caregiver dashboard).
 
 Topic structure:
-  MQTT_FALL_TOPIC (default: fall/events) acts as a prefix.
-  The inference server publishes to  fall/events/<patient_id>
-  This listener subscribes to        fall/events/#   (wildcard — all patients)
+  fall/events/<patient_id>  — inference server publishes (fall detected)
+                              NOT subscribed here — that's the mobile app's concern
+  fall/alert/<patient_id>   — mobile app publishes AFTER patient confirmation/timeout
+                              THIS listener subscribes to fall/alert/#
+
+The caregiver dashboard only receives events that have passed through the
+patient confirmation step. Raw fall detections (fall/events) are handled
+by the mobile app, which decides whether to escalate.
 """
 
 import asyncio
@@ -33,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 MQTT_BROKER_HOST = os.getenv("MQTT_BROKER_HOST", "").strip()
 MQTT_BROKER_PORT = int(os.getenv("MQTT_BROKER_PORT", "1883"))
-MQTT_FALL_TOPIC  = os.getenv("MQTT_FALL_TOPIC", "fall/events")
+MQTT_ALERT_TOPIC = os.getenv("MQTT_ALERT_TOPIC", "fall/alert")  # confirmed alerts from mobile app
 MQTT_USERNAME    = os.getenv("MQTT_USERNAME", "").strip()
 MQTT_PASSWORD    = os.getenv("MQTT_PASSWORD", "").strip()
 
@@ -45,11 +40,12 @@ class FallEventBroker:
     registers a queue and gets every fall event pushed onto it.
 
     on_fall (optional):
-        Sync callback called from paho's thread on each fall event BEFORE
+        Sync callback called from paho's thread on each confirmed alert BEFORE
         fan-out to SSE clients.  Signature: (event: dict) -> None.
-        Used by the caregiver client to write the fall to the local DB and
-        start the 10-second auto-confirm timer.  If not set, events are
-        forwarded to SSE only (no DB write).
+        Used by the caregiver client to write the fall to the local DB.
+        The patient confirmation step already happened in the mobile app before
+        this alert was published — no auto-confirm timer needed here.
+        If not set, events are forwarded to SSE only (no DB write).
     """
 
     def __init__(self) -> None:
@@ -85,7 +81,7 @@ class FallEventBroker:
             self._client = client
             logger.info(f"FallEventBroker connecting to MQTT "
                         f"{MQTT_BROKER_HOST}:{MQTT_BROKER_PORT}"
-                        f"  subscribing to {MQTT_FALL_TOPIC}/#")
+                        f"  subscribing to {MQTT_ALERT_TOPIC}/#")
         except Exception as exc:
             logger.warning(f"MQTT broker connection failed ({exc}) — "
                            "live dashboard alerts disabled.")
@@ -124,7 +120,7 @@ class FallEventBroker:
 
     def _on_connect(self, client, userdata, flags, rc) -> None:
         if rc == 0:
-            topic = f"{MQTT_FALL_TOPIC}/#"
+            topic = f"{MQTT_ALERT_TOPIC}/#"
             client.subscribe(topic)
             logger.info(f"MQTT connected — subscribed to '{topic}'")
         else:
