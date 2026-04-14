@@ -84,7 +84,7 @@ def cancel_auto_confirm_timer(fall_id: int) -> None:
 @app.on_event("startup")
 async def _startup() -> None:
     cdb.init_db()
-    await broker.start()
+    # broker.start() is called from client.py after wiring the on_fall callback
 
 
 @app.on_event("shutdown")

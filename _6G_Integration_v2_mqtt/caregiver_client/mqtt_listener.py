@@ -44,14 +44,19 @@ class FallEventBroker:
     Keeps a set of asyncio.Queue subscribers; each /api/stream connection
     registers a queue and gets every fall event pushed onto it.
 
-    Public interface is identical to the previous Redis-based FallEventBroker
-    so web.py requires no changes beyond the import.
+    on_fall (optional):
+        Sync callback called from paho's thread on each fall event BEFORE
+        fan-out to SSE clients.  Signature: (event: dict) -> None.
+        Used by the caregiver client to write the fall to the local DB and
+        start the 10-second auto-confirm timer.  If not set, events are
+        forwarded to SSE only (no DB write).
     """
 
     def __init__(self) -> None:
         self._subscribers: Set[asyncio.Queue] = set()
         self._client: Optional[object] = None   # paho mqtt.Client
         self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self.on_fall = None   # set by client.py before broker.start()
 
     # ------------------------------------------------------------------
     async def start(self) -> None:
@@ -132,7 +137,11 @@ class FallEventBroker:
     def _on_message(self, client, userdata, msg) -> None:
         """
         Paho calls this in its own background thread.
-        Parse the payload and schedule publish_local() on the asyncio event loop.
+
+        If on_fall is set (caregiver mode):
+          - on_fall() handles DB write, auto-confirm timer, AND publish_local()
+        Otherwise:
+          - publish_local() is scheduled directly (SSE fan-out only, no DB write)
         """
         try:
             payload = msg.payload.decode("utf-8")
@@ -148,4 +157,11 @@ class FallEventBroker:
             logger.warning("Event loop not available — cannot forward MQTT event to SSE")
             return
 
-        asyncio.run_coroutine_threadsafe(self.publish_local(event), self._loop)
+        if self.on_fall is not None:
+            # on_fall is responsible for publish_local + DB + timer
+            try:
+                self.on_fall(event)
+            except Exception as exc:
+                logger.warning(f"on_fall callback raised: {exc}")
+        else:
+            asyncio.run_coroutine_threadsafe(self.publish_local(event), self._loop)
