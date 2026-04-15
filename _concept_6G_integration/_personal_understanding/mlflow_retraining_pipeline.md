@@ -185,3 +185,14 @@ around the training script that records everything that went in and came out.
 The cost is small (a few extra lines in `retrain.py`). The benefit is that six months
 from now, when someone asks "why did the fall detection rate drop after the last
 model update?", you have a complete audit trail to answer that question.
+
+
+
+--- 
+**Data source for retraining: Postgres, not InfluxDB.**
+
+Here's why: the inference server already stores pre-computed features in `feature_snapshot` (one row per feature per prediction). `fall_history` stores the ground truth label (`patient_confirmed`). So retraining is just a SQL JOIN — no InfluxDB archaeology needed.
+
+For testing without Charite patients: `seed_test_data.py` either generates synthetic labelled windows (no InfluxDB needed, fastest) or reads from your own InfluxDB, runs the same preprocessing pipeline, and inserts rows directly into Postgres — simulating what would have happened if patients had been wearing the device.
+
+Now let me implement all of Step 11:

@@ -1,0 +1,23 @@
+# Retraining pipeline dependencies
+# pip install -r retrain/requirements.txt
+
+# MLflow — experiment tracking, model registry, artifact store
+mlflow>=2.10
+
+# ML
+xgboost>=1.7
+scikit-learn>=1.3
+numpy
+pandas
+joblib
+
+# DB access (shared with other components)
+sqlalchemy>=2.0
+# Optional Postgres driver — uncomment if DATABASE_URL points at Postgres
+# psycopg2-binary
+
+# Configuration
+python-dotenv
+
+# InfluxDB (only needed for --influxdb mode in seed_test_data.py)
+influxdb-client

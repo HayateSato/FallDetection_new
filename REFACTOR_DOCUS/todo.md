@@ -80,7 +80,7 @@ Sample rate confirmed 50Hz → `HARDWARE_ACC_SAMPLE_RATE=50` set in `.env`.
 
 ---
 
-## Step 6b — Postgres: Shared Inference Log + Fall History DB (H) ← REQUIRED
+## Step 6b — Postgres: Shared Inference Log + Fall History DB (H) ✓
 
 **Decision (2026-04-15):** Not optional. Required for:
 1. Retraining pipeline — confirmed falls (from `fall_history`) joined with ACC windows
@@ -91,25 +91,20 @@ Sample rate confirmed 50Hz → `HARDWARE_ACC_SAMPLE_RATE=50` set in `.env`.
 - `fall_detection` — our tables (inference_log, feature_snapshot, fall_history, participant_session)
 - `mlflow` — MLflow's internal tracking tables (kept separate to avoid migration conflicts)
 
-Both `inference_server` and `caregiver_client` point at the same Postgres instance but
-write to different tables. Both live in the same Kubernetes namespace so no cross-namespace
-DB traffic.
+Cross-reference key: `observation_id` (UUID, not integer FK) is generated at the start of
+every `/predict` call, returned in the HTTP response, carried through MQTT alert payload,
+and stored in both `inference_log.observation_id` and `fall_history.observation_id`.
+This allows the retraining JOIN without a synchronous DB call in the HTTP handler.
 
-The `fall_history.inference_id` FK links each confirmed alert to its `inference_log` row —
-makes the retraining JOIN a single FK lookup.
-
-- [ ] 6.5 Copy `_OLD/.../db_writer.py` → `inference_server/services/db_writer.py`
-- [ ] 6.6 Create `shared/db/models.py` with updated schema:
-        `inference_log`, `feature_snapshot`, `fall_history` (add `inference_id` FK + `needs_help`),
-        `participant_session`
-- [ ] 6.7 Create `shared/db/session.py` — `SessionLocal` factory + `get_db()` dependency
-- [ ] 6.8 Set up Alembic in `shared/db/migrations/`
-- [ ] 6.9 Add `BackgroundTasks` DB write in `/predict` (inference_server)
-- [ ] 6.10 Update `caregiver_client/db.py` to use the shared models (drop standalone SQLite schema)
-- [ ] 6.11 Inference server puts its `inference_log.id` in the MQTT alert payload so caregiver_client
-         can set `fall_history.inference_id` on arrival
-- [ ] 6.12 Update `DATABASE_URL` in `.env` to point at Postgres
-         (keep SQLite fallback for local dev without Docker)
+- [x] 6.5 Created `inference_server/services/db_writer.py` — BackgroundTask write; never raises
+- [x] 6.6 Created `shared/db/models.py` — InferenceLog, FeatureSnapshot, FallHistory, ParticipantSession
+- [x] 6.7 Created `shared/db/session.py` — SessionLocal factory, get_db(), init_db()
+- [x] 6.8 Set up Alembic: `alembic.ini` + `shared/db/migrations/` + `versions/0001_initial_schema.py`
+- [x] 6.9 Added `BackgroundTasks` DB write (step 10) in `/predict`; `observation_id` in PredictResponse
+- [x] 6.10 Rewrote `caregiver_client/db.py` to import from shared models; added `observation_id`, `needs_help`
+- [x] 6.11 `mock_app/poller.py` includes `observation_id` from HTTP response in MQTT alert payload;
+          `caregiver_client/client.py` reads it and passes to `record_fall()`
+- [x] 6.12 `DATABASE_URL=sqlite:///./caregiver.db` in `.env` (SQLite default; Postgres in production)
 
 ---
 
@@ -176,36 +171,60 @@ makes the retraining JOIN a single FK lookup.
 
 ---
 
-## Step 11 — MLflow: Retraining on Charite Data (H)
+## Step 11 — MLflow: Retraining on Charite Data (H) ✓ (pipeline implemented; data pending)
 
 **Pre-condition:** Charite data sharing agreement required before using patient data.
+**For testing:** Use `retrain/seed_test_data.py` to seed Postgres from our own InfluxDB or synthetic data.
+**Data source for retraining:** Postgres only (feature_snapshot + fall_history). InfluxDB is only upstream.
 
-### 11a — MLflow tracking server
+### 11a — MLflow tracking server ✓
 
-- [ ] 11.1 Add `mlflow` to requirements
+- [x] 11.1 Added `mlflow>=2.10` to `retrain/requirements.txt`
 - [ ] 11.2 MLflow tracking server as a pod; backed by `mlflow` Postgres database + MinIO artifact store
-         (MinIO needed only when inference server loads models from registry across pods)
-- [ ] 11.3 Set `MLFLOW_TRACKING_URI` in `.env`
+         (MinIO needed only when inference server loads models from registry across pods) — deferred to Step 9 (Helm)
+- [x] 11.3 Added `MLFLOW_TRACKING_URI=./mlruns` to `.env` (local file store; change to `http://mlflow:5000` in production)
 
-### 11b — Instrument training script
+### 11b — Instrument training script ✓
 
-- [ ] 11.4 Wrap with `mlflow.start_run()` context
-- [ ] 11.5 Log parameters: `window_seconds`, `sample_rate`, `model_version`, `threshold`, `feature_set`
-- [ ] 11.6 Log metrics: `accuracy`, `precision`, `recall`, `f1`, `auc`, confusion matrix
-- [ ] 11.7 Log trained `.pkl` as MLflow artifact
-- [ ] 11.8 Tag runs: `dataset=charite` vs `dataset=original`
+- [x] 11.4 `retrain/retrain.py` — wraps training with `mlflow.start_run()`
+- [x] 11.5 Logs params: `model_version`, `n_features`, `n_train`, `n_test`, `scale_pos_weight`, `threshold`
+- [x] 11.6 Logs metrics: `accuracy`, `precision`, `recall`, `f1`, `auc`, `tp`, `fp`, `tn`, `fn`
+- [x] 11.7 Logs trained `.pkl` as MLflow artifact via `mlflow.xgboost.log_model()`
+- [x] 11.8 Tags runs: `dataset=our_data` vs `dataset=charite`; `model_version`, `feature_set`, `window_seconds`
 
-### 11c — Model registry
+### 11c — Model registry (partial)
 
-- [ ] 11.9 Register best model in MLflow Model Registry
-- [ ] 11.10 Stages: `Staging` → evaluate → `Production`
-- [ ] 11.11 Wire `POST /model/switch` to load from registry by name/stage
+- [x] 11.9 `--register` flag in `retrain.py` registers model in MLflow Model Registry as `fall-detection-xgboost`
+- [ ] 11.10 Stages: `Staging` → evaluate → `Production` — manual via MLflow UI; no code needed
+- [ ] 11.11 Wire `POST /model/switch` to load from registry by name/stage — deferred; current hot-swap is file-based
 
-### 11d — Retraining data pipeline
+### 11d — Retraining data pipeline ✓
 
-- [ ] 11.12 Query: `SELECT il.acc_features, fh.patient_confirmed FROM inference_log il JOIN fall_history fh ON fh.inference_id = il.id WHERE il.fall_detected = TRUE`
-- [ ] 11.13 Write `retrain.py` with feature extraction + XGBoost training
-- [ ] 11.14 Define retraining trigger: manual / scheduled cron / confidence drift threshold
+- [x] 11.12 `retrain/data_pipeline.py` — JOIN query; pivot feature_snapshot long→wide; label assignment
+- [x] 11.13 `retrain/retrain.py` — full training script (load → split → XGBoost fit → MLflow log → save .pkl)
+- [x] 11.14 Trigger: manual (`python -m retrain.retrain`). Scheduled / drift-based trigger deferred.
+- [x] 11.15 `retrain/seed_test_data.py` — seeds Postgres for testing without Charite data:
+           `--synthetic N` (no InfluxDB needed) or `--influxdb` (real windows from our InfluxDB)
+
+### How to test the pipeline now (no Charite data needed)
+
+```powershell
+# From _6G_Integration_v2_mqtt/ as cwd, with venv active:
+pip install -r retrain/requirements.txt
+
+# Seed with 100 synthetic labelled windows:
+python -m retrain.seed_test_data --synthetic 100 --model-version v3
+
+# Check dataset stats:
+python -m retrain.retrain --dry-run
+
+# Train + log to MLflow:
+python -m retrain.retrain --model-version v3 --dataset our_data
+
+# View results:
+mlflow ui --backend-store-uri ./mlruns
+# → http://localhost:5000
+```
 
 ---
 
@@ -225,6 +244,7 @@ Also: writes fall detection result + patient confirmation to FOCUS InfluxDB from
 
 | Task | Notes |
 |------|-------|
-| **Step 6b (Postgres)** | Required — start with shared models + Alembic setup |
-| Step 8.1–8.3 (API docs for Isa) | Write up current endpoints + response field shapes |
-| Step 11a (MLflow tracking server) | Blocked only on data sharing agreement with Charite |
+| **Step 6c (Grafana dashboards)** | Needs Docker Compose with Prometheus + Grafana; code ready |
+| **Step 8.1–8.3 (API docs for Isa)** | Write up current endpoints + response field shapes |
+| **Step 10 (End-to-end test)** | Steps 1–3, 6b, 11 complete — can run local test now |
+| **Test MLflow pipeline** | Run `seed_test_data.py --synthetic 100` then `retrain.py` — no blockers |
