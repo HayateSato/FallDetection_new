@@ -156,11 +156,15 @@ class MockAppPoller(threading.Thread):
             f"opening patient confirmation window ({self._confirmation_timeout}s)..."
         )
 
-        # Build the event payload that will eventually reach the caregiver
+        # Build the event payload that will eventually reach the caregiver.
+        # observation_id is the UUID returned by /predict — it links the
+        # fall_history row (written by caregiver_client) to the inference_log
+        # row (written by the inference_server BackgroundTask) for retraining.
         event = {
             "patient_id":       patient_id,
             "device_id":        mac_address,
             "timestamp":        result.get("timestamp"),
+            "observation_id":   result.get("observation_id"),   # UUID cross-ref key
             "fall_detected":    True,
             "confidence":       round(float(confidence), 4),
             "model_version":    inference.get("model_version"),

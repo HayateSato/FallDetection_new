@@ -43,7 +43,7 @@ from typing import Dict, List, Optional
 import httpx
 import numpy as np
 import uvicorn
-from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
@@ -57,6 +57,12 @@ try:
     from inference_server.services.metrics_collector import record_prediction as _record_prediction
 except ImportError:
     def _record_prediction(*args, **kwargs):
+        pass
+
+try:
+    from inference_server.services.db_writer import write_inference_log as _write_inference_log
+except ImportError:
+    def _write_inference_log(*args, **kwargs):
         pass
 
 # ---------------------------------------------------------------------------
@@ -260,7 +266,13 @@ class PredictResponse(BaseModel):
     Combined response: inference result + FHIR R4 Observation.
     The `fhir_observation` field is a complete, valid FHIR R4 Observation
     resource that can be POSTed directly to a FHIR server.
+
+    `observation_id` is the UUID cross-reference key: it is stored in
+    inference_log (written as a BackgroundTask) and should be included in
+    the MQTT alert payload by mock_app so caregiver_client can store it in
+    fall_history — enabling the retraining JOIN without a synchronous DB call.
     """
+    observation_id:   str
     patient_id:       str
     device_id:        Optional[str]
     timestamp:        str
@@ -344,7 +356,7 @@ async def model_info():
 
 @app.post("/predict", response_model=PredictResponse,
           dependencies=[Depends(verify_api_key)])
-async def predict(req: PredictRequest):
+async def predict(req: PredictRequest, background_tasks: BackgroundTasks):
     """
     Run fall detection on one window of sensor data.
 
@@ -478,7 +490,24 @@ async def predict(req: PredictRequest):
             if is_fall or not FHIR_PUSH_ON_FALL_ONLY:
                 fhir_pushed = await _push_to_fhir_server(fhir_obs)
 
+        # 10. Write inference log to Postgres (BackgroundTask — runs after response sent)
+        detection_time = datetime.fromisoformat(timestamp)
+        background_tasks.add_task(
+            _write_inference_log,
+            observation_id = obs_id,
+            patient_id     = req.patient_id,
+            device_id      = req.device_id,
+            model_version  = model_version,
+            fall_detected  = is_fall,
+            confidence     = float(confidence),
+            window_size    = len(window_df),
+            latency_ms     = latency_ms,
+            detection_time = detection_time,
+            features       = result.get("features", {}),
+        )
+
         return PredictResponse(
+            observation_id=obs_id,
             patient_id=req.patient_id,
             device_id=req.device_id,
             timestamp=timestamp,

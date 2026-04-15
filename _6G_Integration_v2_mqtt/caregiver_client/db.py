@@ -2,103 +2,58 @@
 Caregiver client database layer.
 ================================
 
-Two tables:
+Uses the shared ORM models from shared.db so both the inference_server
+(inference_log + feature_snapshot) and the caregiver_client (fall_history +
+participant_session) write to the same SQLite / Postgres instance.
 
-  participant_session  — one row per recording session for a patient
-                         (reused from the full system's shared schema)
+Tables written by this module:
+  fall_history         — one row per MQTT fall/alert event received
+  participant_session  — one row per active patient session
 
-  fall_history         — one row per fall event observed by this client
-                         (new — exact columns requested for the 6G integration)
+Tables written by inference_server (read-only here):
+  inference_log        — one row per /predict call
+  feature_snapshot     — one row per feature per inference
 
-Defaults to a local SQLite file (caregiver.db) so the client runs without
-any external Postgres dependency. Set DATABASE_URL in .env to point at
-Postgres in production, e.g.
+Cross-reference: observation_id (UUID) is received in the MQTT alert payload
+and stored in fall_history. It links back to inference_log for the retraining
+JOIN without requiring a synchronous DB call in the inference server.
 
-    DATABASE_URL=postgresql+psycopg2://user:pass@host:5432/caregiver
+Defaults to SQLite (caregiver.db) so the client runs without Postgres. Set
+DATABASE_URL in .env to point at Postgres in production.
 """
 
 import logging
-import os
 from contextlib import contextmanager
 from datetime import datetime
 from typing import Generator, List, Optional
 
-from sqlalchemy import (
-    Boolean, Column, DateTime, Integer, String, create_engine, func, select
-)
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+from sqlalchemy import func, select
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Engine + session factory
+# Session factory + models — shared with inference_server
 # ---------------------------------------------------------------------------
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./caregiver.db")
-
-# SQLite needs check_same_thread=False because the InfluxDB poller and
-# the FastAPI request handlers run in different threads.
-_engine_kwargs = {}
-if DATABASE_URL.startswith("sqlite"):
-    # check_same_thread=False: poller thread + FastAPI threads share the DB
-    # timeout=30: wait up to 30s for a lock instead of failing immediately
-    _engine_kwargs["connect_args"] = {"check_same_thread": False, "timeout": 30}
-
-engine = create_engine(DATABASE_URL, future=True, **_engine_kwargs)
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
-
-
-class Base(DeclarativeBase):
-    pass
+from shared.db.session import SessionLocal, init_db as _shared_init_db
+from shared.db.models import FallHistory, ParticipantSession
 
 
 # ---------------------------------------------------------------------------
-# Models
-# ---------------------------------------------------------------------------
-
-class ParticipantSession(Base):
-    """One row per recording session — reused from full-system shared schema."""
-    __tablename__ = "participant_session"
-
-    id               = Column(Integer, primary_key=True, autoincrement=True)
-    participant_name = Column(String(100), nullable=False, index=True)
-    gender           = Column(String(10))
-    start_time       = Column(DateTime(timezone=True), server_default=func.now())
-    end_time         = Column(DateTime(timezone=True), nullable=True)
-    fall_count       = Column(Integer, default=0)
-
-
-class FallHistory(Base):
-    """
-    One row per fall event observed by this caregiver client.
-
-    Columns intentionally minimal — exactly what the 6G use case requires:
-      patient_id        : FHIR patient identifier
-      fall_detection    : binary, True if the model detected a fall
-      patient_confirmed : 'yes' | 'no' | 'not_answered'  (manual override / future feedback)
-      detection_time    : timestamp of the inference window
-    """
-    __tablename__ = "fall_history"
-
-    id                = Column(Integer, primary_key=True, autoincrement=True)
-    patient_id        = Column(String(100), nullable=False, index=True)
-    fall_detection    = Column(Boolean, nullable=False)
-    patient_confirmed = Column(String(20), nullable=False, default="not_answered")
-    detection_time    = Column(DateTime(timezone=True),
-                               server_default=func.now(), nullable=False, index=True)
-
-
-# ---------------------------------------------------------------------------
-# Helpers
+# Public init
 # ---------------------------------------------------------------------------
 
 def init_db() -> None:
     """Create tables on first run. Safe to call repeatedly."""
-    Base.metadata.create_all(engine)
-    logger.info(f"Database ready  url={DATABASE_URL}")
+    _shared_init_db()
+    logger.info("Database ready (shared schema)")
 
+
+# ---------------------------------------------------------------------------
+# Session helper
+# ---------------------------------------------------------------------------
 
 @contextmanager
-def session_scope() -> Generator[Session, None, None]:
+def session_scope() -> Generator:
     """Context-managed session — commits on success, rolls back on error."""
     db = SessionLocal()
     try:
@@ -111,19 +66,37 @@ def session_scope() -> Generator[Session, None, None]:
         db.close()
 
 
+# ---------------------------------------------------------------------------
+# Write helpers
+# ---------------------------------------------------------------------------
+
 def record_fall(
-    patient_id: str,
-    fall_detected: bool,
-    detection_time: Optional[datetime] = None,
+    patient_id:        str,
+    fall_detected:     bool,
+    detection_time:    Optional[datetime] = None,
     patient_confirmed: str = "not_answered",
+    observation_id:    Optional[str] = None,
+    needs_help:        Optional[bool] = None,
 ) -> int:
-    """Insert a fall_history row. Returns the new row id."""
+    """
+    Insert a fall_history row. Returns the new row id.
+
+    observation_id — UUID from the /predict HTTP response, carried through
+                     the MQTT alert payload. Links this row to inference_log
+                     for the retraining JOIN:
+                       SELECT * FROM inference_log il
+                       JOIN fall_history fh ON fh.observation_id = il.observation_id
+    needs_help     — patient response to the 'do you need help?' follow-up
+                     question in the mobile app confirmation popup.
+    """
     with session_scope() as db:
         row = FallHistory(
-            patient_id=patient_id,
-            fall_detection=fall_detected,
-            detection_time=detection_time or datetime.utcnow(),
-            patient_confirmed=patient_confirmed,
+            observation_id    = observation_id,
+            patient_id        = patient_id,
+            fall_detected     = fall_detected,
+            detection_time    = detection_time or datetime.utcnow(),
+            patient_confirmed = patient_confirmed,
+            needs_help        = needs_help,
         )
         db.add(row)
         db.flush()
@@ -153,14 +126,17 @@ def ensure_session(patient_id: str) -> None:
             db.add(ParticipantSession(participant_name=patient_id, fall_count=0))
 
 
+# ---------------------------------------------------------------------------
+# Read helpers
+# ---------------------------------------------------------------------------
+
 def list_patients() -> List[dict]:
     """Return one row per patient with fall counts."""
     with session_scope() as db:
-        # Falls per patient
         falls_by_patient = dict(
             db.execute(
                 select(FallHistory.patient_id, func.count(FallHistory.id))
-                .where(FallHistory.fall_detection.is_(True))
+                .where(FallHistory.fall_detected.is_(True))
                 .group_by(FallHistory.patient_id)
             ).all()
         )
@@ -175,17 +151,16 @@ def list_patients() -> List[dict]:
                 continue
             seen.add(s.participant_name)
             out.append({
-                "patient_id":  s.participant_name,
-                "fall_count":  falls_by_patient.get(s.participant_name, 0),
+                "patient_id":      s.participant_name,
+                "fall_count":      falls_by_patient.get(s.participant_name, 0),
                 "session_started": s.start_time.isoformat() if s.start_time else None,
                 "session_active":  s.end_time is None,
             })
-        # Patients that only show in fall_history (no session row yet)
         for pid, count in falls_by_patient.items():
             if pid not in seen:
                 out.append({
-                    "patient_id": pid,
-                    "fall_count": count,
+                    "patient_id":      pid,
+                    "fall_count":      count,
                     "session_started": None,
                     "session_active":  False,
                 })
@@ -203,14 +178,16 @@ def list_falls(
         if patient_id:
             stmt = stmt.where(FallHistory.patient_id == patient_id)
         if only_falls:
-            stmt = stmt.where(FallHistory.fall_detection.is_(True))
+            stmt = stmt.where(FallHistory.fall_detected.is_(True))
         rows = db.execute(stmt).scalars().all()
         return [
             {
                 "id":                r.id,
+                "observation_id":    r.observation_id,
                 "patient_id":        r.patient_id,
-                "fall_detection":    bool(r.fall_detection),
+                "fall_detected":     bool(r.fall_detected),
                 "patient_confirmed": r.patient_confirmed,
+                "needs_help":        r.needs_help,
                 "detection_time":    r.detection_time.isoformat() if r.detection_time else None,
             }
             for r in rows

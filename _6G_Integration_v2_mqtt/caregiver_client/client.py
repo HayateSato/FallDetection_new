@@ -95,6 +95,8 @@ async def _start_mqtt_with_callback() -> None:
         patient_id        = event.get("patient_id", "unknown")
         ts                = event.get("timestamp")
         patient_confirmed = event.get("patient_confirmed", "not_answered")
+        observation_id    = event.get("observation_id")      # UUID from /predict response
+        needs_help        = event.get("needs_help")          # bool from patient popup
         try:
             det_time = datetime.fromisoformat(ts) if ts else datetime.now(timezone.utc)
         except Exception:
@@ -106,6 +108,8 @@ async def _start_mqtt_with_callback() -> None:
             fall_detected     = True,
             detection_time    = det_time,
             patient_confirmed = patient_confirmed,
+            observation_id    = observation_id,
+            needs_help        = needs_help,
         )
         event["fall_id"] = fall_id
 

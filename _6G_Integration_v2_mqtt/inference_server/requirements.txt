@@ -20,5 +20,11 @@ httpx
 prometheus-client
 prometheus-fastapi-instrumentator
 
+# Database — inference log (BackgroundTask write to SQLite/Postgres)
+sqlalchemy>=2.0
+# Optional Postgres driver — uncomment if DATABASE_URL points at Postgres
+# psycopg2-binary
+alembic
+
 # Configuration
 python-dotenv
