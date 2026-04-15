@@ -1,0 +1,18 @@
+# Grafana dashboard provider provisioning
+# Tells Grafana to load all JSON files from /var/lib/grafana/dashboards/
+# (mounted from infrastructure/grafana/dashboards/ via docker-compose volume).
+
+apiVersion: 1
+
+providers:
+  - name:            fall-detection
+    orgId:           1
+    folder:          Fall Detection
+    folderUid:       fall-detection
+    type:            file
+    disableDeletion: false
+    editable:        true
+    updateIntervalSeconds: 30
+    allowUiUpdates: true
+    options:
+      path: /var/lib/grafana/dashboards
