@@ -35,11 +35,24 @@ the cluster over the network.
 │  (patient            │     │    HTTP response → fall_detected                     │
 │   demographics)      │     │          │ BackgroundTask                            │
 │                      │     │          ▼                                           │
-│  FOCUS Dashboard     │     │    inference_log + feature_snapshot                  │
-│  (patient info       │     │    (Postgres — fall_detection DB)                   │
-│   component)         │     │                                                      │
-│    │ reads FHIR  ────┤     │  MQTT broker  :1883                                  │
-│    │ reads InfluxDB  │     │    fall/alert/<patient_id>                           │
+│                      │     │    inference_log + feature_snapshot                  │
+│  Patient Dashboard   |     │    (Postgres — fall_detection DB)                   │
+|  (one web app shown  │     |                                                      |
+│   to the caregiver): │     │                                                      │
+│   • patient info     │     │  MQTT broker  :1883                                  │
+│     panel — FHIR     │     │    fall/alert/<patient_id>                           │
+│     demographics     │     │                                                      │
+│     (height, weight) │     │                                                      │
+│   • biosignal panel  │     │                                                      │
+│     — HR etc from    │     │                                                      │
+│     InfluxDB         │     │                                                      │
+│   • fall panel       │     │                                                      │
+│     (fall history +  │     │                                                      │
+│     real-time alert) │     │                                                      │
+│     ← served by      │     │                                                      │
+│       fall_dashboard │     │                                                      │
+│    │ reads FHIR  ────┤     │                                                      │
+│    │ reads InfluxDB  │     │                                                      │
 │    │ reads our API ──┼─────┼──► **fall_dashboard**  :8002                          │
 │                      │     │      - subscribes MQTT fall/alert/#                 │
 └──────────────────────┘     │      - writes fall_history (Postgres)               │
@@ -86,17 +99,21 @@ in-cluster setup.
 │                          │     │  inference_server                           │
 │  FHIR Server (mock)      │     │  fall_dashboard                             │
 │                          │     │  Postgres                                   │
-│  FOCUS Dashboard         │     │  MQTT broker                                │
-│  (patient info +         │     │  MLflow / Prometheus / Grafana              │
-│   caregiver dashboard)   │     │                                             │
+│  Patient Dashboard       │     │  MQTT broker                                │
+│  (one web app shown to   │     │  MLflow / Prometheus / Grafana              │
+│   the caregiver —        │     │                                             │
+│   patient info panel     │     │                                             │
+│   + fall panel)          │     │                                             │
 │                          │     │                                             │
 └──────────────────────────┘     └─────────────────────────────────────────────┘
 ```
 
-The caregiver dashboard (Isa's real UI) lives in the mock FOCUS namespace in this
-future setup — mirroring where it will sit in production. Our namespace only contains
-backend services. This validates that cross-namespace HTTP and MQTT connections work
-correctly before the real FOCUS deployment.
+The Patient Dashboard (Isa's real UI) is one web app shown to the caregiver. It
+combines two panels: patient info (demographics from FHIR, biosignals like HR from
+InfluxDB) and the fall panel (fall history + real-time alerts, data from our
+fall_dashboard API). It lives in the mock FOCUS namespace — mirroring production.
+Our namespace only contains backend services. This validates that cross-namespace
+HTTP and MQTT connections work correctly before the real FOCUS deployment.
 
 ---
 
