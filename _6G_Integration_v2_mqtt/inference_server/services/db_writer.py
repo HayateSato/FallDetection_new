@@ -10,7 +10,7 @@ Two rows are written per call:
   2. feature_snapshot — one row per feature (typically 16–22 rows)
 
 The observation_id (UUID) is already in the HTTP response, so mock_app can
-include it in the MQTT alert payload. caregiver_client stores it in
+include it in the MQTT alert payload. fall_dashboard stores it in
 fall_history.observation_id, linking the two tables for the retraining query.
 """
 

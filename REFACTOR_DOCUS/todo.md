@@ -45,7 +45,7 @@
 
 ## Step 3 — Caregiver Client: Subscribe to Confirmed Alerts Only (H) ✓
 
-- [x] 3.1 Create `caregiver_client/mqtt_listener.py` — subscribes to `fall/alert/#`
+- [x] 3.1 Create `fall_dashboard/mqtt_listener.py` — subscribes to `fall/alert/#`
 - [x] 3.2 `on_fall` callback wired before `broker.start()` (avoids race condition)
 - [x] 3.3 `_on_fall_mqtt` reads `patient_confirmed` from alert payload
 - [x] 3.4 Removed `start_auto_confirm_timer` — patient confirmation is mobile app's responsibility
@@ -101,17 +101,40 @@ This allows the retraining JOIN without a synchronous DB call in the HTTP handle
 - [x] 6.7 Created `shared/db/session.py` — SessionLocal factory, get_db(), init_db()
 - [x] 6.8 Set up Alembic: `alembic.ini` + `shared/db/migrations/` + `versions/0001_initial_schema.py`
 - [x] 6.9 Added `BackgroundTasks` DB write (step 10) in `/predict`; `observation_id` in PredictResponse
-- [x] 6.10 Rewrote `caregiver_client/db.py` to import from shared models; added `observation_id`, `needs_help`
+- [x] 6.10 Rewrote `fall_dashboard/db.py` to import from shared models; added `observation_id`, `needs_help`
 - [x] 6.11 `mock_app/poller.py` includes `observation_id` from HTTP response in MQTT alert payload;
-          `caregiver_client/client.py` reads it and passes to `record_fall()`
+          `fall_dashboard/client.py` reads it and passes to `record_fall()`
 - [x] 6.12 `DATABASE_URL=sqlite:///./caregiver.db` in `.env` (SQLite default; Postgres in production)
 
 ---
 
-## Step 6c — Grafana Dashboards (H)
+## Step 6c — Grafana Dashboards (H) ✓
 
-- [ ] 6.13 Add Prometheus + Grafana to Helm chart (Step 9)
-- [ ] 6.14 Wire 3 dashboards: `ml_server_overview`, `model_performance`, `fall_events_timeline`
+**Infrastructure:** `infrastructure/` folder — Docker Compose spins up Postgres, MQTT, Prometheus, Grafana.
+Python services (inference_server, fall_dashboard, mock_app) still run manually in terminals.
+
+Run order:
+```powershell
+# 1 — Start infrastructure (from _6G_Integration_v2_mqtt/):
+docker-compose -f infrastructure/docker-compose.yml up
+
+# 2 — Switch DATABASE_URL in .env to Postgres (see .env comment), then run migrations:
+$env:DATABASE_URL = "postgresql+psycopg2://fall_user:fall_pass@localhost:5432/fall_detection"
+alembic upgrade head
+
+# 3 — Start Python services as normal (see README run order)
+```
+
+- [x] 6.13 Add Prometheus + Grafana to Docker Compose (`infrastructure/docker-compose.yml`)
+       Helm chart wiring deferred to Step 9 (blocked on FOCUS DevOps)
+- [x] 6.14 Wired 3 dashboards (auto-provisioned via `infrastructure/grafana/provisioning/`):
+       - `ml_server_overview.json` — request rate, error rate, p95 latency, falls/hour, confidence buckets
+       - `model_performance.json`  — fall rate trend, confidence distribution, low-confidence ratio (drift alert), per-version breakdown
+       - `fall_events_timeline.json` — SQL-backed: falls today, recent events table, confidence scatter, falls per patient
+- [x] 6.15 Created `infrastructure/postgres/init.sql` — creates `fall_detection` + `mlflow` databases
+- [x] 6.16 Created `infrastructure/mosquitto/mosquitto.conf` — MQTT broker config (replaces manual docker run command)
+- [x] 6.17 Created `infrastructure/prometheus/prometheus.yml` — scrapes `host.docker.internal:8001/metrics`
+- [x] 6.18 Created `infrastructure/grafana/provisioning/datasources/datasources.yaml` — Prometheus + PostgreSQL datasources auto-provisioned
 
 ---
 
@@ -145,7 +168,7 @@ This allows the retraining JOIN without a synchronous DB call in the HTTP handle
 - **FOCUS namespace** — FHIR server, InfluxDB (eventually), mobile app, FOCUS data fetcher
 - **Our namespace** — everything we build (see deployment_architecture.md for full breakdown)
 
-- [ ] 9.1 Write `Dockerfile` for each component (inference_server, caregiver_client, MLflow, Prometheus, Grafana)
+- [ ] 9.1 Write `Dockerfile` for each component (inference_server, fall_dashboard, MLflow, Prometheus, Grafana)
 - [ ] 9.2 Create `helm/fall-detection/` chart with one `values.yaml`
 - [ ] 9.3 Each component = one Kubernetes `Deployment` + `Service`
 - [ ] 9.4 Postgres as a `StatefulSet` with persistent volume (one instance, two databases)
@@ -244,7 +267,13 @@ Also: writes fall detection result + patient confirmation to FOCUS InfluxDB from
 
 | Task | Notes |
 |------|-------|
-| **Step 6c (Grafana dashboards)** | Needs Docker Compose with Prometheus + Grafana; code ready |
 | **Step 8.1–8.3 (API docs for Isa)** | Write up current endpoints + response field shapes |
-| **Step 10 (End-to-end test)** | Steps 1–3, 6b, 11 complete — can run local test now |
-| **Test MLflow pipeline** | Run `seed_test_data.py --synthetic 100` then `retrain.py` — no blockers |
+| **Step 10 (End-to-end test)** | Steps 1–3, 6b, 6c, 11 complete — can run full local test now |
+| **Test MLflow pipeline** | `seed_test_data.py --synthetic 100` then `retrain.py` — no blockers |
+| **Test Grafana** | `docker-compose -f infrastructure/docker-compose.yml up`, then start inference_server, run a few /predict calls |
+
+
+
+manually added list 
+ - is the Eclipse MQTT compatible to the mobile app built with react native 
+ - 

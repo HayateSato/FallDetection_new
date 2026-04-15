@@ -3,8 +3,8 @@
 Three-component fall detection stack designed for the FOCUS / Charite monitoring
 ecosystem. The inference server returns FHIR R4 Observation resources over HTTP.
 The mobile app (mock or real) handles patient confirmation and publishes a confirmed
-alert over MQTT. The caregiver client subscribes to those alerts and shows a
-real-time dashboard.
+alert over MQTT. The fall dashboard subscribes to those alerts and shows a
+real-time caregiver view.
 
 ```
 _6G_Integration_v2_mqtt/
@@ -28,8 +28,8 @@ _6G_Integration_v2_mqtt/
 │   ├── api_caller.py           ← HTTP client to inference server
 │   └── requirements.txt
 │
-└── caregiver_client/           ← dashboard (subscribes to MQTT alerts)
-    ├── client.py               ← entry point: python -m caregiver_client.client
+└── fall_dashboard/             ← dashboard (subscribes to MQTT alerts)
+    ├── client.py               ← entry point: python -m fall_dashboard.client
     ├── mqtt_listener.py        ← FallEventBroker: MQTT → SSE fan-out
     ├── web.py                  ← FastAPI :8002 (JSON API + SSE + dashboard)
     ├── db.py                   ← SQLAlchemy: participant_session + fall_history
@@ -62,7 +62,7 @@ _6G_Integration_v2_mqtt/
 [MQTT broker :1883]
     │  route to subscribers of fall/alert/#
     ▼
-[caregiver_client :8002]
+[fall_dashboard :8002]
     │  DB write (SQLite)
     │  SSE fan-out
     ▼
@@ -75,7 +75,7 @@ _6G_Integration_v2_mqtt/
 | Component | Role | Topic |
 |-----------|------|-------|
 | `mock_app` | publisher | `fall/alert/<patient_id>` |
-| `caregiver_client` | subscriber | `fall/alert/#` |
+| `fall_dashboard` | subscriber | `fall/alert/#` |
 
 The inference server has **no MQTT client**. It receives requests and returns
 responses over HTTP. The mobile app already has the fall result in the HTTP
@@ -90,8 +90,8 @@ response — no second channel is needed.
 | FHIR conversion | inference_server (returned in HTTP response) |
 | Patient confirmation popup | mock_app (real app: phone UI) |
 | Confirmed alert delivery | mock_app publishes MQTT |
-| Fall history storage | caregiver_client (own SQLite/Postgres DB) |
-| Live dashboard push | caregiver_client MQTT → SSE → browser |
+| Fall history storage | fall_dashboard (own SQLite/Postgres DB) |
+| Live dashboard push | fall_dashboard MQTT → SSE → browser |
 | FHIR auto-push to partner server | inference_server (optional) |
 
 ---
@@ -104,7 +104,7 @@ cd _6G_Integration_v2_mqtt
 # 1 — Install dependencies
 pip install -r inference_server/requirements.txt
 pip install -r mock_app/requirements.txt
-pip install -r caregiver_client/requirements.txt
+pip install -r fall_dashboard/requirements.txt
 
 # 2 — Start MQTT broker (first time only)
 docker run -d --name mqtt-local -p 1883:1883 eclipse-mosquitto
@@ -114,8 +114,8 @@ docker run -d --name mqtt-local -p 1883:1883 eclipse-mosquitto
 # 4 — Terminal 1: inference server
 uvicorn inference_server.server:app --host 0.0.0.0 --port 8001
 
-# 5 — Terminal 2: caregiver dashboard
-python -m caregiver_client.client
+# 5 — Terminal 2: fall dashboard
+python -m fall_dashboard.client
 # Dashboard: http://localhost:8002/
 
 # 6 — Terminal 3: mock mobile app
@@ -126,7 +126,7 @@ Verify:
 ```powershell
 curl.exe http://localhost:8001/health
 curl.exe http://localhost:8001/model/info      # check uses_barometer
-curl.exe http://localhost:8002/api/patients    # caregiver API
+curl.exe http://localhost:8002/api/patients    # fall dashboard API
 ```
 
 ---
@@ -182,7 +182,7 @@ Exposes: `fall_detections_total`, `inference_latency_seconds`, `model_confidence
 
 ---
 
-## Caregiver Client API (port 8002)
+## Fall Dashboard API (port 8002)
 
 | Method | Path | Purpose |
 |--------|------|---------|
@@ -200,7 +200,7 @@ The dashboard:
 
 ## `fall_history` table — schema
 
-Created automatically on first run by `caregiver_client/db.py`.
+Created automatically on first run by `fall_dashboard/db.py`.
 
 | Column | Type | Notes |
 |--------|------|-------|

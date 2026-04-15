@@ -40,7 +40,7 @@ the cluster over the network.
 │   component)         │     │                                                      │
 │    │ reads FHIR  ────┤     │  MQTT broker  :1883                                  │
 │    │ reads InfluxDB  │     │    fall/alert/<patient_id>                           │
-│    │ reads our API ──┼─────┼──► caregiver_client  :8002                          │
+│    │ reads our API ──┼─────┼──► **fall_dashboard**  :8002                          │
 │                      │     │      - subscribes MQTT fall/alert/#                 │
 └──────────────────────┘     │      - writes fall_history (Postgres)               │
                              │      - SSE fan-out to dashboard                     │
@@ -84,7 +84,7 @@ in-cluster setup.
 │  InfluxDB                │◄────┼── mobile app writes sensor data             │
 │  (new packaged instance) │     │                                             │
 │                          │     │  inference_server                           │
-│  FHIR Server (mock)      │     │  caregiver_client                           │
+│  FHIR Server (mock)      │     │  fall_dashboard                             │
 │                          │     │  Postgres                                   │
 │  FOCUS Dashboard         │     │  MQTT broker                                │
 │  (patient info +         │     │  MLflow / Prometheus / Grafana              │
@@ -129,8 +129,8 @@ correctly before the real FOCUS deployment.
 | Component | What it does | Status |
 |-----------|-------------|--------|
 | `inference_server` | Receives `/predict` HTTP, runs XGBoost, returns FHIR observation; writes `inference_log` to Postgres via BackgroundTask | Implemented — Postgres write pending |
-| `caregiver_client` | Subscribes to MQTT `fall/alert/#`; writes `fall_history` to Postgres; serves dashboard API + SSE | Implemented — Postgres migration pending |
-| `mqtt_broker` | eclipse-mosquitto; routes `fall/alert/<patient_id>` between mobile app and caregiver_client | Running locally |
+| `fall_dashboard` | Subscribes to MQTT `fall/alert/#`; writes `fall_history` to Postgres; serves dashboard API + SSE | Implemented — Postgres migration pending |
+| `mqtt_broker` | eclipse-mosquitto; routes `fall/alert/<patient_id>` between mobile app and fall_dashboard | Running locally |
 | `Postgres` | One instance, two logical databases: `fall_detection` (our data) + `mlflow` (MLflow internals) | Pending |
 | `MLflow tracking server` | Logs training runs, metrics, model artifacts; hosts Model Registry | Pending — blocked on data sharing agreement |
 | `Prometheus` | Scrapes `/metrics` from inference_server every 15s | Pending (code ready — no infra yet) |
@@ -145,7 +145,7 @@ correctly before the real FOCUS deployment.
 |---------|------|---------------|-----------|-----------|---------|
 | **InfluxDB** (FOCUS-hosted; our cloud instance for local dev) | Time-series | Raw ACC + barometer from SmarKo wearable; fall detection result (confidence, model_version, timestamp); patient confirmation (fall T/F, help_required T/F, no_response T/F, timestamp, patient UID); window start/end timestamps | Mobile app (Isa) | mock_app / real mobile app data fetcher | Sensor data source for inference; source of truth for all bio events |
 | **FHIR Server** (FOCUS-hosted) | FHIR R4 | Patient demographics, identifiers, Patient resources | FOCUS | Our dashboard (read-only, patient info panel) | Patient identity and medical context |
-| **Postgres `fall_detection` DB** (our namespace) | Relational | `inference_log`: every prediction (patient_id, model_version, fall_detected, confidence, latency_ms, detection_time) · `feature_snapshot`: feature name+value per inference · `fall_history`: confirmed alerts (linked to inference_log via FK, patient_confirmed, needs_help) · `participant_session`: fall count per patient | `inference_server` writes inference_log + feature_snapshot · `caregiver_client` writes fall_history + participant_session | Caregiver dashboard (fall history) · `retrain.py` (labelled training data) | Fall history for dashboard display; labelled dataset for model retraining |
+| **Postgres `fall_detection` DB** (our namespace) | Relational | `inference_log`: every prediction (patient_id, model_version, fall_detected, confidence, latency_ms, detection_time) · `feature_snapshot`: feature name+value per inference · `fall_history`: confirmed alerts (linked to inference_log via FK, patient_confirmed, needs_help) · `participant_session`: fall count per patient | `inference_server` writes inference_log + feature_snapshot · `fall_dashboard` writes fall_history + participant_session | Caregiver dashboard (fall history) · `retrain.py` (labelled training data) | Fall history for dashboard display; labelled dataset for model retraining |
 | **Postgres `mlflow` DB** (our namespace) | Relational | MLflow runs, parameters, metrics, model registry stages | MLflow tracking server | MLflow UI · inference_server (`/model/switch` loads from registry) | Experiment tracking and model versioning |
 | **MinIO** (our namespace) | Object store | Trained model `.pkl` artifacts, per MLflow run | MLflow (via `retrain.py`) | `inference_server` (loads model from registry) | Model artifact storage for retraining pipeline |
 
@@ -199,7 +199,7 @@ feature_snapshot (
     feature_value   FLOAT NOT NULL
 )
 
--- Written by caregiver_client (on MQTT fall/alert arrival)
+-- Written by fall_dashboard (on MQTT fall/alert arrival)
 fall_history (
     id                  SERIAL PRIMARY KEY,
     inference_id        INT REFERENCES inference_log(id),  -- FK to inference_log

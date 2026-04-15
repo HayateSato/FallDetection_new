@@ -1,9 +1,9 @@
 """
-Caregiver client database layer.
-================================
+Fall Dashboard database layer.
+==============================
 
 Uses the shared ORM models from shared.db so both the inference_server
-(inference_log + feature_snapshot) and the caregiver_client (fall_history +
+(inference_log + feature_snapshot) and the fall_dashboard (fall_history +
 participant_session) write to the same SQLite / Postgres instance.
 
 Tables written by this module:

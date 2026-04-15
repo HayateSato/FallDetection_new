@@ -255,7 +255,7 @@ sequenceDiagram
 │       ├── redis_listener.py  [async task in FastAPI]    │
 │       ├── web.py             [FastAPI event loop]       │
 │       └── db.py              [SQLite file on disk]      │
-│     Start: python -m caregiver_client.client            │
+│     Start: python -m fall_dashboard.client            │
 └─────────────────────────────────────────────────────────┘
 
 ┌─────────────────────────────────────────────────────────┐

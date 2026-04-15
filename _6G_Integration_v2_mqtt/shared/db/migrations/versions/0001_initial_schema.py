@@ -3,7 +3,7 @@
 Tables created:
   inference_log      — one row per /predict call (written by inference_server)
   feature_snapshot   — one row per feature per inference (FK → inference_log)
-  fall_history       — one row per MQTT alert received (written by caregiver_client)
+  fall_history       — one row per MQTT alert received (written by fall_dashboard)
   participant_session — one row per patient recording session
 
 Revision ID: 0001

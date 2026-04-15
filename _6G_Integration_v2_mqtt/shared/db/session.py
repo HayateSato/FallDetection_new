@@ -1,5 +1,5 @@
 """
-SQLAlchemy session factory — shared between inference_server and caregiver_client.
+SQLAlchemy session factory — shared between inference_server and fall_dashboard.
 
 Supports both SQLite (local dev, zero setup) and Postgres (production).
 The engine is configured once at module import time based on DATABASE_URL.

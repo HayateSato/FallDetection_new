@@ -158,7 +158,7 @@ class MockAppPoller(threading.Thread):
 
         # Build the event payload that will eventually reach the caregiver.
         # observation_id is the UUID returned by /predict — it links the
-        # fall_history row (written by caregiver_client) to the inference_log
+        # fall_history row (written by fall_dashboard) to the inference_log
         # row (written by the inference_server BackgroundTask) for retraining.
         event = {
             "patient_id":       patient_id,

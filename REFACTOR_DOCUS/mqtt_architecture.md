@@ -66,16 +66,16 @@ The inference server is **not involved in MQTT** — the fall result arrives in 
 
 ---
 
-## MQTT Client 2 — caregiver_client (Subscriber)
+## MQTT Client 2 — fall_dashboard (Subscriber)
 
 | | |
 |-|-|
-| **Lives in** | `_6G_Integration_v2_mqtt/caregiver_client/mqtt_listener.py` |
+| **Lives in** | `_6G_Integration_v2_mqtt/fall_dashboard/mqtt_listener.py` |
 | **Role** | Subscriber |
 | **Subscribes to** | `fall/alert/#`  (wildcard — receives alerts for all patients) |
 | **paho client ID** | `fall-detection-caregiver` |
 | **Class** | `FallEventBroker` |
-| **Started by** | `caregiver_client/client.py` startup hook (after `on_fall` callback is set) |
+| **Started by** | `fall_dashboard/client.py` startup hook (after `on_fall` callback is set) |
 
 ### What happens on message received
 
@@ -104,7 +104,7 @@ The `on_fall` callback is wired in `client.py` before `broker.start()` is called
 
 | Topic | Publisher | Subscriber |
 |-------|-----------|------------|
-| `fall/alert/<patient_id>` | mock_app | caregiver_client |
+| `fall/alert/<patient_id>` | mock_app | fall_dashboard |
 
 Only one active topic. The previous `fall/events/<patient_id>` topic (used when inference server published directly) has been removed.
 
@@ -129,7 +129,7 @@ Only one active topic. The previous `fall/events/<patient_id>` topic (used when 
     │
     │  route to subscribers of fall/alert/#
     ▼
-[caregiver_client :8002]
+[fall_dashboard :8002]
     │  DB write (SQLite)
     │  SSE fan-out
     ▼
@@ -150,6 +150,6 @@ MQTT_PASSWORD=
 MOCK_PATIENT_RESPONSE_TIMEOUT=10
 ```
 
-`MQTT_ALERT_TOPIC` is the base topic. Both mock_app and caregiver_client read this value:
+`MQTT_ALERT_TOPIC` is the base topic. Both mock_app and fall_dashboard read this value:
 - mock_app publishes to `{MQTT_ALERT_TOPIC}/{patient_id}`
-- caregiver_client subscribes to `{MQTT_ALERT_TOPIC}/#`
+- fall_dashboard subscribes to `{MQTT_ALERT_TOPIC}/#`

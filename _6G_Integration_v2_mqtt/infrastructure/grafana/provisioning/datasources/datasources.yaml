@@ -19,7 +19,7 @@ datasources:
 
   # ── PostgreSQL — fall_detection database ──────────────────────────────────
   # Used by the fall_events_timeline dashboard for SQL queries.
-  # Connects to the same Postgres instance as inference_server + caregiver_client.
+  # Connects to the same Postgres instance as inference_server + fall_dashboard.
   - name:     PostgreSQL
     type:     postgres
     uid:      postgresql

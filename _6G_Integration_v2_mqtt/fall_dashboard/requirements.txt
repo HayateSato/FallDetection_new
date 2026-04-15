@@ -1,5 +1,5 @@
-# Caregiver client dependencies
-# pip install -r caregiver_client/requirements.txt
+# Fall Dashboard dependencies
+# pip install -r fall_dashboard/requirements.txt
 
 # Web server
 fastapi

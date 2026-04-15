@@ -49,8 +49,8 @@
 
 | Component | What it does | Maps to our existing code |
 |-----------|-------------|--------------------------|
-| Data Fetcher (for inference) | Polls InfluxDB for ACC data per patient | `caregiver_client/influx_poller.py` (to be refactored) |
-| API Caller | Sends sensor data to Inference API | `caregiver_client/inference_client.py` |
+| Data Fetcher (for inference) | Polls InfluxDB for ACC data per patient | `fall_dashboard/influx_poller.py` (to be refactored) |
+| API Caller | Sends sensor data to Inference API | `fall_dashboard/inference_client.py` |
 | Inference API | Runs XGBoost model → FHIR result | `inference_server/server.py` |
 | Event Publisher | Publishes fall event to MQTT broker | Currently Redis publish in `server.py` → **replace with MQTT** |
 | Event Subscriber | Subscribes to MQTT → triggers dashboard alert | Currently `redis_listener.py` → **replace with MQTT** |
@@ -104,7 +104,7 @@ MQTT is designed for IoT/mobile bidirectional messaging. The Mobile App can also
 
 ### Step 3 — Replace Redis subscriber with MQTT subscriber in caregiver client
 
-**File to change:** `_6G_Integration_v2/caregiver_client/redis_listener.py`
+**File to change:** `_6G_Integration_v2/fall_dashboard/redis_listener.py`
 
 This file creates a `FallEventBroker` that subscribes to Redis and fans out to SSE clients. It needs to be rewritten to subscribe to MQTT instead, then push to whatever the dashboard uses (SSE or a direct MQTT consumer in the browser).
 
@@ -118,7 +118,7 @@ Confirm with Andreea (the dashboard developer).
 
 ### Step 4 — Separate the Data Fetcher from the caregiver client
 
-**Current state:** `influx_poller.py` is tightly coupled inside `caregiver_client/` — it polls InfluxDB AND calls the inference server AND writes to the local DB in one component.
+**Current state:** `influx_poller.py` is tightly coupled inside `fall_dashboard/` — it polls InfluxDB AND calls the inference server AND writes to the local DB in one component.
 
 **Required state (per meeting):** The data fetcher must be a standalone component, separate from the rest of the pipeline.
 

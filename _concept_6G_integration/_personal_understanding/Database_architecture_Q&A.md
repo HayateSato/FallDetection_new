@@ -17,7 +17,7 @@ Under the current design:
 
 **Postgres `inference_log`** ← written by **inference_server** inside `/predict` (via `BackgroundTasks` after the HTTP response is sent — so it doesn't add latency to the mobile app).
 
-**SQLite `fall_history`** ← written by **caregiver_client** when a confirmed alert arrives via MQTT.
+**SQLite `fall_history`** ← written by **fall_dashboard** when a confirmed alert arrives via MQTT.
 
 So a single fall event produces two writes in two different processes. That's intentional — each DB has a different owner and a different purpose.
 
@@ -54,7 +54,7 @@ You're describing a real architectural pattern called a **materialized view** �
 That's actually what the caregiver DB already is:
 
 - The mobile app writes raw data to InfluxDB (source of truth)
-- The caregiver_client subscribes to the MQTT alert → writes a joined row to its own SQLite
+- The fall_dashboard subscribes to the MQTT alert → writes a joined row to its own SQLite
 - The dashboard reads from SQLite with one query
 
 The argument for keeping it:
@@ -63,7 +63,7 @@ The argument for keeping it:
     │
     │  MQTT fall/alert event
     ▼
-caregiver_client
+fall_dashboard
     │  one INSERT per confirmed fall
     ▼
 SQLite fall_history  (read model, owned by you)
@@ -84,6 +84,6 @@ dashboard`
 
 1. **Query simplicity** — relational queries (counts, joins, filters) are SQL's strength, not InfluxDB's
 2. **Decoupling** — if Isa changes her InfluxDB measurement names or field names, your dashboard doesn't break. The caregiver DB is a stable interface you control.
-3. **You already have it** — the caregiver_client already subscribes to MQTT events and writes on arrival. The sync problem essentially doesn't exist because the write happens in the same callback that receives the event.
+3. **You already have it** — the fall_dashboard already subscribes to MQTT events and writes on arrival. The sync problem essentially doesn't exist because the write happens in the same callback that receives the event.
 
-The only real downside is that InfluxDB and the caregiver DB can theoretically diverge if the caregiver_client is down when an alert fires. That's an acceptable trade-off for a local dashboard. In production you'd add a reconciliation query on startup — compare the last N events in InfluxDB against the caregiver DB and fill any gaps.
+The only real downside is that InfluxDB and the caregiver DB can theoretically diverge if the fall_dashboard is down when an alert fires. That's an acceptable trade-off for a local dashboard. In production you'd add a reconciliation query on startup — compare the last N events in InfluxDB against the caregiver DB and fill any gaps.

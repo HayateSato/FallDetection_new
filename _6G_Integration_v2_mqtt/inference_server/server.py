@@ -269,7 +269,7 @@ class PredictResponse(BaseModel):
 
     `observation_id` is the UUID cross-reference key: it is stored in
     inference_log (written as a BackgroundTask) and should be included in
-    the MQTT alert payload by mock_app so caregiver_client can store it in
+    the MQTT alert payload by mock_app so fall_dashboard can store it in
     fall_history — enabling the retraining JOIN without a synchronous DB call.
     """
     observation_id:   str

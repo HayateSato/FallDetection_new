@@ -1,18 +1,18 @@
 """
-SQLAlchemy ORM models — shared between inference_server and caregiver_client.
+SQLAlchemy ORM models — shared between inference_server and fall_dashboard.
 
 Tables (all in the 'fall_detection' Postgres database):
 
   inference_log      — one row per /predict call; written by inference_server
   feature_snapshot   — one feature value per row; FK → inference_log; written by inference_server
   fall_history       — one row per confirmed alert; FK → inference_log via observation_id;
-                       written by caregiver_client on MQTT fall/alert arrival
-  participant_session — one row per active patient session; written by caregiver_client
+                       written by fall_dashboard on MQTT fall/alert arrival
+  participant_session — one row per active patient session; written by fall_dashboard
 
 Cross-reference key:
   observation_id (UUID string) is generated at the start of every /predict call.
   It is returned in the HTTP response so mock_app can include it in the MQTT alert
-  payload. caregiver_client stores it in fall_history, linking the two tables without
+  payload. fall_dashboard stores it in fall_history, linking the two tables without
   needing a synchronous DB round-trip inside the HTTP handler.
 
 Retraining query:
@@ -71,11 +71,11 @@ class FeatureSnapshot(Base):
 
 class FallHistory(Base):
     """
-    One row per confirmed fall alert. Written by caregiver_client on MQTT arrival.
+    One row per confirmed fall alert. Written by fall_dashboard on MQTT arrival.
 
     observation_id links back to inference_log without requiring a synchronous
     DB round-trip in the inference server — the UUID is carried in the HTTP
-    response → MQTT alert payload → caregiver_client.
+    response → MQTT alert payload → fall_dashboard.
     """
     __tablename__ = "fall_history"
 
@@ -94,7 +94,7 @@ class FallHistory(Base):
 
 
 class ParticipantSession(Base):
-    """One row per patient session. Written by caregiver_client on startup."""
+    """One row per patient session. Written by fall_dashboard on startup."""
     __tablename__ = "participant_session"
 
     id               = Column(Integer, primary_key=True, autoincrement=True)

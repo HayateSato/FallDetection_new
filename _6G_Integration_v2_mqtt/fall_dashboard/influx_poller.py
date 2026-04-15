@@ -37,8 +37,8 @@ from config.settings import (
     INFLUXDB_BUCKET,
 )
 
-from caregiver_client import db as cdb
-from caregiver_client.inference_client import InferenceServerClient
+from fall_dashboard import db as cdb
+from fall_dashboard.inference_client import InferenceServerClient
 
 logger = logging.getLogger(__name__)
 

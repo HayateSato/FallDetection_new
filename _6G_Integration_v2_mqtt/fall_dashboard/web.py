@@ -1,5 +1,5 @@
 """
-Caregiver dashboard web layer (FastAPI).
+Fall Dashboard web layer (FastAPI).
 
   GET  /                          → dashboard index.html (caregiver view)
   GET  /patient/                  → patient.html (patient feedback popup)
@@ -22,15 +22,15 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
-from caregiver_client import db as cdb
-from caregiver_client.mqtt_listener import FallEventBroker
+from fall_dashboard import db as cdb
+from fall_dashboard.mqtt_listener import FallEventBroker
 
 logger = logging.getLogger(__name__)
 
 DASHBOARD_DIR = Path(__file__).parent / "dashboard"
 
 broker = FallEventBroker()
-app    = FastAPI(title="Caregiver Dashboard — 6G Integration", version="1.0.0")
+app    = FastAPI(title="Fall Dashboard — 6G Integration", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
