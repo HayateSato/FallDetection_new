@@ -28,14 +28,14 @@ _6G_Integration_v2_mqtt/
 │   └── requirements.txt
 │
 ├── mock_app/                       ← simulates the mobile app
-│   ├── client.py                   ← entry point: python -m mock_app.client
+│   ├── main.py                     ← entry point: python -m mock_app.main
 │   ├── poller.py                   ← fetch → infer → confirm → MQTT publish
 │   ├── influx_fetcher.py           ← queries InfluxDB for raw ACC windows
 │   ├── api_caller.py               ← HTTP client to inference_server /predict
 │   └── requirements.txt
 │
 ├── fall_dashboard/                 ← backend for the fall panel (:8002)
-│   ├── client.py                   ← entry point: python -m fall_dashboard.client
+│   ├── main.py                     ← entry point: python -m fall_dashboard.main
 │   ├── mqtt_listener.py            ← FallEventBroker: MQTT → SSE fan-out
 │   ├── web.py                      ← FastAPI: /api/falls, /api/patients, /api/stream
 │   ├── db.py                       ← writes fall_history + participant_session
@@ -229,12 +229,12 @@ MQTT_BROKER_HOST=localhost
 uvicorn inference_server.server:app --host 0.0.0.0 --port 8001
 
 # Terminal 2 — fall dashboard
-python -m fall_dashboard.client
+python -m fall_dashboard.main
 # API: http://localhost:8002/api/patients
 # Local test UI: http://localhost:8002/
 
 # Terminal 3 — mock mobile app
-python -m mock_app.client
+python -m mock_app.main
 ```
 
 ### Verify

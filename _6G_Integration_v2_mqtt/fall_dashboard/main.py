@@ -17,7 +17,7 @@ This service only:
 
 Run from _6G_Integration_v2_mqtt/ as working directory:
 
-    python -m fall_dashboard.client
+    python -m fall_dashboard.main
 """
 
 import asyncio
@@ -142,7 +142,7 @@ def _banner() -> None:
     print(f"  MQTT broker:      {_mqtt_info}")
     print()
     print("  NOTE: sensor data is fetched by mock_app (run separately)")
-    print("        python -m mock_app.client")
+    print("        python -m mock_app.main")
     print("=" * 64)
 
 

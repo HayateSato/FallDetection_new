@@ -10,7 +10,7 @@ Simulates a mobile app that:
 
 Run from _6G_Integration_v2_mqtt/ as working directory:
 
-    python -m mock_app.client
+    python -m mock_app.main
 """
 
 import logging

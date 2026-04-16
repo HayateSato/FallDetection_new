@@ -39,7 +39,7 @@
 - [x] 2.2 Create `mock_app/api_caller.py`
 - [x] 2.3 Create `mock_app/poller.py` with `_simulate_patient_confirmation` (10s timeout)
 - [x] 2.4 Publish to `fall/alert/<patient_id>` after timeout with `patient_confirmed`, `needs_help`
-- [x] 2.5 Create `mock_app/client.py` with paho MQTT publisher + graceful shutdown
+- [x] 2.5 Create `mock_app/main.py` with paho MQTT publisher + graceful shutdown
 
 ---
 
@@ -103,7 +103,7 @@ This allows the retraining JOIN without a synchronous DB call in the HTTP handle
 - [x] 6.9 Added `BackgroundTasks` DB write (step 10) in `/predict`; `observation_id` in PredictResponse
 - [x] 6.10 Rewrote `fall_dashboard/db.py` to import from shared models; added `observation_id`, `needs_help`
 - [x] 6.11 `mock_app/poller.py` includes `observation_id` from HTTP response in MQTT alert payload;
-          `fall_dashboard/client.py` reads it and passes to `record_fall()`
+          `fall_dashboard/main.py` reads it and passes to `record_fall()`
 - [x] 6.12 `DATABASE_URL=sqlite:///./caregiver.db` in `.env` (SQLite default; Postgres in production)
 
 ---

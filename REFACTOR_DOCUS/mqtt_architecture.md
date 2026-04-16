@@ -26,12 +26,12 @@ The broker does not run inside any of our Python components. It is infrastructur
 
 | | |
 |-|-|
-| **Lives in** | `_6G_Integration_v2_mqtt/mock_app/client.py` |
+| **Lives in** | `_6G_Integration_v2_mqtt/mock_app/main.py` |
 | **Role** | Publisher |
 | **Publishes to** | `fall/alert/<patient_id>` |
 | **When it publishes** | After the patient confirmation window closes (10s timeout) |
 | **paho client ID** | `mock-app-publisher` |
-| **Created by** | `_create_mqtt_publisher()` in `mock_app/client.py` |
+| **Created by** | `_create_mqtt_publisher()` in `mock_app/main.py` |
 
 ### What happens before the MQTT publish
 
@@ -75,7 +75,7 @@ The inference server is **not involved in MQTT** — the fall result arrives in 
 | **Subscribes to** | `fall/alert/#`  (wildcard — receives alerts for all patients) |
 | **paho client ID** | `fall-detection-caregiver` |
 | **Class** | `FallEventBroker` |
-| **Started by** | `fall_dashboard/client.py` startup hook (after `on_fall` callback is set) |
+| **Started by** | `fall_dashboard/main.py` startup hook (after `on_fall` callback is set) |
 
 ### What happens on message received
 

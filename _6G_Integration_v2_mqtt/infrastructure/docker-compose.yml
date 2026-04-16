@@ -9,8 +9,8 @@
 #
 # Then start the Python services in separate terminals (see project README):
 #   uvicorn inference_server.server:app --host 0.0.0.0 --port 8001
-#   python -m fall_dashboard.client
-#   python -m mock_app.client
+#   python -m fall_dashboard.main
+#   python -m mock_app.main
 #
 # Service URLs:
 #   Grafana         http://localhost:3000  (admin / admin)

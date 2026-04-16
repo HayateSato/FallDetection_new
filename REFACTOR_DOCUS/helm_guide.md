@@ -91,7 +91,7 @@ COPY fall_dashboard/ fall_dashboard/
 COPY alembic.ini .
 
 EXPOSE 8002
-CMD ["python", "-m", "fall_dashboard.client"]
+CMD ["python", "-m", "fall_dashboard.main"]
 ```
 
 ### Build and push images
