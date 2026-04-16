@@ -5,17 +5,10 @@ Loads from environment variables with sensible defaults.
 Supports dynamic model selection via MODEL_VERSION environment variable.
 """
 import os
-from pathlib import Path
 from dotenv import load_dotenv
-from datetime import datetime
 
 # Load environment variables from .env file
 load_dotenv()
-# =============================================================================
-# FLASK SETTINGS
-# =============================================================================
-FLASK_PORT = os.getenv("FLASK_PORT", 8000)
-
 
 # =============================================================================
 # MODEL SELECTION
@@ -140,39 +133,6 @@ BARO_WINDOW_SAMPLES = WINDOW_SIZE_SECONDS * BARO_SAMPLE_RATE if BARO_SAMPLE_RATE
 HARDWARE_WINDOW_SAMPLES = WINDOW_SIZE_SECONDS * HARDWARE_ACC_SAMPLE_RATE
 
 # =============================================================================
-# MONITORING SETTINGS
-# =============================================================================
-
-MONITORING_ENABLED = os.getenv('MONITORING_ENABLED', 'true').lower() == 'true'
-MONITORING_INTERVAL_SECONDS = int(os.getenv('MONITORING_INTERVAL_SECONDS', '5'))
-MONITORING_LOOKBACK_SECONDS = int(os.getenv('MONITORING_LOOKBACK_SECONDS', '15'))
-
-# Notification mode: 'sse' (Server-Sent Events) or 'polling'
-NOTIFICATION_MODE = os.getenv('NOTIFICATION_MODE', 'sse').lower()
-if NOTIFICATION_MODE not in ('sse', 'polling'):
-    print(f"WARNING: Invalid NOTIFICATION_MODE '{NOTIFICATION_MODE}', defaulting to 'sse'")
-    NOTIFICATION_MODE = 'sse'
-
-# Polling interval in seconds (only when NOTIFICATION_MODE=polling)
-POLLING_INTERVAL_SECONDS = int(os.getenv('POLLING_INTERVAL_SECONDS', '3'))
-
-# Additional sensor data collection
-COLLECT_ADDITIONAL_SENSORS = os.getenv('COLLECT_ADDITIONAL_SENSORS', 'false').lower() == 'true'
-
-# =============================================================================
-# EXPORT SETTINGS
-# =============================================================================
-
-TIMEZONE_OFFSET_HOURS = float(os.getenv('TIMEZONE_OFFSET_HOURS', '0'))
-TODAY = datetime.today().strftime('%Y%m%d')
-BASE_DIR = os.getenv('FALL_DATA_EXPORT_DIR', 'results/')
-FALL_DATA_EXPORT_DIR = os.path.join(BASE_DIR, 'exported_flaskApp_data', TODAY)
-
-# Create export directory if it doesn't exist
-export_path = Path(FALL_DATA_EXPORT_DIR)
-export_path.mkdir(parents=True, exist_ok=True)
-
-# =============================================================================
 # PREPROCESSING SETTINGS (for reference, used by model registry)
 # =============================================================================
 
@@ -208,47 +168,11 @@ def get_model_path() -> str:
 MODEL_PATH = get_model_path()
 
 # =============================================================================
-# DATABASE & MESSAGING (Phase 1 / Phase 3 additions)
-# =============================================================================
-
-# PostgreSQL connection string — used by ml_server for inference logging
-# Format: postgresql://user:password@host:5432/dbname
-DATABASE_URL = os.getenv('DATABASE_URL', '')
-
-# MQTT broker host — used for fall event pub/sub
-MQTT_BROKER_HOST = os.getenv('MQTT_BROKER_HOST', '')
-
-# JWT secret key — used by operator and caregiver dashboards
-# Generate: python -c "import secrets; print(secrets.token_urlsafe(32))"
-JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', '')
-
-# =============================================================================
-# INFERENCE MODE (local vs remote)
-# =============================================================================
-
-# 'local' = run model locally (default, current behavior)
-# 'remote' = send sensor data to a remote FastAPI server for inference
-INFERENCE_MODE = os.getenv('INFERENCE_MODE', 'local').lower()
-
-# Remote server URL (only used when INFERENCE_MODE=remote)
-# e.g. https://abc123.ngrok-free.app  or  http://192.168.1.50:8000
-REMOTE_SERVER_URL = os.getenv('REMOTE_SERVER_URL', '')
-
-# API key for the remote server (only used when INFERENCE_MODE=remote)
-REMOTE_API_KEY = os.getenv('REMOTE_API_KEY', '')
-
-# =============================================================================
 # PUBLIC ENDPOINT / API SECURITY SETTINGS
 # =============================================================================
 
 # Enable public endpoint mode (adds authentication, rate limiting, production settings)
 PUBLIC_ENDPOINT_ENABLED = os.getenv('PUBLIC_ENDPOINT_ENABLED', 'false').lower() == 'true'
-
-# Tunnel mode: 'local', 'ngrok', or 'cloudflare'
-TUNNEL_MODE = os.getenv('TUNNEL_MODE', 'local').lower()
-if TUNNEL_MODE not in ('local', 'ngrok', 'cloudflare'):
-    print(f"WARNING: Invalid TUNNEL_MODE '{TUNNEL_MODE}', defaulting to 'local'")
-    TUNNEL_MODE = 'local'
 
 # API Keys for authentication (comma-separated list of valid keys)
 # Generate keys with: python -c "import secrets; print(secrets.token_urlsafe(32))"
@@ -260,43 +184,7 @@ RATE_LIMIT_PER_MINUTE = int(os.getenv('RATE_LIMIT_PER_MINUTE', '30'))
 # CORS allowed origins (comma-separated, or * for all)
 CORS_ALLOWED_ORIGINS = os.getenv('CORS_ALLOWED_ORIGINS', '*')
 
-# Flask debug mode (automatically disabled when PUBLIC_ENDPOINT_ENABLED=true)
-FLASK_DEBUG = os.getenv('FLASK_DEBUG', 'true').lower() == 'true'
-if PUBLIC_ENDPOINT_ENABLED:
-    FLASK_DEBUG = False  # Force disable debug in public mode
-
-# ngrok settings
-NGROK_REGION = os.getenv('NGROK_REGION', 'eu')
-
-# Cloudflare Tunnel settings
-CLOUDFLARE_TUNNEL_TOKEN = os.getenv('CLOUDFLARE_TUNNEL_TOKEN', '')
-
-# =============================================================================
-# PRINT CONFIGURATION
-# =============================================================================
-
-def print_config():
-    """Print current configuration"""
-    print("="*60)
-    print("Fall Detection System Configuration")
-    print("="*60)
-    print(f"  Model Version:     {MODEL_VERSION.upper()}")
-    print(f"  Model Path:        {MODEL_PATH}")
-    print(f"  ACC Sensor Type:   {ACC_SENSOR_TYPE}")
-    print(f"  ACC Fields:        {ACC_FIELD_X}, {ACC_FIELD_Y}, {ACC_FIELD_Z}")
-    print(f"  Hardware ACC Rate: {HARDWARE_ACC_SAMPLE_RATE} Hz")
-    print(f"  Model ACC Rate:    {MODEL_ACC_SAMPLE_RATE} Hz")
-    if UPSAMPLING_ENABLED:
-        print(f"  Resampling:        Upsampling ({HARDWARE_ACC_SAMPLE_RATE}Hz -> {MODEL_ACC_SAMPLE_RATE}Hz, method={RESAMPLING_METHOD})")
-    elif DOWNSAMPLING_ENABLED:
-        print(f"  Resampling:        Downsampling ({HARDWARE_ACC_SAMPLE_RATE}Hz -> {MODEL_ACC_SAMPLE_RATE}Hz, method={RESAMPLING_METHOD})")
-    else:
-        print(f"  Resampling:        Disabled (no conversion needed)")
-    print(f"  Window Size:       {WINDOW_SIZE_SECONDS}s ({HARDWARE_WINDOW_SAMPLES} HW samples -> {WINDOW_SAMPLES} model samples)")
-    print(f"  Barometer:         {'Enabled' if BAROMETER_ENABLED else 'Disabled' + (' (V0 model)' if MODEL_VERSION == 'v0' else '')}")
-    if BAROMETER_ENABLED:
-        print(f"  BARO Sample Rate:  {BARO_SAMPLE_RATE} Hz")
-        print(f"  Barometer Field:   {BAROMETER_FIELD}")
-    print(f"  Monitoring:        {'Enabled' if MONITORING_ENABLED else 'Disabled'}")
-    print(f"  Monitor Interval:  {MONITORING_INTERVAL_SECONDS}s")
-    print("="*60)
+# Tunnel mode — not active in current deployment; reserved for future ngrok/cloudflare use
+# TUNNEL_MODE = os.getenv('TUNNEL_MODE', 'local').lower()
+# NGROK_REGION = os.getenv('NGROK_REGION', 'eu')
+# CLOUDFLARE_TUNNEL_TOKEN = os.getenv('CLOUDFLARE_TUNNEL_TOKEN', '')
