@@ -1,48 +1,114 @@
 # Integration Guide — Patient Dashboard (for Isa)
 
-This document covers everything needed to integrate the fall detection backend
-into the Patient Dashboard. The fall detection side is built by Hayate; this
-guide describes what endpoints to call, what data you get back, and how to
-receive real-time fall alerts.
+This document covers everything Isa needs to integrate our fall detection backend
+into the Patient Dashboard. Hayate maintains this guide.
 
 ---
 
-## Overview
+## What is what — naming
 
-The Patient Dashboard is one web app shown to the caregiver. It combines two
-data sources:
+| Name | What it is | Who builds it |
+|------|-----------|---------------|
+| **Patient Dashboard** | The unified web app shown to the caregiver | Isa |
+| **fall_dashboard** | Our FastAPI backend (:8002) — provides fall history + real-time alerts | Hayate |
+| **Mock FHIR server** | Local-dev simulation of FOCUS's FHIR server (:8003) — provides demographics | Hayate (mock only; replaced by real FOCUS FHIR in production) |
 
-| Panel | Data source | Who provides it |
-|-------|-------------|-----------------|
-| Patient info — demographics (height, weight), biosignals (HR) | FHIR server + InfluxDB | FOCUS side (you already have this) |
-| Fall panel — fall history + real-time fall alerts | `fall_dashboard` REST API + SSE | Hayate's backend (:8002) |
+The Patient Dashboard combines three data sources:
 
-This guide covers the **fall panel** integration only.
-
----
-
-## Base URL
-
-| Environment | URL |
-|-------------|-----|
-| Local dev | `http://localhost:8002` |
-| Production | TBD (Kubernetes service in our namespace) |
+| Panel | Data source | Host (local dev) |
+|-------|-------------|------------------|
+| Demographics (name, DOB, height, weight) | FHIR server | `http://localhost:8003` (mock) |
+| Biosignals (HR, SpO₂) | InfluxDB | FOCUS side — you already have this |
+| Fall history + real-time alerts | fall_dashboard REST API + SSE | `http://localhost:8002` |
 
 ---
 
-## Endpoints
+## Mock FHIR Server (local dev)
+
+During development you do not need to wait for FOCUS's real FHIR server.
+Hayate's mock server runs at **`:8003`** and serves synthetic patient demographics.
+
+**Start it:**
+```powershell
+# From _6G_Integration_v2_mqtt/ as cwd:
+uvicorn focus_mock.fhir_server:app --host 0.0.0.0 --port 8003
+# OR via docker-compose — focus_mock_fhir service
+```
+
+### `GET /fhir/Patient`
+
+Returns a FHIR R4 Bundle of all patients.
+
+```json
+{
+  "resourceType": "Bundle",
+  "type": "searchset",
+  "total": 2,
+  "entry": [
+    { "resource": { "resourceType": "Patient", "id": "test_patient-002", ... } }
+  ]
+}
+```
+
+### `GET /fhir/Patient/{patient_id}`
+
+Returns a single FHIR R4 Patient resource.
+
+```json
+{
+  "resourceType": "Patient",
+  "id": "test_patient-002",
+  "name": [{ "family": "Schmidt", "given": ["Margarete"] }],
+  "gender": "female",
+  "birthDate": "1938-11-03",
+  "address": [{ "text": "Ward B, Room 7, Charité Berlin" }],
+  "extension": [
+    { "url": "http://hl7.org/fhir/StructureDefinition/patient-ward", "valueString": "Ward B" }
+  ]
+}
+```
+
+### `GET /fhir/Observation?patient={patient_id}`
+
+Returns a Bundle of vital-sign Observations (height, weight, heart rate).
+LOINC codes: `8302-2` = body height, `29463-7` = body weight, `8867-4` = heart rate.
+
+```json
+{
+  "resourceType": "Bundle",
+  "type": "searchset",
+  "total": 3,
+  "entry": [
+    {
+      "resource": {
+        "resourceType": "Observation",
+        "code": { "coding": [{ "system": "http://loinc.org", "code": "8302-2", "display": "Body height" }] },
+        "valueQuantity": { "value": 158, "unit": "cm" }
+      }
+    }
+  ]
+}
+```
+
+**In production:** replace `http://localhost:8003` with the real FOCUS FHIR server URL.
+The response shape is standard FHIR R4 — no code changes needed when switching.
+
+---
+
+## Fall Dashboard REST API
+
+Base URL: `http://localhost:8002` (local dev) · TBD Kubernetes service URL (production)
 
 ### `GET /api/patients`
 
 Returns all registered patients with their current fall count.
 
-**Response:**
 ```json
 {
   "patients": [
     {
-      "patient_id": "patient-001",
-      "mac_id":     "AA:BB:CC:DD:EE:FF",
+      "patient_id": "test_patient-002",
+      "mac_id":     "6c:1d:eb:04:a9:e6",
       "fall_count": 3
     }
   ]
@@ -60,13 +126,10 @@ Returns fall history rows.
 | Parameter | Default | Notes |
 |-----------|---------|-------|
 | `patient_id` | (all patients) | Filter by patient |
-| `only_falls` | `true` | `true` = confirmed fall events only; `false` = all rows |
+| `only_falls` | `true` | `true` = confirmed events only; `false` = all rows |
 | `limit` | `200` | Max rows returned (up to 2000) |
 
-**Example:**
-```
-GET /api/falls?patient_id=patient-001&limit=50
-```
+**Example:** `GET /api/falls?patient_id=test_patient-002&limit=50`
 
 **Response:**
 ```json
@@ -74,8 +137,8 @@ GET /api/falls?patient_id=patient-001&limit=50
   "falls": [
     {
       "id":                1,
-      "patient_id":        "patient-001",
-      "mac_id":            "AA:BB:CC:DD:EE:FF",
+      "patient_id":        "test_patient-002",
+      "mac_id":            "6c:1d:eb:04:a9:e6",
       "fall_detected":     true,
       "patient_confirmed": "yes",
       "needs_help":        true,
@@ -89,11 +152,11 @@ GET /api/falls?patient_id=patient-001&limit=50
 
 **`patient_confirmed` values:**
 
-| Value | Meaning |
-|-------|---------|
-| `yes` | Patient confirmed they fell |
-| `no` | Patient said they did not fall (false positive) |
-| `not_answered` | Confirmation popup timed out (10s) — treated as a fall |
+| Value | Meaning | Show alert? |
+|-------|---------|------------|
+| `yes` | Patient confirmed they fell | Yes |
+| `no` | Patient said they did not fall (false positive) | No |
+| `not_answered` | Popup timed out (10s) — treated as a fall | Yes |
 
 ---
 
@@ -102,7 +165,6 @@ GET /api/falls?patient_id=patient-001&limit=50
 Server-Sent Events (SSE) stream. Emits one event per confirmed fall alert the
 instant it arrives from MQTT. Use this to drive the real-time alert banner.
 
-**Connect:**
 ```js
 const source = new EventSource('http://localhost:8002/api/stream');
 
@@ -112,71 +174,94 @@ source.addEventListener('connected', () => {
 
 source.onmessage = (e) => {
   const event = JSON.parse(e.data);
-  // event has the same fields as /api/falls rows
-  showFallAlert(event);
+  showFallAlert(event);  // same fields as /api/falls rows
 };
 
-source.onerror = () => {
-  // Browser auto-reconnects on error — no manual handling needed
-};
+// Browser auto-reconnects on error — no manual handling needed
+source.onerror = () => {};
 ```
 
-**Event payload** (same shape as `/api/falls` rows):
+**Event payload:**
 ```json
 {
-  "fall_id":          1,
-  "patient_id":       "patient-001",
-  "mac_id":           "AA:BB:CC:DD:EE:FF",
-  "fall_detected":    true,
+  "fall_id":           1,
+  "patient_id":        "test_patient-002",
+  "mac_id":            "6c:1d:eb:04:a9:e6",
+  "fall_detected":     true,
   "patient_confirmed": "yes",
-  "needs_help":       true,
-  "observation_id":   "a1b2c3d4-...",
-  "timestamp":        "2026-04-16T10:00:10+00:00"
+  "needs_help":        true,
+  "observation_id":    "a1b2c3d4-...",
+  "timestamp":         "2026-04-16T10:00:10+00:00"
 }
 ```
 
-The stream also sends a `: keepalive` comment every 15 seconds to keep the
-connection alive through proxies.
+The stream sends a `: keepalive` comment every 15 seconds to keep the connection
+alive through proxies.
 
 ---
 
-## MQTT — direct subscription (alternative to SSE)
+## MQTT — React Native compatibility
 
-If the React Native app needs to consume fall alerts directly (without going
-through the SSE backend), it can subscribe to the MQTT broker over WebSocket.
+**Yes, Eclipse Mosquitto is fully compatible with React Native.**
 
-**Broker:** same host as the fall_dashboard, port **9001** (WebSocket)
-— port 1883 is raw TCP and does not work from a browser or React Native.
+React Native cannot use raw TCP sockets (port 1883). Use **MQTT over WebSocket**
+on port **9001** instead — already enabled in `mosquitto.conf`:
 
-**Topic:** `fall/alert/#` (all patients) or `fall/alert/<patient_id>`
+```
+listener 9001
+protocol websockets
+```
 
-**npm package:** `mqtt` (MQTT.js — works in React Native without native modules)
+**npm package:** `mqtt` (MQTT.js) — works in React Native without any native modules:
+
+```bash
+npm install mqtt
+```
 
 ```js
 import mqtt from 'mqtt';
 
+// port 9001 = WebSocket (works in React Native)
+// port 1883 = raw TCP   (does NOT work in React Native)
 const client = mqtt.connect('ws://<broker-host>:9001');
 
 client.on('connect', () => {
+  // Subscribe to all patients, or a specific one:
   client.subscribe('fall/alert/#');
+  // client.subscribe('fall/alert/test_patient-002');
 });
 
 client.on('message', (topic, message) => {
   const event = JSON.parse(message.toString());
-  // event.patient_id, event.patient_confirmed, event.needs_help, etc.
+  // event.patient_id, event.fall_detected, event.patient_confirmed,
+  // event.needs_help, event.confidence, event.observation_id
   showFallAlert(event);
+});
+
+client.on('error', (err) => {
+  console.error('MQTT error:', err);
 });
 ```
 
-**Note:** No authentication is configured on the broker in the current dev setup
-(anonymous connections allowed). Auth will be added before production.
+**Broker connection details:**
+
+| Setting | Local dev | Production |
+|---------|-----------|------------|
+| Host | `localhost` | Kubernetes service name (TBD) |
+| Port | `9001` (WebSocket) | `9001` (WebSocket) |
+| Auth | None (anonymous) | Username/password (to be set before prod) |
+| Topic | `fall/alert/#` | `fall/alert/#` |
+
+**SSE vs MQTT — which to use in the Patient Dashboard:**
+
+- **Patient Dashboard (web app)** → use SSE (`/api/stream`). Simpler, no extra library, works in any browser.
+- **Mobile app (React Native)** → use MQTT over WebSocket. Direct broker subscription, lower latency.
 
 ---
 
 ## CORS
 
-The fall_dashboard API allows all origins (`*`) in dev. No CORS config needed
-on your side for local development.
+The fall_dashboard API allows all origins (`*`) in dev. No CORS config needed.
 
 ---
 
@@ -184,53 +269,34 @@ on your side for local development.
 
 ```
 On dashboard load:
-  1. GET /api/patients          → render patient list with fall counts
-  2. GET /api/falls             → render fall history table
-  3. Open EventSource /api/stream
+  1. GET /fhir/Patient/{id}             → render demographics panel (name, DOB, ward)
+  2. GET /fhir/Observation?patient={id} → render vitals (height, weight, HR)
+  3. GET /api/patients                  → render patient list with fall count badges
+  4. GET /api/falls?patient_id={id}     → render fall history table
+  5. Open EventSource /api/stream       → listen for real-time fall alerts
 
 On SSE message:
-  4. Show alert banner (patient name, time, needs_help)
-  5. Re-fetch GET /api/patients  → update fall count badge
-  6. Prepend new row to fall history table
+  6. Show alert banner (patient name, time, needs_help)
+  7. Re-fetch GET /api/patients         → update fall count badge
+  8. Prepend new row to fall history table
 ```
+
+---
+
+## Cross-namespace URL (Kubernetes — future)
+
+When deployed to Kubernetes, replace localhost URLs with:
+
+| Service | Kubernetes URL |
+|---------|----------------|
+| fall_dashboard | `http://fall-dashboard.fall-detection.svc.cluster.local:8002` |
+| Mock FHIR (replaced by real FOCUS FHIR in prod) | real FOCUS FHIR URL in their namespace |
 
 ---
 
 ## Open questions (to confirm with Hayate)
 
-- [ ] Final production URL for fall_dashboard (Kubernetes service name in our namespace)
-- [ ] Auth on the API — JWT header required? Currently open (no auth in dev)
-- [ ] Auth on MQTT broker — username/password before production
-- [ ] Patient ID format — confirm the `patient_id` values match the FHIR Patient identifiers you are already using
-
-
-
-Yes, Eclipse Mosquitto is fully compatible with React Native.
-
-The standard approach is the **MQTT over WebSocket** connection — React Native can't use raw TCP sockets directly, but Mosquitto supports WebSocket on port 9001 (already configured in your `mosquitto.conf`):
-
-`listener 9001
-protocol websockets`
-
-Isa would use the `mqtt` npm package (based on MQTT.js) in the React Native app:
-
-`import mqtt from 'mqtt';
-
-const client = mqtt.connect('ws://your-broker-host:9001');
-
-client.on('connect', () => {
-  client.subscribe('fall/alert/#');
-});
-
-client.on('message', (topic, message) => {
-  const event = JSON.parse(message.toString());
-  // show fall alert in UI
-});`
-
-**What to tell Isa:**
-
-- Broker host: wherever Mosquitto is deployed (localhost for dev, Kubernetes service name in production)
-- Port: **9001** (WebSocket), not 1883 (raw TCP)
-- Topic to subscribe: `fall/alert/#` to receive all patient alerts, or `fall/alert/<patient_id>` for a specific patient
-- No auth configured yet (anonymous allowed in current `mosquitto.conf`)
-- Package to use: `mqtt` (MQTT.js) — works in React Native without native modules
+- [ ] Final Kubernetes service name for fall_dashboard
+- [ ] JWT auth on the API — required before production
+- [ ] MQTT broker auth — username/password before production
+- [ ] Confirm `patient_id` values match the FHIR Patient `id` field you use on the FOCUS side

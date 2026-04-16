@@ -64,6 +64,22 @@ Sample rate confirmed 50Hz → `HARDWARE_ACC_SAMPLE_RATE=50` set in `.env`.
 
 **Blocked on: 0.5, 0.6**
 
+**Naming clarification (2026-04-16):**
+- **Patient Dashboard** = Isa's unified web app (lives in FOCUS namespace). Combines:
+  - Demographics panel → `GET /fhir/Patient/{id}` from FOCUS FHIR server (or `focus_mock` locally)
+  - Biosignals panel → InfluxDB (FOCUS side, not our code)
+  - Fall panel → our `fall_dashboard` API (`GET /api/falls`, SSE `/api/stream`)
+- **fall_dashboard** = our backend service (:8002). Not a standalone UI — feeds the fall panel only.
+
+**Mock FHIR server implemented (2026-04-16):**
+`focus_mock/fhir_server.py` — FastAPI, port 8003. Simulates FOCUS namespace for local dev.
+- `GET /fhir/Patient` — Bundle of all patients
+- `GET /fhir/Patient/{id}` — single Patient resource (name, DOB, gender, ward)
+- `GET /fhir/Observation?patient={id}` — height, weight, heart rate
+Run: `uvicorn focus_mock.fhir_server:app --host 0.0.0.0 --port 8003`
+Or via docker-compose (focus_mock_fhir service).
+**Replace with real FOCUS FHIR URL in K8s — this mock never ships.**
+
 - [ ] 5.1 Confirm whether FHIR server exists and `FHIR_SERVER_URL` is needed
 - [ ] 5.2 If FHIR stored in DB → add JSON column to `fall_history` in `db.py`
 - [ ] 5.3 Confirm plain JSON from `/predict` is sufficient if no FHIR required
