@@ -202,3 +202,35 @@ On SSE message:
 - [ ] Auth on the API — JWT header required? Currently open (no auth in dev)
 - [ ] Auth on MQTT broker — username/password before production
 - [ ] Patient ID format — confirm the `patient_id` values match the FHIR Patient identifiers you are already using
+
+
+
+Yes, Eclipse Mosquitto is fully compatible with React Native.
+
+The standard approach is the **MQTT over WebSocket** connection — React Native can't use raw TCP sockets directly, but Mosquitto supports WebSocket on port 9001 (already configured in your `mosquitto.conf`):
+
+`listener 9001
+protocol websockets`
+
+Isa would use the `mqtt` npm package (based on MQTT.js) in the React Native app:
+
+`import mqtt from 'mqtt';
+
+const client = mqtt.connect('ws://your-broker-host:9001');
+
+client.on('connect', () => {
+  client.subscribe('fall/alert/#');
+});
+
+client.on('message', (topic, message) => {
+  const event = JSON.parse(message.toString());
+  // show fall alert in UI
+});`
+
+**What to tell Isa:**
+
+- Broker host: wherever Mosquitto is deployed (localhost for dev, Kubernetes service name in production)
+- Port: **9001** (WebSocket), not 1883 (raw TCP)
+- Topic to subscribe: `fall/alert/#` to receive all patient alerts, or `fall/alert/<patient_id>` for a specific patient
+- No auth configured yet (anonymous allowed in current `mosquitto.conf`)
+- Package to use: `mqtt` (MQTT.js) — works in React Native without native modules
