@@ -1,139 +1,256 @@
 # Fall Detection — 6G / Charite Integration (MQTT)
 
-Three-component fall detection stack designed for the FOCUS / Charite monitoring
-ecosystem. The inference server returns FHIR R4 Observation resources over HTTP.
-The mobile app (mock or real) handles patient confirmation and publishes a confirmed
-alert over MQTT. The fall dashboard subscribes to those alerts and shows a
-real-time caregiver view.
+Fall detection stack designed for the FOCUS / Charite monitoring ecosystem.
+The inference server returns FHIR R4 Observation resources over HTTP. The mobile
+app (mock or real) handles patient confirmation and publishes a confirmed alert
+over MQTT. The fall dashboard subscribes to those alerts, writes them to a database,
+and feeds the fall panel inside the Patient Dashboard (Isa's unified caregiver UI).
+
+---
+
+## Folder structure
 
 ```
 _6G_Integration_v2_mqtt/
-├── .env                        ← single shared config
-├── README.md                   ← you are here
-├── fhir_converter.py           ← builds FHIR R4 Observation
-├── app/                        ← shared ML pipeline (do not edit)
-├── config/                     ← settings.py reads .env
-├── model/                      ← XGBoost .pkl files
+├── .env                            ← single shared config for all components
+├── README.md                       ← you are here
+├── alembic.ini                     ← Alembic config (script_location = shared/db/migrations)
+├── fhir_converter.py               ← builds FHIR R4 Observation from inference result
+├── app/                            ← shared ML pipeline (do not edit)
+├── config/                         ← settings.py reads .env
+├── model/                          ← XGBoost .pkl files (v0, v3, v5_lsb, ...)
 │
-├── inference_server/           ← HTTP-only ML server
-│   ├── server.py               ← FastAPI :8001
+├── inference_server/               ← HTTP-only ML server (:8001)
+│   ├── server.py                   ← FastAPI: /predict, /health, /metrics, /model/*
 │   ├── services/
-│   │   └── metrics_collector.py  ← Prometheus metrics
+│   │   ├── metrics_collector.py    ← Prometheus counters + histograms
+│   │   └── db_writer.py            ← BackgroundTask: writes inference_log + feature_snapshot
 │   └── requirements.txt
 │
-├── mock_app/                   ← simulates the mobile app
-│   ├── client.py               ← entry point: python -m mock_app.client
-│   ├── poller.py               ← fetch → infer → confirm → publish
-│   ├── influx_fetcher.py       ← queries InfluxDB for ACC windows
-│   ├── api_caller.py           ← HTTP client to inference server
+├── mock_app/                       ← simulates the mobile app
+│   ├── client.py                   ← entry point: python -m mock_app.client
+│   ├── poller.py                   ← fetch → infer → confirm → MQTT publish
+│   ├── influx_fetcher.py           ← queries InfluxDB for raw ACC windows
+│   ├── api_caller.py               ← HTTP client to inference_server /predict
 │   └── requirements.txt
 │
-└── fall_dashboard/             ← dashboard (subscribes to MQTT alerts)
-    ├── client.py               ← entry point: python -m fall_dashboard.client
-    ├── mqtt_listener.py        ← FallEventBroker: MQTT → SSE fan-out
-    ├── web.py                  ← FastAPI :8002 (JSON API + SSE + dashboard)
-    ├── db.py                   ← SQLAlchemy: participant_session + fall_history
-    ├── dashboard/
-    │   ├── index.html
-    │   ├── app.js
-    │   └── style.css
-    └── requirements.txt
+├── fall_dashboard/                 ← backend for the fall panel (:8002)
+│   ├── client.py                   ← entry point: python -m fall_dashboard.client
+│   ├── mqtt_listener.py            ← FallEventBroker: MQTT → SSE fan-out
+│   ├── web.py                      ← FastAPI: /api/falls, /api/patients, /api/stream
+│   ├── db.py                       ← writes fall_history + participant_session
+│   ├── inference_client.py         ← (unused in MQTT flow — legacy)
+│   ├── influx_poller.py            ← (unused in MQTT flow — legacy)
+│   ├── dashboard/                  ← standalone HTML/JS for local testing
+│   │   ├── index.html
+│   │   ├── app.js
+│   │   └── style.css
+│   └── requirements.txt
+│
+├── shared/                         ← shared code imported by both inference_server and fall_dashboard
+│   └── db/
+│       ├── models.py               ← SQLAlchemy ORM: InferenceLog, FeatureSnapshot, FallHistory, ParticipantSession
+│       ├── session.py              ← SessionLocal factory, get_db(), init_db()
+│       └── migrations/             ← Alembic migration files
+│           ├── env.py
+│           └── versions/
+│               └── 0001_initial_schema.py
+│
+├── retrain/                        ← MLflow retraining pipeline
+│   ├── data_pipeline.py            ← JOIN query: inference_log + feature_snapshot + fall_history → DataFrame
+│   ├── retrain.py                  ← train XGBoost + log to MLflow (CLI)
+│   ├── seed_test_data.py           ← seed Postgres for testing: --synthetic N or --influxdb
+│   └── requirements.txt
+│
+└── infrastructure/                 ← Docker Compose for supporting services
+    ├── docker-compose.yml          ← postgres, mqtt, prometheus, grafana
+    ├── postgres/
+    │   └── init.sql                ← creates fall_detection + mlflow databases
+    ├── mosquitto/
+    │   └── mosquitto.conf          ← MQTT broker config (listener 1883, WebSocket 9001)
+    ├── prometheus/
+    │   └── prometheus.yml          ← scrapes host.docker.internal:8001/metrics
+    └── grafana/
+        ├── provisioning/
+        │   ├── datasources/        ← auto-provisions Prometheus + PostgreSQL datasources
+        │   └── dashboards/         ← loads JSON files from dashboards/
+        └── dashboards/
+            ├── ml_server_overview.json     ← request rate, latency, error rate, falls/hour
+            ├── model_performance.json      ← confidence distribution, drift alert, per-version breakdown
+            └── fall_events_timeline.json   ← SQL: falls today, recent events table, per-patient
 ```
 
 ---
 
 ## Architecture
 
+### How it fits into the wider system
+
+The Patient Dashboard is one web app shown to the caregiver (built by Isa). It has two panels:
+
+| Panel | Data source | Owned by |
+|-------|-------------|----------|
+| Patient info — demographics (height, weight), biosignals (HR) | FHIR server + InfluxDB | FOCUS |
+| Fall panel — fall history + real-time alerts | `fall_dashboard` API (this repo) | Us |
+
+The `fall_dashboard` service (:8002) is the backend that feeds the fall panel. It is not a standalone end-user product.
+
 ### Message flow
 
 ```
 [InfluxDB]
-    │  fetch ACC window
+    │  fetch raw ACC window (50 Hz)
     ▼
 [mock_app]  ──── HTTP POST /predict ────►  [inference_server :8001]
-    ◄─────────── HTTP response ──────────  fall_detected, confidence, FHIR
+    ◄─────────── HTTP response ──────────  fall_detected, confidence,
+    │                                      observation_id (UUID), FHIR
+    │                                          │ BackgroundTask (non-blocking)
+    │                                          ▼
+    │                                   [Postgres: inference_log
+    │                                    + feature_snapshot]
     │
     │  10s patient confirmation window
     │  (real app: popup on patient's phone)
     │  (mock: waits MOCK_PATIENT_RESPONSE_TIMEOUT seconds)
     │
     │  MQTT PUBLISH  fall/alert/<patient_id>
+    │  payload: { observation_id, patient_confirmed, needs_help, ... }
     ▼
 [MQTT broker :1883]
     │  route to subscribers of fall/alert/#
     ▼
 [fall_dashboard :8002]
-    │  DB write (SQLite)
-    │  SSE fan-out
+    │  DB write → fall_history (Postgres/SQLite)
+    │  SSE fan-out → Patient Dashboard browser
     ▼
-[caregiver dashboard browser]
-    alert: "patient-001 has fallen at 10:00:10 and needs help"
+[Patient Dashboard — caregiver browser]
+    fall panel: "patient-001 fell at 10:00:10, confirmed, needs help"
 ```
 
-### MQTT clients
+### MQTT clients (only 2)
 
 | Component | Role | Topic |
 |-----------|------|-------|
 | `mock_app` | publisher | `fall/alert/<patient_id>` |
 | `fall_dashboard` | subscriber | `fall/alert/#` |
 
-The inference server has **no MQTT client**. It receives requests and returns
-responses over HTTP. The mobile app already has the fall result in the HTTP
-response — no second channel is needed.
+The inference server has **no MQTT client**. Fall result is returned directly in the HTTP response.
 
-### Component responsibilities
+### observation_id cross-reference
 
-| Concern | Component |
-|---------|-----------|
-| Sensor data fetching | mock_app (real app: BLE wearable) |
-| ML inference | inference_server |
-| FHIR conversion | inference_server (returned in HTTP response) |
-| Patient confirmation popup | mock_app (real app: phone UI) |
-| Confirmed alert delivery | mock_app publishes MQTT |
-| Fall history storage | fall_dashboard (own SQLite/Postgres DB) |
-| Live dashboard push | fall_dashboard MQTT → SSE → browser |
-| FHIR auto-push to partner server | inference_server (optional) |
+A UUID is generated at the start of every `/predict` call. It flows:
+
+```
+inference_server generates obs_id
+    → returned in HTTP response (PredictResponse.observation_id)
+    → mock_app includes it in MQTT alert payload
+    → fall_dashboard stores it in fall_history.observation_id
+    → also stored in inference_log.observation_id (BackgroundTask)
+```
+
+This links `inference_log` ↔ `fall_history` without a synchronous DB round-trip in the HTTP handler, and enables the retraining JOIN.
 
 ---
 
 ## Quick start
 
+### Step 1 — Start infrastructure services
+
 ```powershell
 cd _6G_Integration_v2_mqtt
 
-# 1 — Install dependencies
+# Start Postgres, MQTT broker, Prometheus, Grafana
+docker-compose -f infrastructure/docker-compose.yml up
+```
+
+Service URLs once running:
+- Grafana: http://localhost:3000 (admin / admin)
+- Prometheus: http://localhost:9090
+- MQTT broker: localhost:1883
+- Postgres: localhost:5432 (fall_user / fall_pass)
+
+### Step 2 — Install Python dependencies
+
+```powershell
 pip install -r inference_server/requirements.txt
 pip install -r mock_app/requirements.txt
 pip install -r fall_dashboard/requirements.txt
+```
 
-# 2 — Start MQTT broker (first time only)
-docker run -d --name mqtt-local -p 1883:1883 eclipse-mosquitto
+### Step 3 — Run database migrations
 
-# 3 — Edit .env  (see Configuration section below)
+**SQLite (default)** — no extra steps. Tables are created automatically on first run.
 
-# 4 — Terminal 1: inference server
+**Postgres** (using the compose stack):
+
+```powershell
+# Install the Postgres driver if not already installed
+pip install psycopg2-binary
+
+# Point Alembic at the compose Postgres instance
+$env:DATABASE_URL = "postgresql+psycopg2://fall_user:fall_pass@localhost:5432/fall_detection"
+
+# Run migrations (from _6G_Integration_v2_mqtt/ — where alembic.ini lives)
+alembic upgrade head
+```
+
+Verify the tables were created:
+
+```powershell
+docker exec -it fall_postgres psql -U fall_user -d fall_detection -c "\dt"
+```
+
+Expected output:
+```
+ public | fall_history        | table | fall_user
+ public | feature_snapshot    | table | fall_user
+ public | inference_log       | table | fall_user
+ public | participant_session | table | fall_user
+```
+
+### Step 4 — Edit .env
+
+Copy `.env.example` to `.env` (or edit `.env` directly). Minimum required:
+
+```
+PATIENT_IDS=patient-001
+MAC_IDS=AA:BB:CC:DD:EE:FF
+INFLUXDB_URL=...
+INFLUXDB_TOKEN=...
+INFLUXDB_ORG=...
+INFLUXDB_BUCKET=...
+MQTT_BROKER_HOST=localhost
+```
+
+### Step 5 — Start Python services (3 terminals)
+
+```powershell
+# Terminal 1 — inference server
 uvicorn inference_server.server:app --host 0.0.0.0 --port 8001
 
-# 5 — Terminal 2: fall dashboard
+# Terminal 2 — fall dashboard
 python -m fall_dashboard.client
-# Dashboard: http://localhost:8002/
+# API: http://localhost:8002/api/patients
+# Local test UI: http://localhost:8002/
 
-# 6 — Terminal 3: mock mobile app
+# Terminal 3 — mock mobile app
 python -m mock_app.client
 ```
 
-Verify:
+### Verify
+
 ```powershell
 curl.exe http://localhost:8001/health
-curl.exe http://localhost:8001/model/info      # check uses_barometer
-curl.exe http://localhost:8002/api/patients    # fall dashboard API
+curl.exe http://localhost:8001/model/info       # check uses_barometer flag
+curl.exe http://localhost:8002/api/patients     # should list configured patients
+curl.exe http://localhost:8002/api/falls        # fall history (empty until a fall fires)
 ```
 
 ---
 
 ## Inference Server API (port 8001)
 
-### `POST /predict` — header: `X-API-Key: <your key>`
+### `POST /predict` — header: `X-API-Key: <key>`
 
 ```json
 {
@@ -142,28 +259,25 @@ curl.exe http://localhost:8002/api/patients    # fall dashboard API
   "acc_x":                   [-512, -498, "..."],
   "acc_y":                   [128, 134, "..."],
   "acc_z":                   [16300, 16280, "..."],
-  "timestamps_ms":           [1712345678000, 1712345678040, "..."],
+  "timestamps_ms":           [1712345678000, 1712345678020, "..."],
   "pressure":                [101325.0, 101322.5, "..."],
-  "pressure_timestamps_ms":  [1712345678000, 1712345678040, "..."]
+  "pressure_timestamps_ms":  [1712345678000, 1712345678020, "..."]
 }
 ```
 
-Input ACC values must be **raw LSB integers** (as recorded by the SmarKo app).
-The server converts LSB → g and resamples from hardware rate to 50 Hz internally.
+Input ACC values must be **raw LSB integers** as recorded by the SmarKo app. The server converts LSB → g and resamples from hardware rate to 50 Hz internally.
 
-The response includes a complete FHIR R4 Observation in `fhir_observation`.
-If `FHIR_SERVER_URL` is set, the server also POSTs the observation there automatically.
+Response includes `fall_detected`, `confidence`, `observation_id` (UUID), and a full FHIR R4 Observation in `fhir_observation`. If `FHIR_SERVER_URL` is set, the server also POSTs the observation there automatically.
 
 ### `GET /model/info`
 
-Returns the loaded model metadata including the `uses_barometer` flag — the mock_app
-reads this to decide whether to fetch barometer data from InfluxDB.
+Returns loaded model metadata including the `uses_barometer` flag. mock_app reads this to decide whether to fetch barometer data from InfluxDB.
 
 ### `GET /model/list`
 
 Returns all model versions available on disk.
 
-### `POST /model/switch` — header: `X-API-Key: <your key>`
+### `POST /model/switch` — header: `X-API-Key: <key>`
 
 Hot-swaps the loaded model without restarting the server.
 
@@ -177,94 +291,172 @@ Liveness check. Returns model version, uptime, sensor config.
 
 ### `GET /metrics`
 
-Prometheus metrics endpoint (requires `prometheus-fastapi-instrumentator` installed).
-Exposes: `fall_detections_total`, `inference_latency_seconds`, `model_confidence`.
+Prometheus metrics endpoint. Exposes: `fall_detections_total`, `inference_latency_seconds`, `model_confidence`.
 
 ---
 
 ## Fall Dashboard API (port 8002)
 
+This API is consumed by the Patient Dashboard (Isa's UI) to populate the fall panel.
+
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/` | Dashboard HTML/JS |
-| GET | `/api/patients` | Patient list with fall counts |
-| GET | `/api/falls?patient_id=&limit=` | Fall history rows |
-| GET | `/api/stream` | Server-Sent Events feed of live confirmed alerts |
+| GET | `/api/patients` | Patient list with fall counts and MAC address |
+| GET | `/api/falls` | Fall history (`?patient_id=&only_falls=true&limit=200`) |
+| GET | `/api/stream` | Server-Sent Events — live confirmed fall alerts |
+| GET | `/` | Standalone local test dashboard (HTML/JS) |
 
-The dashboard:
-- **Patients tab** — one card per registered patient, fall count badge, red border on patients who have fallen.
-- **Fall History tab** — table of confirmed alerts with patient_confirmed status.
-- **Alert banner** — flashes the instant a confirmed alert arrives over SSE.
+### Response fields — `/api/falls`
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | int | Row PK |
+| `patient_id` | string | FHIR Patient identifier |
+| `mac_id` | string | MAC address (from MAC_IDS env var) |
+| `fall_detected` | bool | True if model flagged a fall |
+| `patient_confirmed` | string | `yes` / `no` / `not_answered` |
+| `needs_help` | bool / null | Set by patient in confirmation popup |
+| `observation_id` | string | UUID linking to `inference_log` |
+| `detection_time` | datetime | When the fall was detected |
+| `alert_time` | datetime | When the MQTT alert was received |
 
 ---
 
-## `fall_history` table — schema
+## Database schema
 
-Created automatically on first run by `fall_dashboard/db.py`.
+Shared Postgres instance (two logical databases). Managed by Alembic.
 
-| Column | Type | Notes |
-|--------|------|-------|
-| `id` | int PK | |
-| `patient_id` | string, indexed | FHIR Patient identifier |
-| `fall_detection` | boolean | True if the model flagged a fall |
-| `patient_confirmed` | string | `yes` / `no` / `not_answered` — set by mobile app |
-| `detection_time` | datetime | Indexed; defaults to row insertion time |
+**Database: `fall_detection`**
 
-`patient_confirmed` is written from the MQTT alert payload — the value is determined
-by the mobile app during the patient confirmation step, not by the caregiver backend.
+| Table | Written by | Purpose |
+|-------|-----------|---------|
+| `inference_log` | inference_server (BackgroundTask) | One row per /predict call |
+| `feature_snapshot` | inference_server (BackgroundTask) | One row per feature value per call |
+| `fall_history` | fall_dashboard (on MQTT arrival) | One row per confirmed alert |
+| `participant_session` | fall_dashboard (on startup) | One row per registered patient |
+
+**Database: `mlflow`** — MLflow internal tracking tables (kept separate to avoid migration conflicts).
+
+Cross-reference: `observation_id` (UUID string) is the join key between `inference_log` and `fall_history`. It is not an integer FK — this avoids a synchronous DB call inside the `/predict` HTTP handler.
+
+Local dev uses SQLite (`DATABASE_URL=sqlite:///./caregiver.db`) — no Docker needed. Switch to Postgres by changing `DATABASE_URL` only.
+
+---
+
+## MLflow retraining pipeline
+
+Test the pipeline without Charite data using synthetic Postgres seeds:
+
+```powershell
+pip install -r retrain/requirements.txt
+
+# Seed Postgres with 100 synthetic labelled windows:
+python -m retrain.seed_test_data --synthetic 100 --model-version v3
+
+# Check dataset stats (dry run):
+python -m retrain.retrain --dry-run
+
+# Train + log to MLflow:
+python -m retrain.retrain --model-version v3 --dataset our_data
+
+# View results in MLflow UI:
+mlflow ui --backend-store-uri ./mlruns
+# → http://localhost:5000
+```
+
+Retraining data comes from **Postgres only** (feature_snapshot + fall_history joined on observation_id). InfluxDB is not needed for retraining — features are pre-computed and stored at inference time.
 
 ---
 
 ## Configuration
 
-All three components share a single `.env` in this folder.
+All components share a single `.env` in this folder.
 
-| Variable | SERVER | MOCK APP | CAREGIVER | Notes |
-|----------|:------:|:--------:|:---------:|-------|
-| `MODEL_VERSION` | X | | | Fixed model on server (restart to change) |
-| `ACC_SENSOR_TYPE` | X | X | | Both sides must agree on hardware |
-| `HARDWARE_ACC_SAMPLE_RATE` | X | X | | Same |
+| Variable | SERVER | MOCK APP | FALL DASHBOARD | Notes |
+|----------|:------:|:--------:|:--------------:|-------|
+| `MODEL_VERSION` | X | | | Model loaded on startup |
+| `ACC_SENSOR_TYPE` | X | X | | Must match on both sides |
+| `HARDWARE_ACC_SAMPLE_RATE` | X | X | | 50 Hz for Charite InfluxDB data |
 | `RESAMPLING_METHOD` | X | | | Server resamples to 50 Hz |
-| `INFLUXDB_*` | | X | | mock_app fetches sensor data |
-| `PATIENT_IDS` | | X | X | Patients to poll / register |
-| `MAC_IDS` | | X | X | Comma-separated, 1:1 with PATIENT_IDS |
+| `INFLUXDB_URL` | | X | | |
+| `INFLUXDB_TOKEN` | | X | | |
+| `INFLUXDB_ORG` | | X | | |
+| `INFLUXDB_BUCKET` | | X | | |
+| `PATIENT_IDS` | | X | X | Comma-separated |
+| `MAC_IDS` | | X | X | Positional, 1:1 with PATIENT_IDS |
 | `POLL_INTERVAL_SECONDS` | | X | | How often mock_app polls InfluxDB |
-| `POLL_LOOKBACK_SECONDS` | | X | | Seconds of history to fetch each cycle |
+| `POLL_LOOKBACK_SECONDS` | | X | | Seconds of history per poll |
 | `INFERENCE_SERVER_URL` | | X | | Where mock_app POSTs /predict |
 | `INFERENCE_API_KEY` | | X | | Must match `API_KEYS` on server |
-| `API_KEYS` | X | | | Accepted X-API-Key header values |
-| `DATABASE_URL` | | | X | SQLite by default; Postgres in production |
+| `API_KEYS` | X | | | Accepted X-API-Key values |
+| `MOCK_PATIENT_RESPONSE_TIMEOUT` | | X | | Seconds before treating as not_answered |
+| `DATABASE_URL` | X | | X | SQLite default; Postgres in production |
 | `MQTT_BROKER_HOST` | | X | X | Broker hostname or IP |
-| `MQTT_BROKER_PORT` | | X | X | Default 1883 (8883 for TLS) |
+| `MQTT_BROKER_PORT` | | X | X | Default 1883 |
 | `MQTT_ALERT_TOPIC` | | X | X | Default `fall/alert` |
-| `MQTT_USERNAME` | | X | X | Leave empty if broker has no auth |
-| `MQTT_PASSWORD` | | X | X | Leave empty if broker has no auth |
-| `MOCK_PATIENT_RESPONSE_TIMEOUT` | | X | | Seconds to wait before treating as no-answer |
+| `MQTT_USERNAME` | | X | X | Leave empty if no broker auth |
+| `MQTT_PASSWORD` | | X | X | Leave empty if no broker auth |
 | `FHIR_SERVER_URL` | X | | | Optional — server auto-pushes observations |
+| `MLFLOW_TRACKING_URI` | | | | Default `./mlruns`; set to `http://mlflow:5000` in production |
+| `CAREGIVER_HOST` | | | X | Default `0.0.0.0` |
 | `CAREGIVER_PORT` | | | X | Default 8002 |
 | `SERVER_PORT` | X | | | Default 8001 |
 
 ---
 
-## What is NOT included
+## Postgres — interactive debugging
 
-Compared to the full system on the `complete_system` branch:
-- No Grafana dashboards (Prometheus metrics endpoint exists but no dashboard config)
-- No patient feedback popup served from this backend (popup is the mobile app's job)
-- No Docker Compose (run with three terminals + one Docker container for the broker)
-- No JWT auth / login screen on the dashboard
-- No MinIO datalake / CSV replay
+Enter the container and stay in a live psql session:
+
+```powershell
+docker exec -it fall_postgres psql -U fall_user -d fall_detection
+```
+
+You'll get a `fall_detection=#` prompt. Useful queries:
+
+```sql
+-- Check recent inference results
+SELECT id, patient_id, fall_detected, confidence, detection_time
+FROM inference_log
+ORDER BY id DESC LIMIT 5;
+
+-- Check fall history (written by fall_dashboard on MQTT arrival)
+SELECT id, patient_id, patient_confirmed, needs_help, detection_time
+FROM fall_history
+ORDER BY id DESC LIMIT 5;
+
+-- Count rows per table
+SELECT 'inference_log' AS tbl, COUNT(*) FROM inference_log
+UNION ALL
+SELECT 'fall_history',         COUNT(*) FROM fall_history
+UNION ALL
+SELECT 'feature_snapshot',     COUNT(*) FROM feature_snapshot
+UNION ALL
+SELECT 'participant_session',  COUNT(*) FROM participant_session;
+
+-- List tables
+\dt
+
+-- Describe a table's columns
+\d inference_log
+
+-- Exit
+\q
+```
+
+One-liner (run query without entering the container):
+
+```powershell
+docker exec -it fall_postgres psql -U fall_user -d fall_detection -c "SELECT id, patient_id, fall_detected, confidence, detection_time FROM inference_log ORDER BY id DESC LIMIT 5;"
+```
 
 ---
 
 ## Development notes
 
-- The inference server runs `--workers 1`. If you need multiple workers, Prometheus
-  counters become per-process — use a pushgateway or run a single worker.
-- SQLite is the default for zero-setup local testing. Switch to Postgres in production
-  by changing `DATABASE_URL` only — no code change needed.
-- If `MQTT_BROKER_HOST` is empty: mock_app logs a warning and skips publishing;
-  caregiver SSE sends keepalives only; fall history is never written (no alerts arrive).
-- `MAC_IDS` uses positional mapping to `PATIENT_IDS` (comma-separated lists, same order).
-  Do not use `key:value` format — MAC addresses contain `:` which breaks parsing.
+- `MAC_IDS` uses positional mapping to `PATIENT_IDS` (comma-separated, same order). Do not use `key:value` format — MAC addresses contain `:` which breaks parsing.
 - `python-dotenv` does not strip inline `#` comments. Put comments on their own line.
+- The inference server must run `--workers 1`. Prometheus counters are per-process; multiple workers would give split counts.
+- If `MQTT_BROKER_HOST` is empty: mock_app skips publishing; fall_dashboard SSE sends keepalives only; fall_history is never written.
+- Old `caregiver.db` (pre Step 6b) has an incompatible schema. Delete it on first run after upgrading — the correct schema is created automatically by `init_db()`.
+- SQLite can report "database is locked" if an external DB viewer holds the file open. Fix: close the viewer, or set `connect_args={"timeout": 30}`.

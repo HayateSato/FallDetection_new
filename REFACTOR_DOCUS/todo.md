@@ -272,8 +272,3 @@ Also: writes fall detection result + patient confirmation to FOCUS InfluxDB from
 | **Test MLflow pipeline** | `seed_test_data.py --synthetic 100` then `retrain.py` — no blockers |
 | **Test Grafana** | `docker-compose -f infrastructure/docker-compose.yml up`, then start inference_server, run a few /predict calls |
 
-
-
-manually added list 
- - is the Eclipse MQTT compatible to the mobile app built with react native 
- - 
