@@ -24,8 +24,7 @@ prometheus-fastapi-instrumentator
 sqlalchemy>=2.0
 # MLflow — used by /model/switch to load models from registry (Step 11c)
 # mlflow>=2.10   # uncomment when wiring registry-based model loading
-# Optional Postgres driver — uncomment if DATABASE_URL points at Postgres
-# psycopg2-binary
+psycopg2-binary
 alembic
 
 # Configuration

@@ -8,8 +8,7 @@ uvicorn[standard]
 # DB layer (shared schema with inference_server)
 sqlalchemy>=2.0
 alembic
-# Optional Postgres driver — uncomment if DATABASE_URL points at Postgres
-# psycopg2-binary
+psycopg2-binary
 
 # Sync HTTP client (used to call the inference server)
 requests

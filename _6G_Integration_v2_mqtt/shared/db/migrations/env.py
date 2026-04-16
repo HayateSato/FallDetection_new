@@ -18,14 +18,17 @@ Running migrations:
 """
 
 import os
+import sys
+from pathlib import Path
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 
-# ── Import the ORM Base so Alembic can autogenerate migrations ────────────────
-# sys.path manipulation is not needed when alembic is run from the
-# _6G_Integration_v2_mqtt/ directory (which is the project root).
+# Add project root to sys.path so 'shared' can be imported
+root_dir = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(root_dir))
+
 from shared.db.models import Base
 
 # ── Alembic config object ─────────────────────────────────────────────────────
