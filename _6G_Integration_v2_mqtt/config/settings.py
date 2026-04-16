@@ -33,6 +33,16 @@ INFLUXDB_ORG = os.getenv('INFLUXDB_ORG', '')
 INFLUXDB_BUCKET = os.getenv('INFLUXDB_BUCKET', '')
 
 # =============================================================================
+# PATIENT SETTINGS
+# =============================================================================
+
+# Comma-separated patient identifiers (used by mock_app and retrain/seed_test_data)
+PATIENT_IDS = os.getenv('PATIENT_IDS', '')
+
+# Comma-separated MAC addresses, positional 1:1 with PATIENT_IDS
+MAC_IDS = os.getenv('MAC_IDS', '')
+
+# =============================================================================
 # ACCELEROMETER SENSOR CONFIGURATION
 # =============================================================================
 
