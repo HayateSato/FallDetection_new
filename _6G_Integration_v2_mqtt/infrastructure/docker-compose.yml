@@ -72,6 +72,24 @@ services:
       - "--storage.tsdb.retention.time=30d"
       - "--web.enable-lifecycle"   # allows hot-reload via POST /-/reload
 
+  # ── Mock FHIR Server — simulates FOCUS namespace (demographics only) ─────────
+  # NOT part of our production namespace. Replace with real FOCUS FHIR URL in K8s.
+  # Patient Dashboard (Isa's app) calls GET /fhir/Patient/{id} for demographics.
+  focus_mock_fhir:
+    image: python:3.12-slim
+    container_name: focus_mock_fhir
+    restart: unless-stopped
+    working_dir: /app
+    command: >
+      sh -c "pip install fastapi uvicorn python-dotenv --quiet &&
+             uvicorn focus_mock.fhir_server:app --host 0.0.0.0 --port 8003"
+    ports:
+      - "8003:8003"
+    volumes:
+      - ..:/app
+    environment:
+      PYTHONPATH: /app
+
   # ── Grafana — 3 dashboards: server overview, model performance, fall timeline ─
   grafana:
     image: grafana/grafana:10.4.0
