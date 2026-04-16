@@ -214,3 +214,10 @@ _before_refactoring/
 _EcoSystem_Integration/
 emergency/
 _OLD/
+
+# MLflow local experiment store (reproducible — regenerate with retrain.py)
+mlruns/
+mlflow.db
+
+# SQLite fallback database (dev only — production uses Postgres)
+*.db

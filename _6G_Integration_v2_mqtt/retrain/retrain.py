@@ -58,7 +58,6 @@ DEFAULT_XGB_PARAMS = {
     "min_child_weight": 3,
     "scale_pos_weight": 1,   # updated dynamically to balance classes
     "eval_metric":    "logloss",
-    "use_label_encoder": False,
     "random_state":   42,
 }
 
@@ -68,7 +67,7 @@ DEFAULT_XGB_PARAMS = {
 # ---------------------------------------------------------------------------
 
 def train(
-    model_version:     str = "v3",
+    model_version:     str = "v0",
     dataset_tag:       str = "our_data",
     output_dir:        Optional[str] = None,
     register:          bool = False,
@@ -193,7 +192,7 @@ def train(
             "scale_pos_weight": spw,
             "threshold":        threshold,
             **{k: v for k, v in params.items()
-               if k not in ("use_label_encoder", "eval_metric", "random_state")},
+               if k not in ("eval_metric", "random_state")},
         })
 
         # ── Log dataset tags ──────────────────────────────────────────────
@@ -258,7 +257,7 @@ def train(
 
         mlflow.xgboost.log_model(
             model,
-            artifact_path="model",
+            name="model",
             registered_model_name=REGISTERED_MODEL_NAME if register else None,
             signature=signature,
             input_example=pd.DataFrame(X_train[:2], columns=ordered_features),
@@ -278,8 +277,8 @@ def train(
         feat_path = f"{out_dir}/feature_names.txt"
         with open(feat_path, "w") as fh:
             fh.write("\n".join(ordered_features))
-        mlflow.log_artifact(feat_path, artifact_path="model")
-        mlflow.log_artifact(pkl_path, artifact_path="model")
+        mlflow.log_artifact(feat_path, artifact_uri="model")
+        mlflow.log_artifact(pkl_path, artifact_uri="model")
 
         print(f"\nMLflow run_id : {run_id}")
         print(f"Tracking URI  : {tracking_uri}")
@@ -300,8 +299,8 @@ def _parse_args():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=__doc__,
     )
-    parser.add_argument("--model-version", default="v3",
-                        help="Base model version to retrain (default: v3)")
+    parser.add_argument("--model-version", default="v0",
+                        help="Base model version to retrain (default: v0)")
     parser.add_argument("--dataset", default="our_data",
                         choices=["our_data", "charite"],
                         help="MLflow dataset tag (default: our_data)")
