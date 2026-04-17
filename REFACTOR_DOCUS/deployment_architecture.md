@@ -299,7 +299,7 @@ MLFLOW_ARTIFACT_ROOT=s3://mlflow-artifacts/     # bucket name
 
 ```
 1. docker-compose -f infrastructure/docker-compose.yml up   # starts MinIO on :9000
-2. Open http://localhost:9001 (MinIO console) → create bucket: mlflow-artifacts
+2. Open http://localhost:9002 (MinIO console) → create bucket: mlflow-artifacts
 3. mlflow ui --backend-store-uri sqlite:///./mlruns.db --workers 1
 4. python -m retrain.retrain --model-version v0 --register   # artifacts now go to MinIO
 5. .\scripts\switch_model.ps1 -Stage Production              # inference_server loads from MinIO
