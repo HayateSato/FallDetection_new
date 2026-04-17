@@ -31,8 +31,8 @@ Hayate's mock server runs at **`:8003`** and serves synthetic patient demographi
 **Start it:**
 ```powershell
 # From _6G_Integration_v2_mqtt/ as cwd:
-uvicorn focus_mock.fhir_server:app --host 0.0.0.0 --port 8003
-# OR via docker-compose — focus_mock_fhir service
+uvicorn mock_focus.fhir_server:app --host 0.0.0.0 --port 8003
+# OR via docker-compose — mock_focus_fhir service
 ```
 
 ### `GET /fhir/Patient`

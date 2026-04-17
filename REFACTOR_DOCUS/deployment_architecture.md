@@ -13,6 +13,12 @@ the cluster over the network.
 > **Local development note:** `mock_app` plays the role of the mobile app in this diagram.
 > Our cloud InfluxDB currently plays the role of the InfluxDB instance that would live in
 > the FOCUS namespace. See "Future: Mock FOCUS Namespace" section below.
+>
+> **Important:** In production, the mobile app reads from the SmarKo wearable via BLE
+> and sends ACC windows directly to `inference_server` — **InfluxDB is not in the
+> inference path**. `mock_app` reads from InfluxDB as a local-dev shortcut only because
+> we do not have the real SmarKo app. InfluxDB's role is biosignal display in the
+> Patient Dashboard, not inference input.
 
 ```
   SmarKo wearable  (physical device — external)
@@ -160,7 +166,7 @@ HTTP and MQTT connections work correctly before the real FOCUS deployment.
 
 | Storage | Type | What is stored | Who writes | Who reads | Purpose |
 |---------|------|---------------|-----------|-----------|---------|
-| **InfluxDB** (FOCUS-hosted; our cloud instance for local dev) | Time-series | Raw ACC + barometer from SmarKo wearable; fall detection result (confidence, model_version, timestamp); patient confirmation (fall T/F, help_required T/F, no_response T/F, timestamp, patient UID); window start/end timestamps | Mobile app (Isa) | mock_app / real mobile app data fetcher | Sensor data source for inference; source of truth for all bio events |
+| **InfluxDB** (FOCUS-hosted; our cloud instance for local dev) | Time-series | Raw ACC + barometer from SmarKo wearable; biosignals (HR etc.); fall results + patient confirmation written by mobile app | Mobile app (Isa) writes · `mock_app` writes (local dev only) | **Patient Dashboard** (biosignal display panel) · `mock_app` reads as a local-dev shortcut (replaces BLE wearable input) | **Biosignal display in Patient Dashboard only. NOT used for inference in production.** In production the mobile app reads from the wearable via BLE and sends windows directly to inference_server. `seed_test_data --influxdb` reads from here as a dev utility to populate Postgres without a live inference_server. |
 | **FHIR Server** (FOCUS-hosted) | FHIR R4 | Patient demographics, identifiers, Patient resources | FOCUS | Our dashboard (read-only, patient info panel) | Patient identity and medical context |
 | **Postgres `fall_detection` DB** (our namespace) | Relational | `inference_log`: every prediction (patient_id, model_version, fall_detected, confidence, latency_ms, detection_time) · `feature_snapshot`: feature name+value per inference · `fall_history`: confirmed alerts (linked to inference_log via FK, patient_confirmed, needs_help) · `participant_session`: fall count per patient | `inference_server` writes inference_log + feature_snapshot · `fall_dashboard` writes fall_history + participant_session | Caregiver dashboard (fall history) · `retrain.py` (labelled training data) | Fall history for dashboard display; labelled dataset for model retraining |
 | **Postgres `mlflow` DB** (our namespace) | Relational | MLflow runs, parameters, metrics, model registry stages | MLflow tracking server | MLflow UI · inference_server (`/model/switch` loads from registry) | Experiment tracking and model versioning |
@@ -184,12 +190,14 @@ Eventually (production Helm deployment): package a new InfluxDB instance inside 
 These are the only points where our namespace communicates with the FOCUS namespace.
 All are initiated by us (outbound from our namespace), and all are read-only except the `/predict` call.
 
-| From (our namespace) | To (FOCUS namespace) | Protocol | Direction | Data |
-|----------------------|--------------------|----------|-----------|------|
-| mock_app / real mobile app | InfluxDB | InfluxDB HTTP API | Read | ACC windows for inference |
-| inference_server | FHIR Server | HTTPS | Write (optional) | FHIR Observation (if `FHIR_SERVER_URL` set) |
-| caregiver dashboard | FHIR Server | HTTPS | Read | Patient demographics |
-| Mobile App (FOCUS) | inference_server | HTTP | Write | POST /predict requests |
+| From | To (FOCUS namespace) | Protocol | Direction | Data | Notes |
+|------|---------------------|----------|-----------|------|-------|
+| `mock_app` (local dev only) | InfluxDB | InfluxDB HTTP API | Read | ACC windows | **Local dev shortcut only.** Replaces BLE wearable input. Not a production connection. |
+| Mobile App (production) | InfluxDB | InfluxDB HTTP API | Write | Raw biosignals, fall results, patient confirmation | Mobile app writes sensor data for Patient Dashboard display. |
+| Mobile App (production) | `inference_server` | HTTP | Write | POST /predict (ACC window) | **Primary inference path.** Mobile app reads from BLE wearable, sends directly — InfluxDB not involved. |
+| `inference_server` | FHIR Server | HTTPS | Write (optional) | FHIR Observation | Only if `FHIR_SERVER_URL` is configured. |
+| Patient Dashboard | FHIR Server | HTTPS | Read | Patient demographics | Isa's app reads demographics for the patient info panel. |
+| Patient Dashboard | `fall_dashboard` | HTTP/SSE | Read | Fall history, real-time alerts | Fall panel in Patient Dashboard calls our API. |
 
 ---
 

@@ -282,7 +282,8 @@ class PredictResponse(BaseModel):
 
 
 class ModelSwitchRequest(BaseModel):
-    version: str = Field(..., description="Model version to load (e.g. 'v3')")
+    version:      Optional[str] = Field(None, description="File-based model version (e.g. 'v0_retrained'). Use this OR mlflow_stage.")
+    mlflow_stage: Optional[str] = Field(None, description="MLflow registry stage: 'Production' or 'Staging'. Loads latest registered version at that stage.")
 
 
 class ModelSwitchResponse(BaseModel):
@@ -542,33 +543,108 @@ async def model_list():
     return {"available_versions": list_available_models()}
 
 
+def _load_from_mlflow_registry(stage: str):
+    """
+    Load a model from the MLflow Model Registry by stage name.
+
+    Fetches the latest version of 'fall-detection-xgboost' at the given stage,
+    downloads the .pkl artifact, and returns (engine, info, config, version_label).
+
+    Requires MLFLOW_TRACKING_URI to point at the same store used by retrain.py.
+    """
+    try:
+        import mlflow
+        from mlflow.tracking import MlflowClient
+        from pathlib import Path
+    except ImportError:
+        raise RuntimeError("mlflow is not installed. Run: pip install mlflow>=2.10")
+
+    tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "sqlite:///./mlruns.db")
+    mlflow.set_tracking_uri(tracking_uri)
+    client = MlflowClient()
+
+    # Get latest registered version at this stage
+    versions = client.get_latest_versions("fall-detection-xgboost", stages=[stage])
+    if not versions:
+        raise ValueError(
+            f"No model at stage '{stage}' in registry 'fall-detection-xgboost'. "
+            f"Promote a run in the MLflow UI first: Models → fall-detection-xgboost → Transition to {stage}."
+        )
+
+    mv = versions[0]
+    run_id = mv.run_id
+    registry_version = mv.version
+
+    # Read model_version tag set by retrain.py (e.g. 'v0', 'v3')
+    run = client.get_run(run_id)
+    model_version_tag = run.data.tags.get("model_version", "v0")
+
+    # Download the .pkl artifact (logged under artifact_path="model" by retrain.py)
+    artifact_dir = mlflow.artifacts.download_artifacts(
+        run_id=run_id,
+        artifact_path="model",
+    )
+    pkl_files = list(Path(artifact_dir).glob("*.pkl"))
+    if not pkl_files:
+        raise ValueError(
+            f"No .pkl file found in MLflow artifacts for run {run_id}. "
+            f"Make sure retrain.py logged the .pkl with mlflow.log_artifact()."
+        )
+    pkl_path = str(pkl_files[0])
+
+    engine     = PipelineSelector(model_version_tag, pkl_path)
+    info       = engine.get_model_info()
+    config     = get_model_config(get_model_name(model_version_tag))
+    # Label shown in /model/info so you know where it came from
+    label      = f"mlflow:{stage}:v{registry_version}({model_version_tag})"
+
+    logger.info(
+        f"Loaded from MLflow registry: stage={stage}  "
+        f"registry_version={registry_version}  run_id={run_id}  pkl={pkl_path}"
+    )
+    return engine, info, config, label
+
+
 @app.post("/model/switch", response_model=ModelSwitchResponse,
           dependencies=[Depends(verify_api_key)])
 async def model_switch(req: ModelSwitchRequest):
     """
     Hot-swap the loaded model without restarting the server.
 
-    Uses a threading lock so any in-flight /predict calls complete before
-    the switch takes effect.  The new model is used for all subsequent
-    /predict calls.
+    Two modes:
+      - version      : file-based — loads from model/ directory (e.g. 'v0_retrained')
+      - mlflow_stage : registry-based — downloads latest .pkl at that stage from MLflow
+                       (e.g. 'Production' or 'Staging')
+
+    Exactly one of version or mlflow_stage must be provided.
+    Uses a threading lock so any in-flight /predict calls complete first.
     """
     global _engine, _current_model_version, _model_info, _model_config
 
-    new_version = req.version.strip()
-    available   = list_available_models()
-    if new_version not in available:
-        raise HTTPException(
-            status_code=404,
-            detail=f"Model '{new_version}' not found. Available: {available}",
-        )
+    if req.version and req.mlflow_stage:
+        raise HTTPException(status_code=422, detail="Provide version OR mlflow_stage, not both.")
+    if not req.version and not req.mlflow_stage:
+        raise HTTPException(status_code=422, detail="Provide either version (file-based) or mlflow_stage (registry-based).")
 
     previous = _current_model_version
     try:
-        new_type   = get_model_name(new_version)
-        new_path   = get_model_path(new_type)
-        new_engine = PipelineSelector(new_version, new_path)
-        new_info   = new_engine.get_model_info()
-        new_config = get_model_config(new_type)
+        if req.mlflow_stage:
+            # Registry-based: download .pkl from MLflow
+            new_engine, new_info, new_config, new_version = _load_from_mlflow_registry(req.mlflow_stage)
+        else:
+            # File-based: existing behaviour
+            new_version = req.version.strip()
+            available   = list_available_models()
+            if new_version not in available:
+                raise HTTPException(
+                    status_code=404,
+                    detail=f"Model '{new_version}' not found. Available: {available}",
+                )
+            new_type   = get_model_name(new_version)
+            new_path   = get_model_path(new_type)
+            new_engine = PipelineSelector(new_version, new_path)
+            new_info   = new_engine.get_model_info()
+            new_config = get_model_config(new_type)
 
         with _model_lock:
             _engine                = new_engine
@@ -585,6 +661,8 @@ async def model_switch(req: ModelSwitchRequest):
             num_features=new_info["num_features"],
             uses_barometer=new_info["uses_barometer"],
         )
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.error(f"Model switch failed: {exc}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Model switch failed: {exc}")

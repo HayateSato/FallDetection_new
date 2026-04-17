@@ -66,18 +66,18 @@ Sample rate confirmed 50Hz → `HARDWARE_ACC_SAMPLE_RATE=50` set in `.env`.
 
 **Naming clarification (2026-04-16):**
 - **Patient Dashboard** = Isa's unified web app (lives in FOCUS namespace). Combines:
-  - Demographics panel → `GET /fhir/Patient/{id}` from FOCUS FHIR server (or `focus_mock` locally)
+  - Demographics panel → `GET /fhir/Patient/{id}` from FOCUS FHIR server (or `mock_focus` locally)
   - Biosignals panel → InfluxDB (FOCUS side, not our code)
   - Fall panel → our `fall_dashboard` API (`GET /api/falls`, SSE `/api/stream`)
 - **fall_dashboard** = our backend service (:8002). Not a standalone UI — feeds the fall panel only.
 
 **Mock FHIR server implemented (2026-04-16):**
-`focus_mock/fhir_server.py` — FastAPI, port 8003. Simulates FOCUS namespace for local dev.
+`mock_focus/fhir_server.py` — FastAPI, port 8003. Simulates FOCUS namespace for local dev.
 - `GET /fhir/Patient` — Bundle of all patients
 - `GET /fhir/Patient/{id}` — single Patient resource (name, DOB, gender, ward)
 - `GET /fhir/Observation?patient={id}` — height, weight, heart rate
-Run: `uvicorn focus_mock.fhir_server:app --host 0.0.0.0 --port 8003`
-Or via docker-compose (focus_mock_fhir service).
+Run: `uvicorn mock_focus.fhir_server:app --host 0.0.0.0 --port 8003`
+Or via docker-compose (mock_focus_fhir service).
 **Replace with real FOCUS FHIR URL in K8s — this mock never ships.**
 
 - [ ] 5.1 Confirm whether FHIR server exists and `FHIR_SERVER_URL` is needed
@@ -213,8 +213,11 @@ alembic upgrade head
 ## Step 11 — MLflow: Retraining on Charite Data (H) ✓ (pipeline implemented; data pending)
 
 **Pre-condition:** Charite data sharing agreement required before using patient data.
-**For testing:** Use `retrain/seed_test_data.py` to seed Postgres from our own InfluxDB or synthetic data.
-**Data source for retraining:** Postgres only (feature_snapshot + fall_history). InfluxDB is only upstream.
+**Data source for retraining:** Postgres only (`feature_snapshot` JOIN `fall_history`). InfluxDB is NOT in the retraining loop — features are pre-computed by inference_server at prediction time and stored in Postgres.
+
+**For testing (when no live inference_server has run yet):** Use `retrain/seed_test_data.py` to populate Postgres:
+- `--synthetic N` — generates fake feature distributions directly in Postgres (no external deps)
+- `--influxdb` — dev utility: fetches historical ACC windows from our own InfluxDB, runs feature extraction locally, writes results to Postgres. Simulates what Postgres would contain after days of live inference. **NOT part of the production retraining flow.**
 
 ### 11a — MLflow tracking server ✓
 
@@ -235,7 +238,9 @@ alembic upgrade head
 
 - [x] 11.9 `--register` flag in `retrain.py` registers model in MLflow Model Registry as `fall-detection-xgboost`
 - [ ] 11.10 Stages: `Staging` → evaluate → `Production` — manual via MLflow UI; no code needed
-- [ ] 11.11 Wire `POST /model/switch` to load from registry by name/stage — deferred; current hot-swap is file-based
+- [x] 11.11 Wire `POST /model/switch` to load from registry by name/stage — implemented (2026-04-17):
+           `{"mlflow_stage": "Production"}` downloads latest .pkl from MLflow registry and hot-swaps it.
+           File-based `{"version": "v0_retrained"}` still works as before. mlflow>=2.10 added to inference_server/requirements.txt.
 
 ### 11d — Retraining data pipeline ✓
 
@@ -243,7 +248,8 @@ alembic upgrade head
 - [x] 11.13 `retrain/retrain.py` — full training script (load → split → XGBoost fit → MLflow log → save .pkl)
 - [x] 11.14 Trigger: manual (`python -m retrain.retrain`). Scheduled / drift-based trigger deferred.
 - [x] 11.15 `retrain/seed_test_data.py` — seeds Postgres for testing without Charite data:
-           `--synthetic N` (no InfluxDB needed) or `--influxdb` (real windows from our InfluxDB)
+           `--synthetic N` (no InfluxDB needed) or `--influxdb` (dev utility: fetches from our InfluxDB,
+           runs feature extraction, writes to Postgres — simulates what a live inference_server would produce)
 
 ### How to test the pipeline now (no Charite data needed)
 

@@ -277,8 +277,8 @@ def train(
         feat_path = f"{out_dir}/feature_names.txt"
         with open(feat_path, "w") as fh:
             fh.write("\n".join(ordered_features))
-        mlflow.log_artifact(feat_path, artifact_uri="model")
-        mlflow.log_artifact(pkl_path, artifact_uri="model")
+        mlflow.log_artifact(feat_path, artifact_path="model")
+        mlflow.log_artifact(pkl_path, artifact_path="model")
 
         print(f"\nMLflow run_id : {run_id}")
         print(f"Tracking URI  : {tracking_uri}")
