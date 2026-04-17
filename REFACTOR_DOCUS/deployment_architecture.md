@@ -1,5 +1,5 @@
 # Deployment Architecture — Fall Detection / FOCUS Integration
-**Last updated:** 2026-04-15  
+**Last updated:** 2026-04-17  
 **Status:** Implementation in progress — see todo.md for open items
 
 ---
@@ -158,7 +158,7 @@ HTTP and MQTT connections work correctly before the real FOCUS deployment.
 | `MLflow tracking server` | Logs training runs, metrics, model artifacts; hosts Model Registry | Pending — blocked on data sharing agreement |
 | `Prometheus` | Scrapes `/metrics` from inference_server every 15s | Pending (code ready — no infra yet) |
 | `Grafana` | 3 dashboards: server overview, model performance, fall events timeline | Pending |
-| `MinIO` | Artifact store for MLflow model `.pkl` files; needed when inference server loads from registry | Pending |
+| `MinIO` | Artifact store for MLflow model `.pkl` files. MLflow uses `s3://mlflow-artifacts/` bucket on MinIO. inference_server downloads `.pkl` from MLflow (which reads from MinIO) via `POST /model/switch`. Base model baked into image as fallback if MinIO/MLflow unavailable at startup. | **Decided — in our namespace** (2026-04-17) |
 
 ---
 
@@ -258,6 +258,55 @@ WHERE il.fall_detected = TRUE
 
 ---
 
+## MinIO — Model Artifact Storage (decided 2026-04-17)
+
+Model `.pkl` files are **not baked into the Docker image** (except as a startup fallback).
+They live in MinIO and are downloaded at runtime by the inference server via the MLflow registry.
+
+### How it fits together
+
+```
+retrain.py                               inference_server
+  │                                           │
+  │ mlflow.xgboost.log_model()               │ POST /model/switch
+  ▼                                           │   {"mlflow_stage": "Production"}
+MLflow tracking server  ────────────────────► │
+  │  (run metadata in Postgres mlflow DB)     │  get_model_version_by_alias()
+  │  (artifact .pkl → MinIO bucket)           │  downloads .pkl from MinIO
+  ▼                                           ▼
+MinIO  s3://mlflow-artifacts/            loads into memory (hot-swap)
+```
+
+### Startup ordering in K8s
+
+inference_server must not crash if MinIO or MLflow is not yet ready. Strategy:
+1. On startup, load the **base model from the baked-in `model/model_v0/` files** (always present in image)
+2. An `initContainer` (or retry loop) waits for MinIO and MLflow to be healthy before the main container starts
+3. Once running, operators use `POST /model/switch` to load the production-registered model from the registry
+
+This means the system is always functional after startup, even if MinIO is temporarily unavailable.
+
+### Environment variables needed (add to .env for local dev with MinIO)
+
+```
+MLFLOW_S3_ENDPOINT_URL=http://localhost:9000    # point MLflow artifact store at MinIO
+AWS_ACCESS_KEY_ID=minioadmin
+AWS_SECRET_ACCESS_KEY=minioadmin
+MLFLOW_ARTIFACT_ROOT=s3://mlflow-artifacts/     # bucket name
+```
+
+### Local dev order with MinIO
+
+```
+1. docker-compose -f infrastructure/docker-compose.yml up   # starts MinIO on :9000
+2. Open http://localhost:9001 (MinIO console) → create bucket: mlflow-artifacts
+3. mlflow ui --backend-store-uri sqlite:///./mlruns.db --workers 1
+4. python -m retrain.retrain --model-version v0 --register   # artifacts now go to MinIO
+5. .\scripts\switch_model.ps1 -Stage Production              # inference_server loads from MinIO
+```
+
+---
+
 ## Open Decisions Still Needed
 
 | Decision | Who decides | Impact |
@@ -266,5 +315,5 @@ WHERE il.fall_detected = TRUE
 | InfluxDB: FOCUS-hosted or our namespace? | FOCUS + us | Whether InfluxDB is in our Helm chart |
 | Container registry location | FOCUS DevOps | Step 9 Helm chart delivery |
 | Kubernetes namespace names | FOCUS DevOps | Helm chart `values.yaml` |
-| Model files: Docker image or mounted volume? | FOCUS DevOps + us | Step 7.3 |
+| ~~Model files: Docker image or mounted volume?~~ | ~~FOCUS DevOps + us~~ | **Decided:** Option B — MinIO in our namespace. See Step 7.3 in todo.md. |
 | Data sharing agreement with Charite | Charite + FOCUS | Unlocks Step 11 (MLflow retraining) |

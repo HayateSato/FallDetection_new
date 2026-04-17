@@ -163,7 +163,11 @@ alembic upgrade head
 
 - [x] 7.1 Ported `POST /model/switch` with `threading.Lock`
 - [x] 7.2 Ported `GET /model/list`
-- [ ] 7.3 Confirm whether model files go in Docker image or mounted volume (ask FOCUS DevOps)
+- [x] 7.3 Model files: **Option B — mounted volume via MinIO in our namespace** (decided 2026-04-17)
+      MinIO runs in our namespace. MLflow artifact store points at MinIO (`s3://mlflow-artifacts/`).
+      inference_server loads models from MLflow registry (which reads from MinIO) via `/model/switch`.
+      Base model baked into image as fallback for startup before MLflow/MinIO are ready.
+      See deployment_architecture.md → MinIO section for startup ordering and implementation steps.
 
 ---
 

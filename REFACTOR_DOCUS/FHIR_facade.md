@@ -56,7 +56,7 @@ and explicitly need us to push to it. The FHIR Observation is already included i
 
 ## If FOCUS later needs historical FHIR data: FHIR facade
 
-If FOCUS wants to query past fall detections in FHIR format, implement a facade endpoint
+If FOCUS wants to query past fall detections in FHIR format, implement a facade (a bridging tool that can convert data from postgrse to FIHR format) endpoint
 in `fall_dashboard` that reads from Postgres and serializes to FHIR R4 on the fly:
 
 ```

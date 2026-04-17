@@ -90,6 +90,37 @@ services:
     environment:
       PYTHONPATH: /app
 
+  # ── MinIO — MLflow artifact store (model .pkl files) ────────────────────────
+  # S3-compatible object store. MLflow logs .pkl artifacts here during retrain.
+  # inference_server downloads from here via /model/switch (MLflow registry path).
+  #
+  # Console: http://localhost:9001  (minioadmin / minioadmin)
+  # S3 API:  http://localhost:9000
+  #
+  # First-time setup: open console → create bucket named "mlflow-artifacts"
+  # Add to .env for retrain.py and MLflow:
+  #   MLFLOW_S3_ENDPOINT_URL=http://localhost:9000
+  #   AWS_ACCESS_KEY_ID=minioadmin
+  #   AWS_SECRET_ACCESS_KEY=minioadmin
+  minio:
+    image: minio/minio:latest
+    container_name: fall_minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Web console
+    environment:
+      MINIO_ROOT_USER:     minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
   # ── Grafana — 3 dashboards: server overview, model performance, fall timeline ─
   grafana:
     image: grafana/grafana:10.4.0
@@ -118,3 +149,4 @@ volumes:
   grafana_data:
   mqtt_data:
   mqtt_logs:
+  minio_data:
