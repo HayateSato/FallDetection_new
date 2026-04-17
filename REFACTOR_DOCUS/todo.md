@@ -50,6 +50,9 @@
 - [x] 3.3 `_on_fall_mqtt` reads `patient_confirmed` from alert payload
 - [x] 3.4 Removed `start_auto_confirm_timer` — patient confirmation is mobile app's responsibility
 - [x] 3.5 `broker.start()` moved to `client.py` startup hook
+- [x] 3.6 Fixed patient name display in fall_dashboard UI (2026-04-17): Patients tab now always shows
+      `patient_id` as the name; MAC address shown as a secondary badge. Previously used `mac_id || patient_id`
+      which silently showed the MAC when `MAC_IDS` was set in `.env`.
 
 ---
 
@@ -81,7 +84,9 @@ Or via docker-compose (mock_focus_fhir service).
 **Replace with real FOCUS FHIR URL in K8s — this mock never ships.**
 
 - [ ] 5.1 Confirm whether FHIR server exists and `FHIR_SERVER_URL` is needed
-- [ ] 5.2 If FHIR stored in DB → add JSON column to `fall_history` in `db.py`
+- [~] 5.2 ~~If FHIR stored in DB → add JSON column to `fall_history` in `db.py`~~ — **WON'T DO**
+      Storing FHIR JSON alongside normalized Postgres tables is redundant duplication.
+      If FOCUS needs FHIR-formatted history, implement a facade endpoint instead (see `REFACTOR_DOCUS/FHIR_facade.md`).
 - [ ] 5.3 Confirm plain JSON from `/predict` is sufficient if no FHIR required
 - [ ] 5.4 Check with FOCUS whether LOINC `72514-3` passes their FHIR validator
 
