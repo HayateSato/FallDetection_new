@@ -15,8 +15,8 @@ Patient IDs match those in .env (PATIENT_IDS) so the full stack links up:
                                                          this server (demographics)
 
 Run:
-  uvicorn focus_mock.fhir_server:app --host 0.0.0.0 --port 8003
-  or via docker-compose (see infrastructure/docker-compose.yml — focus_mock service)
+  uvicorn mock_focus.fhir_server:app --host 0.0.0.0 --port 8003
+  or via docker-compose (see infrastructure/docker-compose.yml — mock_focus service)
 
 Namespace note:
   In production Kubernetes this server is replaced by the real FOCUS FHIR server

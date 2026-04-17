@@ -1,5 +1,0 @@
-# focus_mock — mock FHIR server dependencies
-# pip install -r focus_mock/requirements.txt
-fastapi
-uvicorn[standard]
-python-dotenv
