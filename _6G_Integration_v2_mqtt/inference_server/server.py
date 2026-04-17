@@ -351,8 +351,9 @@ async def model_info():
     Metadata about the loaded model.
     The `uses_barometer` field tells the trigger client whether
     to fetch `bmp_pressure` from InfluxDB alongside ACC data.
+    `loaded_as` shows the full version label including registry source.
     """
-    return _model_info
+    return {**_model_info, "loaded_as": _current_model_version}
 
 
 @app.post("/predict", response_model=PredictResponse,
@@ -563,15 +564,23 @@ def _load_from_mlflow_registry(stage: str):
     mlflow.set_tracking_uri(tracking_uri)
     client = MlflowClient()
 
-    # Get latest registered version at this stage
-    versions = client.get_latest_versions("fall-detection-xgboost", stages=[stage])
-    if not versions:
-        raise ValueError(
-            f"No model at stage '{stage}' in registry 'fall-detection-xgboost'. "
-            f"Promote a run in the MLflow UI first: Models → fall-detection-xgboost → Transition to {stage}."
-        )
+    # Get latest registered version by alias (new API) or stage (fallback for older MLflow)
+    # Aliases replace stages in MLflow >= 2.9. Alias name matches stage name: 'Production', 'Staging'.
+    # Set alias via: client.set_registered_model_alias("fall-detection-xgboost", "Production", <version>)
+    # or via the Python one-liner in mlops_retraining_cycle.md.
+    try:
+        mv = client.get_model_version_by_alias("fall-detection-xgboost", stage)
+    except Exception:
+        # Fallback: stage-based lookup for MLflow < 2.9 or if alias not set
+        versions = client.search_model_versions(f"name='fall-detection-xgboost'")
+        versions = [v for v in versions if v.current_stage == stage]
+        if not versions:
+            raise ValueError(
+                f"No model at stage/alias '{stage}' in registry 'fall-detection-xgboost'. "
+                f"Set it with: client.set_registered_model_alias('fall-detection-xgboost', '{stage}', <version_number>)"
+            )
+        mv = sorted(versions, key=lambda v: int(v.version))[-1]
 
-    mv = versions[0]
     run_id = mv.run_id
     registry_version = mv.version
 

@@ -262,23 +262,40 @@ Missing a fall is far worse.
 
 ---
 
-## Step 5 — Promote in MLflow UI
+## Step 5 — Promote to Production
 
-Before switching the server, promote the version in the registry:
+MLflow >= 2.9 uses **aliases** instead of stages (stages are deprecated).
+Use this one-liner — faster and future-proof:
 
+```powershell
+# Promote version 2 to Production alias
+python -c "
+import mlflow
+mlflow.set_tracking_uri('sqlite:///./mlruns.db')
+client = mlflow.tracking.MlflowClient()
+client.set_registered_model_alias('fall-detection-xgboost', 'Production', 2)
+print('Done')
+"
 ```
-http://localhost:5000
-→ Models → fall-detection-xgboost → click the version → Transition to → Production
-```
 
-Stages:
+Change `2` to the version number you want to promote. To find the version number:
+open `http://localhost:5000` → Model Registry → fall-detection-xgboost.
 
-| Stage | Meaning |
+Alias meanings (same concept as the old stages):
+
+| Alias | Meaning |
 |-------|---------|
-| `None` | Just registered — run evaluation |
 | `Staging` | Under review — test on mock_app |
 | `Production` | Current best — inference server loads this |
-| `Archived` | Superseded — kept for rollback |
+
+To demote / remove an alias:
+```powershell
+python -c "
+import mlflow
+mlflow.set_tracking_uri('sqlite:///./mlruns.db')
+mlflow.tracking.MlflowClient().delete_registered_model_alias('fall-detection-xgboost', 'Production')
+"
+```
 
 ---
 
@@ -349,3 +366,105 @@ If things look wrong: roll back immediately (see Step 6 above).
 | Charite patient data | Blocked — data sharing agreement required | `--dataset charite` — real retraining |
 
 Do not deploy a model trained only on synthetic data to production patients.
+
+---
+
+## Quick Reference — All commands
+
+All commands run from `_6G_Integration_v2_mqtt/` as the working directory with the venv active.
+
+### Start services
+
+```powershell
+# Start infrastructure (Postgres, MQTT, Prometheus, Grafana)
+docker-compose -f infrastructure/docker-compose.yml up
+
+# Start inference server
+uvicorn inference_server.server:app --host 0.0.0.0 --port 8001
+
+# Start MLflow UI
+mlflow ui --backend-store-uri sqlite:///./mlruns.db --workers 1
+# → http://localhost:5000
+```
+
+### Check what model is running
+
+```powershell
+curl.exe http://localhost:8001/model/info
+```
+
+Look at `"loaded_as"` in the response:
+- `"v0"` — original model loaded from `model/model_v0/`
+- `"mlflow:Production:v2(v0)"` — Version 2 from MLflow registry (base model type v0)
+
+### Seed training data (when you have no real patient data yet)
+
+```powershell
+# Synthetic (no external dependencies — pipeline testing only)
+python -m retrain.seed_test_data --synthetic 200 --model-version v0
+
+# Check how many rows you have
+python -m retrain.retrain --dry-run
+```
+
+### Train a new model
+
+```powershell
+python -m retrain.retrain --model-version v0 --dataset our_data --register
+```
+
+### Promote a version to Production in MLflow
+
+Replace `2` with the version number shown in the MLflow Models tab.
+
+```powershell
+python -c "
+import mlflow
+mlflow.set_tracking_uri('sqlite:///./mlruns.db')
+client = mlflow.tracking.MlflowClient()
+client.set_registered_model_alias('fall-detection-xgboost', 'Production', 2)
+print('Done')
+"
+```
+
+### Switch the live model (hot-swap — no server restart)
+
+```powershell
+# Switch to whatever is in the Production alias (recommended)
+.\scripts\switch_model.ps1 -Stage Production
+
+# Switch to a specific retrained file
+.\scripts\switch_model.ps1 -Version v0_retrained
+
+# Roll back to original model
+.\scripts\switch_model.ps1 -Version v0
+```
+
+### Remove a registry alias (demote)
+
+```powershell
+python -c "
+import mlflow
+mlflow.set_tracking_uri('sqlite:///./mlruns.db')
+mlflow.tracking.MlflowClient().delete_registered_model_alias('fall-detection-xgboost', 'Production')
+"
+```
+
+### Manual curl equivalents (if switch_model.ps1 is unavailable)
+
+```powershell
+# Switch to Production alias
+curl.exe -X POST http://localhost:8001/model/switch `
+  -H "Content-Type: application/json" `
+  -H "X-API-Key: 626e6c481b78c77d52db774d0e54a06cefb0553cb245fa15d5c7050fc7424e7a" `
+  -d '{\"mlflow_stage\": \"Production\"}'
+
+# Roll back to original v0
+curl.exe -X POST http://localhost:8001/model/switch `
+  -H "Content-Type: application/json" `
+  -H "X-API-Key: 626e6c481b78c77d52db774d0e54a06cefb0553cb245fa15d5c7050fc7424e7a" `
+  -d '{\"version\": \"v0\"}'
+
+# Check current model
+curl.exe http://localhost:8001/model/info
+```
