@@ -40,10 +40,11 @@ async function loadPatients() {
     }
     list.innerHTML = data.patients.map((p) => `
       <div class="patient-card ${p.fall_count > 0 ? 'has-falls' : ''}">
-        <div class="patient-name">${escapeHtml(p.mac_id || p.patient_id)}</div>
+        <div class="patient-name">${escapeHtml(p.patient_id)}</div>
         <div class="patient-meta">
           <span class="badge">${p.fall_count} falls</span>
           ${p.session_active ? '<span class="badge badge-active">Active</span>' : ''}
+          ${p.mac_id ? `<span class="badge">${escapeHtml(p.mac_id)}</span>` : ''}
         </div>
       </div>
     `).join('');
