@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fall-dashboard
+  namespace: {{ .Values.namespaces.ours }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fall-dashboard
+  template:
+    metadata:
+      labels:
+        app: fall-dashboard
+    spec:
+      containers:
+        - name: fall-dashboard
+          image: {{ .Values.registry }}/{{ .Values.images.fallDashboard.repository }}:{{ .Values.images.fallDashboard.tag }}
+          ports:
+            - containerPort: {{ .Values.fallDashboard.port }}
+          envFrom:
+            - configMapRef:
+                name: fall-detection-config
+          readinessProbe:
+            httpGet:
+              path: /api/patients
+              port: {{ .Values.fallDashboard.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/patients
+              port: {{ .Values.fallDashboard.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 30

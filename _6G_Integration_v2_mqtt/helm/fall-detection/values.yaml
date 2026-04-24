@@ -1,0 +1,89 @@
+# helm/fall-detection/values.yaml
+# Single file to change per environment (dev / staging / production).
+# Placeholders marked with TODO must be confirmed with FOCUS DevOps before deploying.
+
+# ── Namespaces ────────────────────────────────────────────────────────────────
+namespaces:
+  ours: fall-detection        # TODO: confirm with FOCUS DevOps
+  focus: focus-ns             # TODO: confirm with FOCUS DevOps
+
+# ── Container registry ────────────────────────────────────────────────────────
+registry: registry.example.com   # TODO: confirm with FOCUS DevOps
+
+# ── Image tags ────────────────────────────────────────────────────────────────
+images:
+  inferenceServer:
+    repository: inference-server
+    tag: latest
+  fallDashboard:
+    repository: fall-dashboard
+    tag: latest
+
+# ── Inference server ──────────────────────────────────────────────────────────
+inferenceServer:
+  port: 8001
+  modelVersion: v0
+  apiKeys: "changeme"           # override via --set in production
+  fhirServerUrl: ""             # set to FOCUS FHIR server URL once confirmed
+  fhirPushOnFallOnly: "true"
+  accSensorType: bosch
+  hardwareAccSampleRate: "50"
+  resamplingMethod: linear
+
+# ── Fall dashboard ────────────────────────────────────────────────────────────
+fallDashboard:
+  port: 8002
+  patientIds: "test_patient-002"   # comma-separated
+  macIds: "6c:1d:eb:04:a9:e6"      # comma-separated, positional with patientIds
+  pollIntervalSeconds: "10"
+  mockPatientResponseTimeout: "10"
+
+# ── MQTT broker ───────────────────────────────────────────────────────────────
+mqtt:
+  port: 1883
+  websocketPort: 9001
+  image: eclipse-mosquitto:2
+
+# ── Postgres ──────────────────────────────────────────────────────────────────
+postgres:
+  image: postgres:16-alpine
+  port: 5432
+  database: fall_detection
+  user: fall_user
+  password: fall_pass           # override via --set in production
+  storageSize: 10Gi
+  storageClass: ""              # TODO: confirm storage class with FOCUS DevOps
+
+# ── MLflow ────────────────────────────────────────────────────────────────────
+mlflow:
+  image: ghcr.io/mlflow/mlflow:latest
+  port: 5000
+
+# ── MinIO (MLflow artifact store) ─────────────────────────────────────────────
+minio:
+  image: minio/minio:latest
+  port: 9000
+  consolePort: 9001
+  storageSize: 20Gi
+  storageClass: ""              # TODO: confirm storage class with FOCUS DevOps
+  rootUser: minio
+  rootPassword: minio123        # override via --set in production
+  bucketName: mlflow-artifacts
+
+# ── Prometheus ────────────────────────────────────────────────────────────────
+prometheus:
+  image: prom/prometheus:latest
+  port: 9090
+
+# ── Grafana ───────────────────────────────────────────────────────────────────
+grafana:
+  image: grafana/grafana:10.4.0
+  port: 3000
+  adminPassword: admin          # override via --set in production
+
+# ── Ingress ───────────────────────────────────────────────────────────────────
+ingress:
+  enabled: true
+  host: fall-detection.example.com    # TODO: confirm with FOCUS DevOps
+  inferenceServerPath: /predict
+  fallDashboardPath: /api

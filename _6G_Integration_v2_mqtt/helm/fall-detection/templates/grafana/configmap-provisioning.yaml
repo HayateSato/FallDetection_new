@@ -1,0 +1,48 @@
+# Grafana provisioning — auto-configures datasources and dashboard provider on startup.
+# Postgres password is passed via GF_POSTGRES_PASSWORD env var (from secret), not hardcoded here.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-provisioning
+  namespace: {{ .Values.namespaces.ours }}
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name:      Prometheus
+        type:      prometheus
+        uid:       prometheus
+        url:       http://prometheus:{{ .Values.prometheus.port }}
+        access:    proxy
+        isDefault: true
+        jsonData:
+          httpMethod:   POST
+          timeInterval: 15s
+
+      - name:     PostgreSQL
+        type:     postgres
+        uid:      postgresql
+        url:      postgres:{{ .Values.postgres.port }}
+        database: {{ .Values.postgres.database }}
+        user:     {{ .Values.postgres.user }}
+        secureJsonData:
+          password: $__env{GF_POSTGRES_PASSWORD}
+        jsonData:
+          sslmode:         disable
+          postgresVersion: 1600
+          timescaledb:     false
+
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name:            fall-detection
+        orgId:           1
+        folder:          Fall Detection
+        folderUid:       fall-detection
+        type:            file
+        disableDeletion: false
+        editable:        true
+        updateIntervalSeconds: 30
+        allowUiUpdates: true
+        options:
+          path: /var/lib/grafana/dashboards

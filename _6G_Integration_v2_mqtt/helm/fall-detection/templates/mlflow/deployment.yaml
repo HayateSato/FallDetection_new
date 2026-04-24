@@ -1,0 +1,54 @@
+# MLflow tracking server — uses Postgres as backend store and MinIO as artifact store.
+# All retrain.py runs log here. inference-server downloads models from registry via this server.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mlflow
+  namespace: {{ .Values.namespaces.ours }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mlflow
+  template:
+    metadata:
+      labels:
+        app: mlflow
+    spec:
+      containers:
+        - name: mlflow
+          image: {{ .Values.mlflow.image }}
+          command:
+            - mlflow
+            - server
+            - --backend-store-uri
+            - "postgresql+psycopg2://{{ .Values.postgres.user }}:$(POSTGRES_PASSWORD)@postgres:{{ .Values.postgres.port }}/mlflow"
+            - --default-artifact-root
+            - "s3://{{ .Values.minio.bucketName }}/"
+            - --host
+            - "0.0.0.0"
+            - --port
+            - "{{ .Values.mlflow.port }}"
+          ports:
+            - containerPort: {{ .Values.mlflow.port }}
+          env:
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: fall-detection-secrets
+                  key: postgres-password
+            - name: MLFLOW_S3_ENDPOINT_URL
+              value: "http://minio:{{ .Values.minio.port }}"
+            - name: AWS_ACCESS_KEY_ID
+              value: {{ .Values.minio.rootUser }}
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: fall-detection-secrets
+                  key: minio-root-password
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.mlflow.port }}
+            initialDelaySeconds: 15
+            periodSeconds: 10

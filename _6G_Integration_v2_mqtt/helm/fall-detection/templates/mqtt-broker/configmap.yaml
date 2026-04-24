@@ -1,0 +1,15 @@
+# Mosquitto config — two listeners: TCP 1883 (Python services) + WebSocket 9001 (React Native)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mosquitto-config
+  namespace: {{ .Values.namespaces.ours }}
+data:
+  mosquitto.conf: |
+    listener {{ .Values.mqtt.port }}
+    protocol mqtt
+    allow_anonymous true
+
+    listener {{ .Values.mqtt.websocketPort }}
+    protocol websockets
+    allow_anonymous true

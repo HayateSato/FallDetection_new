@@ -1,0 +1,55 @@
+# StatefulSet for MinIO — persistent object store for MLflow model artifacts.
+# inference-server downloads .pkl files from here via /model/switch {"mlflow_stage": "Production"}.
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: minio
+  namespace: {{ .Values.namespaces.ours }}
+spec:
+  serviceName: minio
+  replicas: 1
+  selector:
+    matchLabels:
+      app: minio
+  template:
+    metadata:
+      labels:
+        app: minio
+    spec:
+      containers:
+        - name: minio
+          image: {{ .Values.minio.image }}
+          args: ["server", "/data", "--console-address", ":{{ .Values.minio.consolePort }}"]
+          ports:
+            - containerPort: {{ .Values.minio.port }}
+              name: s3
+            - containerPort: {{ .Values.minio.consolePort }}
+              name: console
+          env:
+            - name: MINIO_ROOT_USER
+              value: {{ .Values.minio.rootUser }}
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: fall-detection-secrets
+                  key: minio-root-password
+          volumeMounts:
+            - name: minio-data
+              mountPath: /data
+          readinessProbe:
+            httpGet:
+              path: /minio/health/live
+              port: {{ .Values.minio.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+  volumeClaimTemplates:
+    - metadata:
+        name: minio-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        {{- if .Values.minio.storageClass }}
+        storageClassName: {{ .Values.minio.storageClass }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.minio.storageSize }}
