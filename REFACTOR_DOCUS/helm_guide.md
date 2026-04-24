@@ -5,6 +5,33 @@ This guide is written with placeholders where those answers are still needed.
 
 ---
 
+## Key mental model — your laptop and the cluster are separate machines
+
+`localhost` on your laptop is not the same as `localhost` inside the cluster. When a cluster
+node pulls a Docker image, it is the node making the network request — not your laptop.
+A registry at `localhost:5000` on your laptop is invisible to the cluster.
+
+```
+YOUR LAPTOP                         FOCUS CLUSTER (separate machines)
+  Docker Desktop                      Kubernetes Control Plane
+    └── Docker Engine                 Node 1
+        └── container (local test)      └── Pod: inference-server  ← image runs HERE
+  kubectl / helm  (CLI tools only)    Node 2
+  localhost = your laptop               └── Pod: postgres
+                                      localhost = that node, NOT your laptop
+```
+
+### Container registry options
+
+| Option | Notes |
+|--------|-------|
+| FOCUS internal registry | **Best option** — private, already trusted by their cluster. Ask for the URL. |
+| `ghcr.io` (GitHub) | Free for public images. Good fallback. |
+| Docker Hub | Free, public. Simple to use. |
+| `localhost` | **Never works** from a cluster node. Local Docker testing only. |
+
+---
+
 ## Prerequisites
 
 - `kubectl` installed and connected to the target cluster
@@ -13,7 +40,9 @@ This guide is written with placeholders where those answers are still needed.
 - FOCUS DevOps has confirmed:
   - [ ] Kubernetes namespace names (placeholders used below: `focus-ns`, `fall-detection`)
   - [ ] Container registry URL (placeholder: `registry.example.com`)
-  - [ ] Ingress controller available in the cluster
+  - [ ] Ingress controller type (nginx / traefik / other)
+  - [ ] Ingress host / domain for our services
+  - [ ] Default StorageClass name for PVCs
 
 ---
 
@@ -617,15 +646,22 @@ The `helm.sh/hook: post-install,post-upgrade` annotation means this Job runs aut
 
 ## Step 13 — Cross-namespace access for Patient Dashboard
 
-The Patient Dashboard lives in `focus-ns` and needs to call our `fall-dashboard` service in `fall-detection`. In Kubernetes, cross-namespace service calls use the full DNS name:
+Two addresses exist simultaneously. Which one Isa uses depends on where the Patient Dashboard runs:
 
-```
-http://fall-dashboard.fall-detection.svc.cluster.local:8002
-```
+| Address | Used by |
+|---------|---------|
+| `http://fall-dashboard.fall-detection.svc.cluster.local:8002` | Server-side app running inside the FOCUS namespace |
+| `https://fall-detection.example.com/api` | Browser app (JavaScript in the user's browser, outside the cluster) |
 
-Give Isa this URL as the `FALL_DASHBOARD_URL` in the Patient Dashboard config. No NetworkPolicy changes are needed unless the cluster enforces them (confirm with FOCUS DevOps).
+**Clarify with Isa:** Is the Patient Dashboard a browser app (React/Vue SPA) or a server-side app?
+- **Browser app** → must use the Ingress / public URL. The browser is outside the cluster.
+- **Server-side app** → can use the internal DNS name directly.
 
-For SSE (`/api/stream`), the same URL applies — the browser connects via the Ingress host, not the internal DNS name, so Ingress must be reachable from the FOCUS namespace or from outside the cluster depending on where the Patient Dashboard is hosted.
+Both can exist at the same time — they are not mutually exclusive. The internal DNS name is for
+pod-to-pod calls inside the cluster. The Ingress URL is for anything outside.
+
+For SSE (`/api/stream`), the `nginx.ingress.kubernetes.io/proxy-buffering: "off"` annotation in
+`ingress.yaml` ensures the connection stays alive. This annotation is already set.
 
 ---
 
@@ -645,7 +681,8 @@ helm install fall-detection ./helm/fall-detection \
   --namespace fall-detection \
   --set postgres.password=<real-password> \
   --set inferenceServer.apiKeys=<real-api-key> \
-  --set grafana.adminPassword=<real-password>
+  --set grafana.adminPassword=<real-password> \
+  --set minio.rootPassword=<real-password>     # do not forget this — was missing in earlier version
 
 # Verify everything is running
 kubectl get pods -n fall-detection
@@ -671,16 +708,67 @@ Alembic migrations run automatically as a Job on every `helm upgrade`.
 
 ---
 
-## Open questions — confirm with FOCUS DevOps before proceeding
+## Source code protection
 
-| Question | Needed for |
-|----------|-----------|
-| Namespace names (confirm `fall-detection` and `focus-ns`) | All templates |
-| Container registry URL | `values.yaml` registry field |
-| Ingress controller type (nginx / traefik / other) | Ingress annotations |
-| Ingress host / domain for our services | `values.yaml` ingress.host |
-| NetworkPolicy enforcement? | Cross-namespace access |
-| Resource limits per pod (CPU / memory) | Deployment resources block |
-| Storage class name for Postgres + MinIO PVCs | StatefulSet volumeClaimTemplates |
-| Model files: baked into Docker image or mounted volume? | inference-server Deployment |
-| Is InfluxDB in FOCUS namespace or do we bring our own? | Whether to add InfluxDB StatefulSet |
+Running inside a Helm namespace means FOCUS installs and uses your system without seeing your source code.
+
+**What FOCUS receives:**
+- Your Docker images — contains packaged code. They can run it but cannot easily read your Python source.
+- Your Helm chart (`helm/fall-detection/`) — contains YAML infrastructure templates, not application logic.
+
+**What FOCUS never receives:** Python source files, model training code, business logic.
+
+**Caveat:** A motivated person can `docker exec` into a running container and browse the filesystem.
+This is obfuscation, not cryptographic protection. For a hospital research integration this is
+standard and accepted.
+
+**Optional — PyArmor for stronger protection** (not needed for FOCUS):
+```bash
+pip install pyarmor
+pyarmor gen inference_server/   # outputs encrypted bytecode to dist/
+# Dockerfile then copies from dist/ instead of raw source
+```
+
+---
+
+## What happens when `helm install` runs — startup chain
+
+Nothing starts all at once. Each step is a controller watching for its piece and reacting independently:
+
+```
+helm install fall-detection ./helm/fall-detection
+  → Helm renders templates → sends YAML to K8s API Server
+  → API Server validates and saves to etcd (cluster database)
+  → Deployment Controller sees "want 1 pod, have 0" → creates ReplicaSet
+  → ReplicaSet Controller creates Pod object (not running yet)
+  → Scheduler assigns Pod to a Node
+  → Kubelet on that Node pulls image from registry
+  → Kubelet starts container
+  → Readiness probe passes: GET /health returns 200
+  → Endpoints Controller adds Pod IP to Service
+  → Ingress Controller updates nginx routing rules
+  → Traffic can now reach the service
+```
+
+**A Service is not a process.** It is implemented as `iptables` rules on every node by
+`kube-proxy`. When a packet hits the Service ClusterIP, the kernel intercepts and redirects
+it directly to a pod IP — no extra hop, no intermediary container.
+
+**The readiness probe is the critical safety mechanism.** It tells the Service "this pod is
+ready for traffic". If a pod crashes and restarts, traffic stops flowing to it until the probe
+passes again. This is already configured correctly on `inference-server` (`initialDelaySeconds: 10`).
+
+---
+
+## Open questions — confirm with FOCUS DevOps before deploying
+
+| Item | What to ask | Impact |
+|------|-------------|--------|
+| **Registry URL** | "What is your container registry URL?" | `values.yaml` → `registry:` field |
+| **Namespace names** | Confirm `fall-detection` is ok; what is their namespace called? | All templates |
+| **Ingress host / domain** | "What domain should our services be reachable at?" | `values.yaml` → `ingress.host` |
+| **Ingress controller type** | nginx, traefik, or other? | Annotations in `ingress.yaml` |
+| **NetworkPolicy enforcement** | "Do you block cross-namespace traffic by default?" | Extra config needed if yes |
+| **StorageClass name** | "What is your default StorageClass?" | `postgres.storageClass` + `minio.storageClass` in `values.yaml` |
+| **Where Patient Dashboard runs** | Browser app or server-side? | Whether Isa uses internal DNS or Ingress URL |
+| **InfluxDB location** | FOCUS-hosted or do we bring our own? | Whether to add InfluxDB StatefulSet to chart |

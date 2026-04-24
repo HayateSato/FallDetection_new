@@ -163,11 +163,13 @@ alembic upgrade head
 
 - [x] 7.1 Ported `POST /model/switch` with `threading.Lock`
 - [x] 7.2 Ported `GET /model/list`
-- [x] 7.3 Model files: **Option B — mounted volume via MinIO in our namespace** (decided 2026-04-17)
+- [x] 7.3 Model files: **Option B — mounted volume via MinIO in our namespace** (decided + tested 2026-04-17)
       MinIO runs in our namespace. MLflow artifact store points at MinIO (`s3://mlflow-artifacts/`).
       inference_server loads models from MLflow registry (which reads from MinIO) via `/model/switch`.
       Base model baked into image as fallback for startup before MLflow/MinIO are ready.
-      See deployment_architecture.md → MinIO section for startup ordering and implementation steps.
+      **Local flow confirmed:** retrain.py → artifacts in MinIO → switch_model.ps1 -Stage Production works.
+      Gotcha: `MLFLOW_ARTIFACT_ROOT` is NOT auto-applied when using SQLite tracking URI — retrain.py
+      now explicitly passes `artifact_location` to `client.create_experiment()` on first run.
 
 ---
 
@@ -187,21 +189,57 @@ alembic upgrade head
 
 ## Step 9 — Helm Chart (H + FOCUS DevOps)
 
-**Blocked on: 0.7, 0.8**
+**Chart files written (2026-04-17). NOT yet deployed to K8s — blocked on FOCUS DevOps answers (0.7, 0.8).**
+
+All YAML templates are in `_6G_Integration_v2_mqtt/helm/fall-detection/`.
+Dockerfiles are at `inference_server/Dockerfile` and `fall_dashboard/Dockerfile`.
 
 **Two namespaces confirmed:**
 - **FOCUS namespace** — FHIR server, InfluxDB (eventually), mobile app, FOCUS data fetcher
 - **Our namespace** — everything we build (see deployment_architecture.md for full breakdown)
 
-- [ ] 9.1 Write `Dockerfile` for each component (inference_server, fall_dashboard, MLflow, Prometheus, Grafana)
-- [ ] 9.2 Create `helm/fall-detection/` chart with one `values.yaml`
-- [ ] 9.3 Each component = one Kubernetes `Deployment` + `Service`
-- [ ] 9.4 Postgres as a `StatefulSet` with persistent volume (one instance, two databases)
-- [ ] 9.5 MQTT broker (eclipse-mosquitto) as a `Deployment` in our namespace
-- [ ] 9.6 Confirm resource limits per pod with FOCUS DevOps
-- [ ] 9.7 Confirm ingress controller for exposing inference API across namespace boundary
-- [ ] 9.8 Plan InfluxDB migration: currently using our cloud InfluxDB; eventually package
-         a new InfluxDB instance inside our Helm namespace
+### What is written (code exists, not yet deployed)
+
+- [x] 9.1 Dockerfiles written: `inference_server/Dockerfile`, `fall_dashboard/Dockerfile`
+- [x] 9.2 `helm/fall-detection/Chart.yaml` + `values.yaml` (single file to change per environment)
+- [x] 9.3 Deployments + Services for: inference-server, fall-dashboard, mqtt-broker, mlflow, prometheus, grafana
+- [x] 9.4 Postgres as `StatefulSet` with `volumeClaimTemplates` (one instance, two databases via init.sql)
+- [x] 9.5 MQTT broker (eclipse-mosquitto) — Deployment + Service + ConfigMap (TCP 1883 + WS 9001)
+- [x] 9.6 MinIO as `StatefulSet` — MLflow artifact store for model `.pkl` files
+- [x] 9.7 Alembic migration as a Kubernetes `Job` (runs automatically on `helm install` / `helm upgrade`)
+- [x] 9.8 `secrets.yaml` — postgres password, minio password, api keys, grafana password
+- [x] 9.9 `configmap.yaml` — all shared env vars (DATABASE_URL, MQTT, MLFLOW, MinIO, etc.)
+- [x] 9.10 `ingress.yaml` — exposes `/predict` (inference) + `/api` (fall dashboard) with SSE buffering disabled
+- [x] 9.11 `migrate-job.yaml` — Alembic hook: `post-install,post-upgrade`
+
+### Still blocked — need FOCUS DevOps before `helm install` works
+
+- [ ] 9.12 Fill in `values.yaml` placeholders:
+          - `registry:` — container registry URL (currently `registry.example.com`)
+          - `namespaces.ours` / `namespaces.focus` — confirm namespace names
+          - `ingress.host` — real domain for our services
+          - `postgres.storageClass` / `minio.storageClass` — cluster's default StorageClass name
+- [ ] 9.13 Confirm ingress controller type (nginx / traefik) — affects annotations in `ingress.yaml`
+- [ ] 9.14 Confirm whether NetworkPolicy blocks cross-namespace traffic (Patient Dashboard → our API)
+- [ ] 9.15 Build + push Docker images to FOCUS registry:
+          ```bash
+          REGISTRY=registry.focus-hospital.de
+          docker build -f inference_server/Dockerfile -t $REGISTRY/inference-server:latest .
+          docker push $REGISTRY/inference-server:latest
+          docker build -f fall_dashboard/Dockerfile   -t $REGISTRY/fall-dashboard:latest .
+          docker push $REGISTRY/fall-dashboard:latest
+          ```
+- [ ] 9.16 Run `helm install` on the cluster:
+          ```bash
+          helm install fall-detection ./helm/fall-detection \
+            --namespace fall-detection \
+            --set postgres.password=<real> \
+            --set inferenceServer.apiKeys=<real> \
+            --set grafana.adminPassword=<real> \
+            --set minio.rootPassword=<real>
+          ```
+- [ ] 9.17 Confirm resource limits per pod with FOCUS DevOps (CPU / memory)
+- [ ] 9.18 Decide InfluxDB location: FOCUS-hosted or package inside our namespace
 
 ---
 
@@ -231,8 +269,8 @@ alembic upgrade head
 ### 11a — MLflow tracking server ✓
 
 - [x] 11.1 Added `mlflow>=2.10` to `retrain/requirements.txt`
-- [ ] 11.2 MLflow tracking server as a pod; backed by `mlflow` Postgres database + MinIO artifact store
-         (MinIO needed only when inference server loads models from registry across pods) — deferred to Step 9 (Helm)
+- [x] 11.2 MLflow tracking server as a pod — Helm template written at `helm/fall-detection/templates/mlflow/`.
+         Backed by `mlflow` Postgres database + MinIO artifact store. Not yet deployed (blocked on Step 9).
 - [x] 11.3 Added `MLFLOW_TRACKING_URI=./mlruns` to `.env` (local file store; change to `http://mlflow:5000` in production)
 
 ### 11b — Instrument training script ✓

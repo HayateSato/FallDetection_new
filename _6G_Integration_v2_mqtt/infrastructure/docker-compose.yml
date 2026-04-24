@@ -108,13 +108,13 @@ services:
     restart: unless-stopped
     ports:
       - "9000:9000"   # S3 API
-      - "9001:9001"   # Web console
+      - "9002:9002"   # Web console (9001 is taken by MQTT WebSocket)
     environment:
       MINIO_ROOT_USER:     minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     volumes:
       - minio_data:/data
-    command: server /data --console-address ":9001"
+    command: server /data --console-address ":9002"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
       interval: 30s
