@@ -27,5 +27,8 @@ mlflow>=2.10
 psycopg2-binary
 alembic
 
+# MinIO / S3 — required when /model/switch loads from MLflow registry backed by MinIO
+boto3
+
 # Configuration
 python-dotenv

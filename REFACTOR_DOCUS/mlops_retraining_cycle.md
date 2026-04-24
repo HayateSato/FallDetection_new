@@ -134,6 +134,44 @@ DATABASE_URL=postgresql+psycopg2://fall_user:fall_pass@localhost:5432/fall_detec
 MLFLOW_TRACKING_URI=sqlite:///./mlruns.db
 ```
 
+### Optional: store model artifacts in MinIO (recommended for production)
+
+By default, MLflow stores `.pkl` artifacts in `mlruns/` on disk. To use MinIO instead
+(required when inference_server runs in a different container/pod from the retrain process):
+
+**One-time setup:**
+
+```powershell
+# 1. Start MinIO (part of docker-compose)
+docker-compose -f infrastructure/docker-compose.yml up
+
+# 2. Open http://localhost:9002 (minioadmin / minioadmin) → Create bucket: mlflow-artifacts
+
+# 3. Install boto3 (MLflow uses it to talk to MinIO's S3 API)
+pip install boto3
+```
+
+**Uncomment these four lines in `.env`:**
+
+```
+MLFLOW_S3_ENDPOINT_URL=http://localhost:9000
+AWS_ACCESS_KEY_ID=minioadmin
+AWS_SECRET_ACCESS_KEY=minioadmin
+MLFLOW_ARTIFACT_ROOT=s3://mlflow-artifacts/
+```
+
+After this, the next `retrain.py --register` run will store `.pkl` artifacts in MinIO.
+`switch_model.ps1 -Stage Production` downloads from MinIO automatically — no code change needed.
+
+**Gotcha:** `MLFLOW_ARTIFACT_ROOT` is not applied automatically to existing MLflow experiments.
+If the experiment already exists pointing at `mlruns/`, delete it first:
+
+```powershell
+python retrain/_delete_exp.py   # deletes all non-default experiments permanently
+```
+
+Then re-run `retrain.py --register` — the experiment is recreated with the MinIO artifact location.
+
 ---
 
 ## Step 1 — Check how much data you have

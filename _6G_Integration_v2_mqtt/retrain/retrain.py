@@ -174,7 +174,19 @@ def train(
     # ── 5. MLflow run ─────────────────────────────────────────────────────
     tracking_uri = os.getenv("MLFLOW_TRACKING_URI", "./mlruns")
     mlflow.set_tracking_uri(tracking_uri)
-    mlflow.set_experiment(f"fall-detection-{model_version}")
+
+    # When MLFLOW_ARTIFACT_ROOT is set (e.g. s3://mlflow-artifacts/), create the
+    # experiment with that artifact location explicitly. MLflow does not pick up
+    # MLFLOW_ARTIFACT_ROOT automatically when using a local/SQLite tracking URI —
+    # it only respects it when a remote tracking server is running.
+    exp_name      = f"fall-detection-{model_version}"
+    artifact_root = os.getenv("MLFLOW_ARTIFACT_ROOT", "").strip()
+    client        = mlflow.tracking.MlflowClient()
+    existing_exp  = client.get_experiment_by_name(exp_name)
+    if existing_exp is None:
+        artifact_location = f"{artifact_root.rstrip('/')}" if artifact_root else None
+        client.create_experiment(exp_name, artifact_location=artifact_location)
+    mlflow.set_experiment(exp_name)
 
     run_name = f"retrain_{model_version}_{dataset_tag}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
 
