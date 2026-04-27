@@ -297,7 +297,7 @@ Dockerfiles are at `inference_server/Dockerfile` and `fall_dashboard/Dockerfile`
 ### 11c — Model registry (partial)
 
 - [x] 11.9 `--register` flag in `retrain.py` registers model in MLflow Model Registry as `fall-detection-xgboost`
-- [ ] 11.10 Stages: `Staging` → evaluate → `Production` — manual via MLflow UI; no code needed
+- [x] 11.10 Stages: `Staging` → evaluate → `Production` — manual via MLflow UI; no code needed
 - [x] 11.11 Wire `POST /model/switch` to load from registry by name/stage — implemented (2026-04-17):
            `{"mlflow_stage": "Production"}` downloads latest .pkl from MLflow registry and hot-swaps it.
            File-based `{"version": "v0_retrained"}` still works as before. mlflow>=2.10 added to inference_server/requirements.txt.
