@@ -11,7 +11,10 @@ namespaces:
 registry: registry.example.com   # TODO: confirm with FOCUS DevOps
 
 # ── Image tags ────────────────────────────────────────────────────────────────
+# pullPolicy: Never   → local test (Docker Desktop K8s — images must be built locally first)
+# pullPolicy: Always  → production (images pulled from real registry on every deploy)
 images:
+  pullPolicy: Never
   inferenceServer:
     repository: inference-server
     tag: latest

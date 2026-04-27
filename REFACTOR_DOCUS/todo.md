@@ -244,7 +244,11 @@ Dockerfiles are at `inference_server/Dockerfile` and `fall_dashboard/Dockerfile`
           ```
 - [x] 9.17 Resource limits confirmed (2026-04-27): cluster has 32 GB RAM. Limits set in `values.yaml`
           and wired into all 8 deployment/statefulset templates. Total limits: ~8 CPU / ~10 Gi.
-- [ ] 9.18 Decide InfluxDB location: FOCUS-hosted or package inside our namespace
+- [x] 9.18 InfluxDB location decided (2026-04-27): **FOCUS-hosted** — lives in FOCUS namespace, not ours.
+          Our `ecosystem-influxdb.smarko-health.de` is local testing only (mock_app data source);
+          it is NOT part of the production system. In production: real mobile app sends sensor
+          data directly to /predict — no InfluxDB query in our inference pipeline at all.
+          FOCUS-hosted InfluxDB is used by Isa's Patient Dashboard for biosignal display only.
 
 ---
 
@@ -346,3 +350,63 @@ Also: writes fall detection result + patient confirmation to FOCUS InfluxDB from
 | **Test MLflow pipeline** | `seed_test_data.py --synthetic 100` then `retrain.py` — no blockers |
 | **Test Grafana** | `docker-compose -f infrastructure/docker-compose.yml up`, then start inference_server, run a few /predict calls |
 
+
+---- 
+
+## Helm install test steps
+
+**Level 1: Verify YAML renders correctly (no cluster needed)**
+
+`helm lint ./helm/fall-detection
+helm template fall-detection ./helm/fall-detection | Out-File -Encoding utf8 rendered.yaml
+# then read rendered.yaml and check the output looks right`
+
+This catches template syntax errors and missing values, but doesn't test whether pods actually start.
+
+---
+
+**Level 2: Full `helm install` test on your own machine**
+
+Docker Desktop (which you already have) has a built-in Kubernetes — just enable it:
+
+**Settings → Kubernetes → Enable Kubernetes → Apply & Restart**
+
+Then the trick to avoid needing a real registry is:
+
+**Step 1 — Build images locally, tagged with the placeholder registry name:**
+
+`# from _6G_Integration_v2_mqtt/ as cwd
+docker build -f inference_server/Dockerfile -t registry.example.com/inference-server:latest .
+docker build -f fall_dashboard/Dockerfile   -t registry.example.com/fall-dashboard:latest .`
+
+Docker Desktop K8s shares Docker's local image cache, so those images are already "there" — no push needed.
+
+**Step 2 — Tell K8s not to try pulling (since the registry doesn't really exist):**
+
+Add `imagePullPolicy: Never` to both custom deployments. I can add this to `values.yaml` so it's one flag to flip:
+
+**Step 3 — Install:**
+
+`# switch kubectl context to Docker Desktop
+kubectl config use-context docker-desktop
+
+# from _6G_Integration_v2_mqtt/ as cwd
+helm install fall-detection ./helm/fall-detection `
+  --namespace fall-detection `
+  --create-namespace `
+  --set postgres.password=testpass `
+  --set minio.rootPassword=testpass `
+  --set grafana.adminPassword=testpass `
+  --set inferenceServer.apiKeys=testkey`
+
+**Step 4 — Check:**
+
+`kubectl get pods -n fall-detection          # all should reach Running or Completed
+kubectl get pvc   -n fall-detection         # postgres-data, minio-data should be Bound
+kubectl logs -n fall-detection deploy/inference-server
+kubectl logs -n fall-detection deploy/fall-dashboard`
+
+**Step 5 — Tear down:**
+
+`helm uninstall fall-detection -n fall-detection
+kubectl delete namespace fall-detection`

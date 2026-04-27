@@ -21,6 +21,7 @@ spec:
       containers:
         - name: inference-server
           image: {{ .Values.registry }}/{{ .Values.images.inferenceServer.repository }}:{{ .Values.images.inferenceServer.tag }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
           ports:
             - containerPort: {{ .Values.inferenceServer.port }}
           envFrom:
