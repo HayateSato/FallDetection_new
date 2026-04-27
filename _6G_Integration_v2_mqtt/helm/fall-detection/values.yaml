@@ -81,7 +81,36 @@ grafana:
   port: 3000
   adminPassword: admin          # override via --set in production
 
+# ── Resource limits ───────────────────────────────────────────────────────────
+# Cluster total: 32 GB RAM (confirmed 2026-04-27). Total limits well within that.
+resources:
+  inferenceServer:
+    requests: { cpu: 500m,  memory: 512Mi }
+    limits:   { cpu: "2",   memory: 2Gi   }
+  fallDashboard:
+    requests: { cpu: 250m,  memory: 256Mi }
+    limits:   { cpu: "1",   memory: 512Mi }
+  mqttBroker:
+    requests: { cpu: 100m,  memory: 128Mi }
+    limits:   { cpu: 500m,  memory: 256Mi }
+  postgres:
+    requests: { cpu: 250m,  memory: 512Mi }
+    limits:   { cpu: "1",   memory: 2Gi   }
+  mlflow:
+    requests: { cpu: 250m,  memory: 256Mi }
+    limits:   { cpu: "1",   memory: 1Gi   }
+  minio:
+    requests: { cpu: 250m,  memory: 512Mi }
+    limits:   { cpu: "1",   memory: 2Gi   }
+  prometheus:
+    requests: { cpu: 250m,  memory: 512Mi }
+    limits:   { cpu: "1",   memory: 2Gi   }
+  grafana:
+    requests: { cpu: 100m,  memory: 128Mi }
+    limits:   { cpu: 500m,  memory: 512Mi }
+
 # ── Ingress ───────────────────────────────────────────────────────────────────
+# Ingress controller: Traefik (confirmed 2026-04-27).
 ingress:
   enabled: true
   host: fall-detection.example.com    # TODO: confirm with FOCUS DevOps

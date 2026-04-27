@@ -219,8 +219,12 @@ Dockerfiles are at `inference_server/Dockerfile` and `fall_dashboard/Dockerfile`
           - `namespaces.ours` / `namespaces.focus` — confirm namespace names
           - `ingress.host` — real domain for our services
           - `postgres.storageClass` / `minio.storageClass` — cluster's default StorageClass name
-- [ ] 9.13 Confirm ingress controller type (nginx / traefik) — affects annotations in `ingress.yaml`
+- [x] 9.13 Ingress controller: **Traefik** (confirmed 2026-04-27). Updated `ingress.yaml`: removed nginx
+          annotations, added `spec.ingressClassName: traefik`. Traefik handles SSE natively (no
+          proxy-buffering annotation needed).
 - [ ] 9.14 Confirm whether NetworkPolicy blocks cross-namespace traffic (Patient Dashboard → our API)
+          — ask FOCUS DevOps: "Does your cluster enforce NetworkPolicy?" If yes, a NetworkPolicy
+          allowing ingress from FOCUS namespace must be added.
 - [ ] 9.15 Build + push Docker images to FOCUS registry:
           ```bash
           REGISTRY=registry.focus-hospital.de
@@ -238,7 +242,8 @@ Dockerfiles are at `inference_server/Dockerfile` and `fall_dashboard/Dockerfile`
             --set grafana.adminPassword=<real> \
             --set minio.rootPassword=<real>
           ```
-- [ ] 9.17 Confirm resource limits per pod with FOCUS DevOps (CPU / memory)
+- [x] 9.17 Resource limits confirmed (2026-04-27): cluster has 32 GB RAM. Limits set in `values.yaml`
+          and wired into all 8 deployment/statefulset templates. Total limits: ~8 CPU / ~10 Gi.
 - [ ] 9.18 Decide InfluxDB location: FOCUS-hosted or package inside our namespace
 
 ---

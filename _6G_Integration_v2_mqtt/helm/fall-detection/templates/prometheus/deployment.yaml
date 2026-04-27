@@ -23,6 +23,13 @@ spec:
             - "--web.enable-lifecycle"
           ports:
             - containerPort: {{ .Values.prometheus.port }}
+          resources:
+            requests:
+              cpu:    {{ .Values.resources.prometheus.requests.cpu }}
+              memory: {{ .Values.resources.prometheus.requests.memory }}
+            limits:
+              cpu:    {{ .Values.resources.prometheus.limits.cpu }}
+              memory: {{ .Values.resources.prometheus.limits.memory }}
           volumeMounts:
             - name: prometheus-config
               mountPath: /etc/prometheus/prometheus.yml

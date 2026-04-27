@@ -21,6 +21,13 @@ spec:
           envFrom:
             - configMapRef:
                 name: fall-detection-config
+          resources:
+            requests:
+              cpu:    {{ .Values.resources.fallDashboard.requests.cpu }}
+              memory: {{ .Values.resources.fallDashboard.requests.memory }}
+            limits:
+              cpu:    {{ .Values.resources.fallDashboard.limits.cpu }}
+              memory: {{ .Values.resources.fallDashboard.limits.memory }}
           readinessProbe:
             httpGet:
               path: /api/patients

@@ -39,6 +39,13 @@ spec:
                 secretKeyRef:
                   name: fall-detection-secrets
                   key: minio-root-password
+          resources:
+            requests:
+              cpu:    {{ .Values.resources.inferenceServer.requests.cpu }}
+              memory: {{ .Values.resources.inferenceServer.requests.memory }}
+            limits:
+              cpu:    {{ .Values.resources.inferenceServer.limits.cpu }}
+              memory: {{ .Values.resources.inferenceServer.limits.memory }}
           readinessProbe:
             httpGet:
               path: /health

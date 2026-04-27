@@ -33,6 +33,13 @@ spec:
                 secretKeyRef:
                   name: fall-detection-secrets
                   key: postgres-password
+          resources:
+            requests:
+              cpu:    {{ .Values.resources.grafana.requests.cpu }}
+              memory: {{ .Values.resources.grafana.requests.memory }}
+            limits:
+              cpu:    {{ .Values.resources.grafana.limits.cpu }}
+              memory: {{ .Values.resources.grafana.limits.memory }}
           volumeMounts:
             - name: grafana-data
               mountPath: /var/lib/grafana

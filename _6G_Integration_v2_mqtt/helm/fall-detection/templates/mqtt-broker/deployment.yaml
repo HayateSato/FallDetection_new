@@ -21,6 +21,13 @@ spec:
               name: mqtt
             - containerPort: {{ .Values.mqtt.websocketPort }}
               name: websocket
+          resources:
+            requests:
+              cpu:    {{ .Values.resources.mqttBroker.requests.cpu }}
+              memory: {{ .Values.resources.mqttBroker.requests.memory }}
+            limits:
+              cpu:    {{ .Values.resources.mqttBroker.limits.cpu }}
+              memory: {{ .Values.resources.mqttBroker.limits.memory }}
           volumeMounts:
             - name: mosquitto-config
               mountPath: /mosquitto/config/mosquitto.conf

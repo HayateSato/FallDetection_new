@@ -33,6 +33,13 @@ spec:
                 secretKeyRef:
                   name: fall-detection-secrets
                   key: minio-root-password
+          resources:
+            requests:
+              cpu:    {{ .Values.resources.minio.requests.cpu }}
+              memory: {{ .Values.resources.minio.requests.memory }}
+            limits:
+              cpu:    {{ .Values.resources.minio.limits.cpu }}
+              memory: {{ .Values.resources.minio.limits.memory }}
           volumeMounts:
             - name: minio-data
               mountPath: /data
