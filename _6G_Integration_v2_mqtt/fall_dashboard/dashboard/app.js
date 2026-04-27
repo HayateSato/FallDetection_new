@@ -5,7 +5,6 @@ const API = {
   patients: '/api/patients',
   falls:    '/api/falls',
   stream:   '/api/stream',
-  confirm:  (id) => `/api/falls/${id}/confirm`,
 };
 
 let currentTab = 'patients';
@@ -89,23 +88,11 @@ async function loadHistory() {
         <td>${formatTime(r.detection_time)}</td>
         <td>${escapeHtml(r.mac_id || r.patient_id)}</td>
         <td>${formatConfirmed(r.patient_confirmed)}</td>
-        <td>
-          <button class="btn-mini" onclick="confirmFall(${r.id}, 'yes')">Yes</button>
-          <button class="btn-mini" onclick="confirmFall(${r.id}, 'no')">No</button>
-        </td>
+        <td>${r.needs_help === true ? '<span class="tag tag-yes">Yes</span>' : r.needs_help === false ? '<span class="tag tag-no">No</span>' : '<span class="tag tag-pending">—</span>'}</td>
       </tr>
     `).join('');
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="5" class="error">Failed to load: ${e.message}</td></tr>`;
-  }
-}
-
-async function confirmFall(id, confirmed) {
-  try {
-    await fetch(`${API.confirm(id)}?confirmed=${confirmed}`, { method: 'POST' });
-    loadHistory();
-  } catch (e) {
-    alert('Could not save confirmation: ' + e.message);
   }
 }
 
@@ -150,12 +137,27 @@ function setStreamStatus(connected) {
 
 function handleFallEvent(event) {
   console.log('Fall event:', event);
+
+  const confirmed  = event.patient_confirmed;
+  const needsHelp  = event.needs_help;
+
+  // Only show the alert banner when the caregiver actually needs to act.
+  // This mirrors the server-side filter in fall_dashboard/main.py.
+  const shouldAlert = (
+    confirmed === 'not_answered' ||
+    (confirmed === 'yes' && needsHelp === true)
+  );
+  if (!shouldAlert) return;
+
   const banner = document.getElementById('alert-banner');
   const text   = document.getElementById('alert-text');
-  const label = event.mac_id || event.patient_id || 'unknown';
-  text.textContent = `FALL DETECTED — ${label} (confidence ${event.confidence ?? '?'})`;
+  const label  = event.mac_id || event.patient_id || 'unknown';
+  const reason = confirmed === 'not_answered'
+    ? 'no response from patient'
+    : 'patient confirmed — needs help';
+  text.textContent = `FALL ALERT — ${label} (${reason}, confidence ${event.confidence ?? '?'})`;
   banner.classList.remove('hidden');
-  // Refresh visible data
+
   if (currentTab === 'patients') loadPatients();
   if (currentTab === 'history')  loadHistory();
 }
