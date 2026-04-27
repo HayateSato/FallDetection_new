@@ -35,11 +35,11 @@
 
 ## Step 2 — Mobile App: Patient Confirmation + MQTT Alert (H) ✓
 
-- [x] 2.1 Create `mock_app/influx_fetcher.py`
-- [x] 2.2 Create `mock_app/api_caller.py`
-- [x] 2.3 Create `mock_app/poller.py` with `_simulate_patient_confirmation` (10s timeout)
+- [x] 2.1 Create `local_dev/mock_app/influx_fetcher.py`
+- [x] 2.2 Create `local_dev/mock_app/api_caller.py`
+- [x] 2.3 Create `local_dev/mock_app/poller.py` with `_simulate_patient_confirmation` (10s timeout)
 - [x] 2.4 Publish to `fall/alert/<patient_id>` after timeout with `patient_confirmed`, `needs_help`
-- [x] 2.5 Create `mock_app/main.py` with paho MQTT publisher + graceful shutdown
+- [x] 2.5 Create `local_dev/mock_app/main.py` with paho MQTT publisher + graceful shutdown
 
 ---
 
@@ -118,12 +118,12 @@ and stored in both `inference_log.observation_id` and `fall_history.observation_
 This allows the retraining JOIN without a synchronous DB call in the HTTP handler.
 
 - [x] 6.5 Created `inference_server/services/db_writer.py` — BackgroundTask write; never raises
-- [x] 6.6 Created `shared/db/models.py` — InferenceLog, FeatureSnapshot, FallHistory, ParticipantSession
-- [x] 6.7 Created `shared/db/session.py` — SessionLocal factory, get_db(), init_db()
-- [x] 6.8 Set up Alembic: `alembic.ini` + `shared/db/migrations/` + `versions/0001_initial_schema.py`
+- [x] 6.6 Created `shared_db/db/models.py` — InferenceLog, FeatureSnapshot, FallHistory, ParticipantSession
+- [x] 6.7 Created `shared_db/db/session.py` — SessionLocal factory, get_db(), init_db()
+- [x] 6.8 Set up Alembic: `alembic.ini` + `shared_db/db/migrations/` + `versions/0001_initial_schema.py`
 - [x] 6.9 Added `BackgroundTasks` DB write (step 10) in `/predict`; `observation_id` in PredictResponse
 - [x] 6.10 Rewrote `fall_dashboard/db.py` to import from shared models; added `observation_id`, `needs_help`
-- [x] 6.11 `mock_app/poller.py` includes `observation_id` from HTTP response in MQTT alert payload;
+- [x] 6.11 `local_dev/mock_app/poller.py` includes `observation_id` from HTTP response in MQTT alert payload;
           `fall_dashboard/main.py` reads it and passes to `record_fall()`
 - [x] 6.12 `DATABASE_URL=sqlite:///./caregiver.db` in `.env` (SQLite default; Postgres in production)
 
@@ -178,7 +178,7 @@ alembic upgrade head
 ### H provides:
 - [ ] 8.1 Document `GET /health` and `GET /model/info` — for Admin view
 - [ ] 8.2 Confirm `GET /api/patients` and `GET /api/falls` return correct fields for Caregiver view
-- [ ] 8.3 Add role-based auth if needed (copy `_OLD/shared/auth/jwt_utils.py`)
+- [ ] 8.3 Add role-based auth if needed (copy `_OLD/shared_db/auth/jwt_utils.py`)
 
 ### Isa builds:
 - [ ] 8.4 **Admin view:** service health, model version, last prediction time

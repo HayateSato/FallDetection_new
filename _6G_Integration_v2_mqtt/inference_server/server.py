@@ -68,10 +68,10 @@ except ImportError:
 # ---------------------------------------------------------------------------
 # Shared pipeline imports  (app/ and config/ live in _6G_Integration/)
 # ---------------------------------------------------------------------------
-from app.core.inference_engine import PipelineSelector
-from app.core.model_registry import get_model_config, get_model_name, get_model_path, list_available_models
-from app.data_input.accelerometer_processor.acc_resampler import AccelerometerResampler
-from app.data_input.data_converter import (
+from ml_pipeline.core.inference_engine import PipelineSelector
+from ml_pipeline.core.model_registry import get_model_config, get_model_name, get_model_path, list_available_models
+from ml_pipeline.data_input.accelerometer_processor.acc_resampler import AccelerometerResampler
+from ml_pipeline.data_input.data_converter import (
     compose_detection_window,
     convert_acc_nparray_to_df,
     convert_lsb_to_g,

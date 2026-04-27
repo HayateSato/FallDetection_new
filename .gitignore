@@ -214,6 +214,7 @@ _before_refactoring/
 _EcoSystem_Integration/
 emergency/
 _OLD/
+_concept_6G_integration\~$MCS_Fall_Detection.xlsx
 
 # MLflow local experiment store (reproducible — regenerate with retrain.py)
 mlruns/

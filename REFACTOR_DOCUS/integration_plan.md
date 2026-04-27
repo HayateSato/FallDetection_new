@@ -163,7 +163,7 @@ HARDWARE_ACC_SAMPLE_RATE=<confirmed>
 If we build it:
 - Admin page: expose `GET /health` and `GET /model/info` from inference server
 - Caregiver page: existing `GET /api/patients` and `GET /api/falls` from caregiver client (already built)
-- Add role-based auth (JWT — already exists in the full system at `shared/auth/jwt_utils.py`)
+- Add role-based auth (JWT — already exists in the full system at `shared_db/auth/jwt_utils.py`)
 
 If they integrate:
 - We document our API endpoints

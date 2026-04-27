@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from typing import Dict, List
 from enum import Enum
 
-from app.core.feature_config import _STAT_ACC, _PAPER_ACC, _RAW_ACC, _EMA_BARO, _PAPER_BARO, _RAW_BARO
+from ml_pipeline.core.feature_config import _STAT_ACC, _PAPER_ACC, _RAW_ACC, _EMA_BARO, _PAPER_BARO, _RAW_BARO
 
 class ModelName(Enum):
     """Available model types."""

@@ -24,8 +24,8 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 
-from app.data_input.data_loader.influx_client_manager import _get_influxdb_client
-from app.data_input.data_converter import (
+from ml_pipeline.data_input.data_loader.influx_client_manager import _get_influxdb_client
+from ml_pipeline.data_input.data_converter import (
     convert_acc_from_flux_to_numpy_array,
     convert_baro_from_flux_to_numpy_array,
 )

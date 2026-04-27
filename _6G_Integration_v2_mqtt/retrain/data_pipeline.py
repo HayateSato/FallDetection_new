@@ -61,7 +61,7 @@ def load_labelled_dataset(
 
     meta : dict with keys 'n_positive', 'n_negative', 'feature_names', 'model_versions'
     """
-    from shared.db.session import SessionLocal
+    from shared_db.db.session import SessionLocal
 
     db = SessionLocal()
     try:

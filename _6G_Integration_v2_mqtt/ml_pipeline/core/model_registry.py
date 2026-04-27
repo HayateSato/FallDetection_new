@@ -1,5 +1,5 @@
 from typing import Dict, Optional
-from app.core.model_config import (
+from ml_pipeline.core.model_config import (
     ModelName,
     ModelConfig,
     MODEL_CONFIGS,

@@ -3,8 +3,8 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Shared dependencies first — better layer caching
-COPY shared/ shared/
-COPY app/ app/
+COPY shared_db/ shared_db/
+COPY ml_pipeline/ ml_pipeline/
 COPY config/ config/
 COPY model/ model/
 COPY fhir_converter.py .

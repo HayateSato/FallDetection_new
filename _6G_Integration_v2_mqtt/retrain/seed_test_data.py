@@ -140,8 +140,8 @@ def seed_synthetic(
     fall_ratio controls the fraction that are labelled as falls.
     Each fall window also gets a fall_history row (patient_confirmed='yes').
     """
-    from shared.db.session import SessionLocal, init_db
-    from shared.db.models import InferenceLog, FeatureSnapshot, FallHistory
+    from shared_db.db.session import SessionLocal, init_db
+    from shared_db.db.models import InferenceLog, FeatureSnapshot, FallHistory
 
     init_db()
     db = SessionLocal()
@@ -238,20 +238,20 @@ def seed_from_influxdb(
     simulating a patient confirming the fall. Adjust the threshold to
     control how many positive examples are seeded.
     """
-    from shared.db.session import SessionLocal, init_db
-    from shared.db.models import InferenceLog, FeatureSnapshot, FallHistory
+    from shared_db.db.session import SessionLocal, init_db
+    from shared_db.db.models import InferenceLog, FeatureSnapshot, FallHistory
     from config.settings import (
         ACC_SAMPLE_RATE, HARDWARE_ACC_SAMPLE_RATE, RESAMPLING_METHOD,
         ACC_SENSOR_TYPE,
     )
-    from app.core.inference_engine import PipelineSelector
-    from app.core.model_registry import get_model_config, get_model_name, get_model_path
-    from app.data_input.data_converter import (
+    from ml_pipeline.core.inference_engine import PipelineSelector
+    from ml_pipeline.core.model_registry import get_model_config, get_model_name, get_model_path
+    from ml_pipeline.data_input.data_converter import (
         convert_acc_nparray_to_df, convert_lsb_to_g, compose_detection_window,
     )
-    from app.data_input.accelerometer_processor.acc_resampler import AccelerometerResampler
-    from app.data_input.data_loader.influx_client_manager import _get_influxdb_client
-    from app.data_input.data_converter import (
+    from ml_pipeline.data_input.accelerometer_processor.acc_resampler import AccelerometerResampler
+    from ml_pipeline.data_input.data_loader.influx_client_manager import _get_influxdb_client
+    from ml_pipeline.data_input.data_converter import (
         convert_acc_from_flux_to_numpy_array, convert_baro_from_flux_to_numpy_array,
     )
     from config.settings import (

@@ -3,15 +3,15 @@
 # Usage (from _6G_Integration_v2_mqtt/ as cwd):
 #
 #   # Load from MLflow registry (recommended — requires model promoted to a stage in UI)
-#   .\scripts\switch_model.ps1 -Stage Production
-#   .\scripts\switch_model.ps1 -Stage Staging
+#   .\local_dev\dev_scripts\switch_model.ps1 -Stage Production
+#   .\local_dev\dev_scripts\switch_model.ps1 -Stage Staging
 #
 #   # Load from local .pkl file
-#   .\scripts\switch_model.ps1 -Version v0_retrained
-#   .\scripts\switch_model.ps1 -Version v0
+#   .\local_dev\dev_scripts\switch_model.ps1 -Version v0_retrained
+#   .\local_dev\dev_scripts\switch_model.ps1 -Version v0
 #
 #   # Point at a different server (default: localhost:8001)
-#   .\scripts\switch_model.ps1 -Stage Production -ServerUrl http://192.168.1.50:8001
+#   .\local_dev\dev_scripts\switch_model.ps1 -Stage Production -ServerUrl http://192.168.1.50:8001
 
 param(
     [string]$Stage      = "",

@@ -23,10 +23,10 @@ from typing import Tuple
 import logging
 
 
-from app.data_input.data_loader.influx_client_manager import _get_influxdb_client
-from app.data_input.accelerometer_processor.acc_resampler import AccelerometerResampler
-from app.data_input.accelerometer_processor.nonbosch_calibration import transform_acc_array as calibrate_non_bosch_to_bosch
-from app.data_input.data_converter import convert_acc_from_flux_to_numpy_array, convert_baro_from_flux_to_numpy_array
+from ml_pipeline.data_input.data_loader.influx_client_manager import _get_influxdb_client
+from ml_pipeline.data_input.accelerometer_processor.acc_resampler import AccelerometerResampler
+from ml_pipeline.data_input.accelerometer_processor.nonbosch_calibration import transform_acc_array as calibrate_non_bosch_to_bosch
+from ml_pipeline.data_input.data_converter import convert_acc_from_flux_to_numpy_array, convert_baro_from_flux_to_numpy_array
 from config.settings import (
     INFLUXDB_URL,
     INFLUXDB_ORG,

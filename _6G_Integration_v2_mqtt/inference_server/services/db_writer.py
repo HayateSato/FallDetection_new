@@ -40,8 +40,8 @@ def write_inference_log(
     If DATABASE_URL is not set or DB is unreachable, logs a warning and returns.
     """
     try:
-        from shared.db.session import SessionLocal
-        from shared.db.models import InferenceLog, FeatureSnapshot
+        from shared_db.db.session import SessionLocal
+        from shared_db.db.models import InferenceLog, FeatureSnapshot
 
         if SessionLocal is None:
             logger.debug("DATABASE_URL not configured — skipping inference log write")

@@ -1,5 +1,5 @@
 # Deployment Architecture — Fall Detection / FOCUS Integration
-**Last updated:** 2026-04-17  
+**Last updated:** 2026-04-27  
 **Status:** Implementation in progress — see todo.md for open items
 
 ---
@@ -10,15 +10,20 @@ The SmarKo wearable and mobile app are **external to both namespaces** — the w
 is a physical device and the app runs on the patient's phone. They communicate into
 the cluster over the network.
 
-> **Local development note:** `mock_app` plays the role of the mobile app in this diagram.
-> Our cloud InfluxDB currently plays the role of the InfluxDB instance that would live in
-> the FOCUS namespace. See "Future: Mock FOCUS Namespace" section below.
+> **Local development note:** `mock_app` (in `local_dev/`) plays the role of the mobile app
+> in this diagram.
 >
-> **Important:** In production, the mobile app reads from the SmarKo wearable via BLE
-> and sends ACC windows directly to `inference_server` — **InfluxDB is not in the
-> inference path**. `mock_app` reads from InfluxDB as a local-dev shortcut only because
-> we do not have the real SmarKo app. InfluxDB's role is biosignal display in the
-> Patient Dashboard, not inference input.
+> **Two InfluxDB instances — do not confuse them:**
+>
+> | Instance | What it is | Role |
+> |----------|-----------|------|
+> | **FOCUS-hosted InfluxDB** (in diagram) | Runs in FOCUS namespace | Stores biosignals written by real mobile app; read by Patient Dashboard for HR/bio display. **Never touched by our inference code.** |
+> | **Our cloud InfluxDB** (`ecosystem-influxdb.smarko-health.de`) | MCS/SmarKo cloud instance | Used **only by `mock_app`** as a fake BLE wearable substitute. Exists because `mock_app` cannot read from the real SmarKo hardware. **Not part of the production system at all.** |
+>
+> **In production:** the real mobile app reads raw ACC from the SmarKo wearable via BLE and
+> POSTs it directly to `inference_server`. Our cloud InfluxDB disappears from the picture
+> entirely. The FOCUS InfluxDB remains, but only for the Patient Dashboard biosignal panel —
+> our inference pipeline never reads from it.
 
 ```
   SmarKo wearable  (physical device — external)
@@ -34,8 +39,9 @@ the cluster over the network.
 │   FOCUS NAMESPACE    │     │                  OUR NAMESPACE                       │
 │                      │     │                                                      │
 │  InfluxDB            │◄────┼─── mobile app writes bio data + fall results        │
-│  [our cloud InfluxDB │     │                                                      │
-│   acts as this now]  │     │  inference_server  :8001                             │
+│  (FOCUS-hosted)      │     │    [local dev: mock_app reads our cloud InfluxDB     │
+│                      │     │     as fake BLE input — unrelated to this box]       │
+│                      │     │  inference_server  :8001                             │
 │                      │     │    - XGBoost inference                               │
 │  FHIR Server  ◄──────┼─────┼─── optional FHIR push (if configured)               │
 │  (patient            │     │    HTTP response → fall_detected                     │
@@ -143,9 +149,10 @@ HTTP and MQTT connections work correctly before the real FOCUS deployment.
 | FHIR Server | Stores patient demographics and identifiers (Patient resources) | FOCUS |
 | FOCUS Dashboard — patient info component | Reads FHIR (demographics) + InfluxDB (bio data) for patient overview | Isa / FOCUS |
 
-> **Local dev substitute:** Our cloud InfluxDB instance (`fd_test` bucket) plays the role
-> of the FOCUS-hosted InfluxDB. No code change needed — only the `INFLUXDB_URL` in `.env`
-> will change when pointing at the real FOCUS instance.
+> **Local dev note:** Our cloud InfluxDB instance (`fd_test` bucket) is used only by
+> `mock_app` as a fake BLE wearable substitute — it is **not** a stand-in for the
+> FOCUS-hosted InfluxDB. The two instances serve completely different roles and are
+> not interchangeable. In production, our cloud InfluxDB plays no role whatsoever.
 
 ### Our Namespace (what we build and deliver via Helm)
 
@@ -172,16 +179,11 @@ HTTP and MQTT connections work correctly before the real FOCUS deployment.
 | **Postgres `mlflow` DB** (our namespace) | Relational | MLflow runs, parameters, metrics, model registry stages | MLflow tracking server | MLflow UI · inference_server (`/model/switch` loads from registry) | Experiment tracking and model versioning |
 | **MinIO** (our namespace) | Object store | Trained model `.pkl` artifacts, per MLflow run | MLflow (via `retrain.py`) | `inference_server` (loads model from registry) | Model artifact storage for retraining pipeline |
 
-### InfluxDB migration plan
+### InfluxDB — decision confirmed (2026-04-27)
 
-Currently (local dev + testing): using our own cloud InfluxDB instance (`fd_test` bucket, existing credentials in `.env`).
+**FOCUS-hosted** — InfluxDB lives in the FOCUS namespace and is operated by FOCUS. It is NOT in our Helm chart.
 
-Eventually (production Helm deployment): package a new InfluxDB instance inside our Helm namespace so the system is self-contained. The mobile app would then write to this instance rather than the FOCUS-hosted one. This needs to be agreed with FOCUS — either they keep hosting InfluxDB in their namespace, or we bring our own.
-
-**Coordination needed with FOCUS before deciding:**
-- Should InfluxDB live in FOCUS namespace (they operate it) or our namespace (we operate it)?
-- If FOCUS-hosted: our mock_app/data fetcher reads across namespace boundary (service URL config only, no code change)
-- If our namespace: we include InfluxDB as a `StatefulSet` in our Helm chart
+Our cloud InfluxDB (`ecosystem-influxdb.smarko-health.de`) is used only by `local_dev/mock_app/` as a source of fake ACC windows. It has no role in the production system.
 
 ---
 
@@ -312,7 +314,7 @@ MLFLOW_ARTIFACT_ROOT=s3://mlflow-artifacts/     # bucket name
 | Decision | Who decides | Impact |
 |----------|-------------|--------|
 | FHIR output required? | FOCUS | Whether `FHIR_SERVER_URL` is used in production |
-| InfluxDB: FOCUS-hosted or our namespace? | FOCUS + us | Whether InfluxDB is in our Helm chart |
+| ~~InfluxDB: FOCUS-hosted or our namespace?~~ | ~~FOCUS + us~~ | **Decided:** FOCUS-hosted, not in our Helm chart (2026-04-27) |
 | Container registry location | FOCUS DevOps | Step 9 Helm chart delivery |
 | Kubernetes namespace names | FOCUS DevOps | Helm chart `values.yaml` |
 | ~~Model files: Docker image or mounted volume?~~ | ~~FOCUS DevOps + us~~ | **Decided:** Option B — MinIO in our namespace. See Step 7.3 in todo.md. |

@@ -5,11 +5,11 @@ Supports both SQLite (local dev, zero setup) and Postgres (production).
 The engine is configured once at module import time based on DATABASE_URL.
 
 Usage in FastAPI endpoints:
-    from shared.db.session import get_db
+    from shared_db.db.session import get_db
     def my_route(db: Session = Depends(get_db)): ...
 
 Usage in background tasks and non-FastAPI code:
-    from shared.db.session import SessionLocal
+    from shared_db.db.session import SessionLocal
     db = SessionLocal()
     try:
         ...
@@ -56,5 +56,5 @@ def init_db() -> None:
     Safe to call on every startup — does nothing if tables already exist.
     In production use Alembic migrations instead (alembic upgrade head).
     """
-    from shared.db.models import Base
+    from shared_db.db.models import Base
     Base.metadata.create_all(engine)

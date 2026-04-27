@@ -10,7 +10,7 @@ Simulates a mobile app that:
 
 Run from _6G_Integration_v2_mqtt/ as working directory:
 
-    python -m mock_app.main
+    python -m local_dev.mock_app.main
 """
 
 import logging
@@ -23,8 +23,8 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from mock_app.api_caller import InferenceServerClient
-from mock_app.poller import MockAppPoller
+from local_dev.mock_app.api_caller import InferenceServerClient
+from local_dev.mock_app.poller import MockAppPoller
 
 # ---------------------------------------------------------------------------
 # Logging

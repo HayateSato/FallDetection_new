@@ -29,7 +29,7 @@ from alembic import context
 root_dir = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(root_dir))
 
-from shared.db.models import Base
+from shared_db.db.models import Base
 
 # ── Alembic config object ─────────────────────────────────────────────────────
 config = context.config

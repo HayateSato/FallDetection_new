@@ -94,7 +94,7 @@ class PipelineSelector:
 
         # Initialize ACC preprocessor
         if self.config.acc_preprocessing == 'v2_paper':
-            from app.data_input.accelerometer_processor.magnitude_based_acc_processor_paper import (
+            from ml_pipeline.data_input.accelerometer_processor.magnitude_based_acc_processor_paper import (
                 PaperMagnitudeAccelerometerConfig, PaperMagnitudeAccelerometerProcessor
             )
             acc_config = PaperMagnitudeAccelerometerConfig(
@@ -106,8 +106,8 @@ class PipelineSelector:
 
         # Initialize BARO preprocessor
         if self.config.baro_preprocessing == 'v1_ema':
-            from app.data_input.barometer_processor.barometer_config import BarometerConfig
-            from app.data_input.barometer_processor.barometer_ema_filter import BarometerProcessor
+            from ml_pipeline.data_input.barometer_processor.barometer_config import BarometerConfig
+            from ml_pipeline.data_input.barometer_processor.barometer_ema_filter import BarometerProcessor
             baro_config = BarometerConfig(
                 median_window=5,
                 tau_fast=0.5,
@@ -116,7 +116,7 @@ class PipelineSelector:
             self.baro_preprocessor = BarometerProcessor(baro_config)
 
         elif self.config.baro_preprocessing == 'v2_paper':
-            from app.data_input.barometer_processor.barometer_slope_limit_paper import (
+            from ml_pipeline.data_input.barometer_processor.barometer_slope_limit_paper import (
                 PaperBarometerConfig, PaperBarometerProcessor
             )
             baro_config = PaperBarometerConfig(

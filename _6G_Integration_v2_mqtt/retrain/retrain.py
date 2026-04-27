@@ -103,8 +103,8 @@ def train(
     import xgboost as xgb
 
     from retrain.data_pipeline import load_labelled_dataset
-    from app.core.model_config import MODEL_CONFIGS
-    from app.core.model_registry import get_model_name
+    from ml_pipeline.core.model_config import MODEL_CONFIGS
+    from ml_pipeline.core.model_registry import get_model_name
 
     # ── 1. Load data ──────────────────────────────────────────────────────
     logger.info(f"Loading labelled dataset  model_version={model_version}  dataset={dataset_tag}")

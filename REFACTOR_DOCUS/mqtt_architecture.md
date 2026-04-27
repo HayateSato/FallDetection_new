@@ -26,22 +26,22 @@ The broker does not run inside any of our Python components. It is infrastructur
 
 | | |
 |-|-|
-| **Lives in** | `_6G_Integration_v2_mqtt/mock_app/main.py` |
+| **Lives in** | `_6G_Integration_v2_mqtt/local_dev/mock_app/main.py` |
 | **Role** | Publisher |
 | **Publishes to** | `fall/alert/<patient_id>` |
 | **When it publishes** | After the patient confirmation window closes (10s timeout) |
 | **paho client ID** | `mock-app-publisher` |
-| **Created by** | `_create_mqtt_publisher()` in `mock_app/main.py` |
+| **Created by** | `_create_mqtt_publisher()` in `local_dev/mock_app/main.py` |
 
 ### What happens before the MQTT publish
 
 The mock_app is not a passive listener — it drives the full detection cycle:
 
 ```
-1. Fetch ACC window from InfluxDB        (mock_app/influx_fetcher.py)
-2. POST to inference server /predict     (mock_app/api_caller.py)
+1. Fetch ACC window from InfluxDB        (local_dev/mock_app/influx_fetcher.py)
+2. POST to inference server /predict     (local_dev/mock_app/api_caller.py)
 3. Receive HTTP response: fall_detected  (inference result returned directly)
-4. Open patient confirmation window      (mock_app/poller.py — 10s sleep in daemon thread)
+4. Open patient confirmation window      (local_dev/mock_app/poller.py — 10s sleep in daemon thread)
 5. PUBLISH fall/alert/<patient_id>       (paho client.publish)
 ```
 

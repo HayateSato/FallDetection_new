@@ -14,27 +14,20 @@ and feeds the fall panel inside the Patient Dashboard (Isa's unified caregiver U
 _6G_Integration_v2_mqtt/
 ├── .env                            ← single shared config for all components
 ├── README.md                       ← you are here
-├── alembic.ini                     ← Alembic config (script_location = shared/db/migrations)
+├── alembic.ini                     ← Alembic config (script_location = shared_db/db/migrations)
 ├── fhir_converter.py               ← builds FHIR R4 Observation from inference result
-├── app/                            ← shared ML pipeline (do not edit)
+├── ml_pipeline/                    ← shared ML pipeline (do not edit)
 ├── config/                         ← settings.py reads .env
 ├── model/                          ← XGBoost .pkl files (v0, v3, v5_lsb, ...)
 │
-├── inference_server/               ← HTTP-only ML server (:8001)
+├── inference_server/               ← HTTP-only ML server (:8001) — ships to K8s
 │   ├── server.py                   ← FastAPI: /predict, /health, /metrics, /model/*
 │   ├── services/
 │   │   ├── metrics_collector.py    ← Prometheus counters + histograms
 │   │   └── db_writer.py            ← BackgroundTask: writes inference_log + feature_snapshot
 │   └── requirements.txt
 │
-├── mock_app/                       ← simulates the mobile app
-│   ├── main.py                     ← entry point: python -m mock_app.main
-│   ├── poller.py                   ← fetch → infer → confirm → MQTT publish
-│   ├── influx_fetcher.py           ← queries InfluxDB for raw ACC windows
-│   ├── api_caller.py               ← HTTP client to inference_server /predict
-│   └── requirements.txt
-│
-├── fall_dashboard/                 ← backend for the fall panel (:8002)
+├── fall_dashboard/                 ← backend for the fall panel (:8002) — ships to K8s
 │   ├── main.py                     ← entry point: python -m fall_dashboard.main
 │   ├── mqtt_listener.py            ← FallEventBroker: MQTT → SSE fan-out
 │   ├── web.py                      ← FastAPI: /api/falls, /api/patients, /api/stream
@@ -47,7 +40,7 @@ _6G_Integration_v2_mqtt/
 │   │   └── style.css
 │   └── requirements.txt
 │
-├── shared/                         ← shared code imported by both inference_server and fall_dashboard
+├── shared_db/                      ← shared code imported by both inference_server and fall_dashboard
 │   └── db/
 │       ├── models.py               ← SQLAlchemy ORM: InferenceLog, FeatureSnapshot, FallHistory, ParticipantSession
 │       ├── session.py              ← SessionLocal factory, get_db(), init_db()
@@ -56,14 +49,26 @@ _6G_Integration_v2_mqtt/
 │           └── versions/
 │               └── 0001_initial_schema.py
 │
-├── retrain/                        ← MLflow retraining pipeline
+├── retrain/                        ← MLflow retraining pipeline — ships to K8s
 │   ├── data_pipeline.py            ← JOIN query: inference_log + feature_snapshot + fall_history → DataFrame
 │   ├── retrain.py                  ← train XGBoost + log to MLflow (CLI)
 │   ├── seed_test_data.py           ← seed Postgres for testing: --synthetic N or --influxdb
 │   └── requirements.txt
 │
-└── infrastructure/                 ← Docker Compose for supporting services
-    ├── docker-compose.yml          ← postgres, mqtt, prometheus, grafana
+├── local_dev/                      ← LOCAL TESTING ONLY — never ships to Kubernetes
+│   ├── mock_app/                   ← simulates the SmarKo mobile app
+│   │   ├── main.py                 ← entry point: python -m local_dev.mock_app.main
+│   │   ├── poller.py               ← fetch ACC from InfluxDB → infer → confirm → MQTT publish
+│   │   ├── influx_fetcher.py       ← queries our cloud InfluxDB for raw ACC windows
+│   │   ├── api_caller.py           ← HTTP client to inference_server /predict
+│   │   └── requirements.txt
+│   ├── mock_focus/                 ← simulates the FOCUS-hosted FHIR server
+│   │   └── fhir_server.py          ← FastAPI stub (:8003): accepts FHIR Observation POSTs
+│   └── dev_scripts/
+│       └── switch_model.ps1        ← hot-swap inference server model via /model/switch API
+│
+└── infrastructure/                 ← Docker Compose for supporting services — local dev only
+    ├── docker-compose.yml          ← postgres, mqtt, prometheus, grafana, minio
     ├── postgres/
     │   └── init.sql                ← creates fall_detection + mlflow databases
     ├── mosquitto/
@@ -98,10 +103,10 @@ The `fall_dashboard` service (:8002) is the backend that feeds the fall panel. I
 ### Message flow
 
 ```
-[InfluxDB]
+[our cloud InfluxDB — local testing only]
     │  fetch raw ACC window (50 Hz)
     ▼
-[mock_app]  ──── HTTP POST /predict ────►  [inference_server :8001]
+[local_dev/mock_app]  ──── HTTP POST /predict ────►  [inference_server :8001]
     ◄─────────── HTTP response ──────────  fall_detected, confidence,
     │                                      observation_id (UUID), FHIR
     │                                          │ BackgroundTask (non-blocking)
@@ -119,7 +124,7 @@ The `fall_dashboard` service (:8002) is the backend that feeds the fall panel. I
 [MQTT broker :1883]
     │  route to subscribers of fall/alert/#
     ▼
-[fall_dashboard :8002]
+[fall_dashboard :8002]  ← real system uses the actual SmarKo app instead of mock_app
     │  DB write → fall_history (Postgres/SQLite)
     │  SSE fan-out → Patient Dashboard browser
     ▼
@@ -131,7 +136,7 @@ The `fall_dashboard` service (:8002) is the backend that feeds the fall panel. I
 
 | Component | Role | Topic |
 |-----------|------|-------|
-| `mock_app` | publisher | `fall/alert/<patient_id>` |
+| `local_dev/mock_app` (local) / real SmarKo app (production) | publisher | `fall/alert/<patient_id>` |
 | `fall_dashboard` | subscriber | `fall/alert/#` |
 
 The inference server has **no MQTT client**. Fall result is returned directly in the HTTP response.
@@ -173,8 +178,10 @@ Service URLs once running:
 
 ```powershell
 pip install -r inference_server/requirements.txt
-pip install -r mock_app/requirements.txt
 pip install -r fall_dashboard/requirements.txt
+
+# Local testing only (mock_app):
+pip install -r local_dev/mock_app/requirements.txt
 ```
 
 ### Step 3 — Run database migrations
@@ -233,8 +240,8 @@ python -m fall_dashboard.main
 # API: http://localhost:8002/api/patients
 # Local test UI: http://localhost:8002/
 
-# Terminal 3 — mock mobile app
-python -m mock_app.main
+# Terminal 3 — mock mobile app (local testing only — simulates the SmarKo app)
+python -m local_dev.mock_app.main
 ```
 
 ### Verify
@@ -372,16 +379,18 @@ Retraining data comes from **Postgres only** (feature_snapshot + fall_history jo
 
 All components share a single `.env` in this folder.
 
+MOCK APP = `local_dev/mock_app` — local testing only, never runs in production.
+
 | Variable | SERVER | MOCK APP | FALL DASHBOARD | Notes |
 |----------|:------:|:--------:|:--------------:|-------|
 | `MODEL_VERSION` | X | | | Model loaded on startup |
 | `ACC_SENSOR_TYPE` | X | X | | Must match on both sides |
 | `HARDWARE_ACC_SAMPLE_RATE` | X | X | | 50 Hz for Charite InfluxDB data |
 | `RESAMPLING_METHOD` | X | | | Server resamples to 50 Hz |
-| `INFLUXDB_URL` | | X | | |
-| `INFLUXDB_TOKEN` | | X | | |
-| `INFLUXDB_ORG` | | X | | |
-| `INFLUXDB_BUCKET` | | X | | |
+| `INFLUXDB_URL` | | X | | Our cloud InfluxDB — local testing only |
+| `INFLUXDB_TOKEN` | | X | | Our cloud InfluxDB — local testing only |
+| `INFLUXDB_ORG` | | X | | Our cloud InfluxDB — local testing only |
+| `INFLUXDB_BUCKET` | | X | | Our cloud InfluxDB — local testing only |
 | `PATIENT_IDS` | | X | X | Comma-separated |
 | `MAC_IDS` | | X | X | Positional, 1:1 with PATIENT_IDS |
 | `POLL_INTERVAL_SECONDS` | | X | | How often mock_app polls InfluxDB |
@@ -460,3 +469,21 @@ docker exec -it fall_postgres psql -U fall_user -d fall_detection -c "SELECT id,
 - If `MQTT_BROKER_HOST` is empty: mock_app skips publishing; fall_dashboard SSE sends keepalives only; fall_history is never written.
 - Old `caregiver.db` (pre Step 6b) has an incompatible schema. Delete it on first run after upgrading — the correct schema is created automatically by `init_db()`.
 - SQLite can report "database is locked" if an external DB viewer holds the file open. Fix: close the viewer, or set `connect_args={"timeout": 30}`.
+- `local_dev/dev_scripts/switch_model.ps1` — developer-only helper to hot-swap the inference server model via `POST /model/switch`. Not part of any automated pipeline. Run from `_6G_Integration_v2_mqtt/` as cwd.
+
+### Local Helm testing (without a real registry)
+
+Docker Desktop's built-in Kubernetes shares the local Docker image cache. Build images with the placeholder registry tag and set `imagePullPolicy: Never` in `values.yaml`:
+
+```powershell
+# Build (from _6G_Integration_v2_mqtt/ as cwd)
+docker build -t registry.example.com/inference-server:latest -f inference_server/Dockerfile .
+docker build -t registry.example.com/fall-dashboard:latest  -f fall_dashboard/Dockerfile  .
+
+# Install (uses local images — no push needed)
+helm install fall-detection ./helm/fall-detection `
+  --set images.pullPolicy=Never `
+  --namespace fall-detection --create-namespace
+```
+
+Switch `images.pullPolicy` back to `Always` (or `IfNotPresent`) when deploying to the real cluster with a real registry.

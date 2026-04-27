@@ -35,14 +35,14 @@ class BarometerProcessor:
     Examples
     --------
     Basic usage with default configuration:
-    >>> from app.barometer_processing import BarometerProcessor, BarometerConfig
+    >>> from ml_pipeline.barometer_processing import BarometerProcessor, BarometerConfig
     >>> config = BarometerConfig(median_window=5)
     >>> processor = BarometerProcessor(config)
     >>> h_filtered, h_fast, h_base, delta_h = processor.process(pressure_array, timestamps)
 
     Using with InfluxDB records:
-    >>> from app.barometer_processing import BarometerProcessor, BarometerConfig
-    >>> from app.data_processor import convert_barometer_influx_to_numpy  # Not yet implemented
+    >>> from ml_pipeline.barometer_processing import BarometerProcessor, BarometerConfig
+    >>> from ml_pipeline.data_processor import convert_barometer_influx_to_numpy  # Not yet implemented
     >>> config = BarometerConfig()
     >>> processor = BarometerProcessor(config)
     >>> pressure, timestamps = convert_barometer_influx_to_numpy(flux_records)

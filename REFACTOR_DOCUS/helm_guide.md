@@ -86,8 +86,8 @@ FROM python:3.11-slim
 WORKDIR /app
 
 # Copy shared dependencies first (better layer caching)
-COPY shared/ shared/
-COPY app/ app/
+COPY shared_db/ shared_db/
+COPY ml_pipeline/ ml_pipeline/
 COPY config/ config/
 COPY model/ model/
 COPY fhir_converter.py .
@@ -109,8 +109,8 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY shared/ shared/
-COPY app/ app/
+COPY shared_db/ shared_db/
+COPY ml_pipeline/ ml_pipeline/
 COPY config/ config/
 
 COPY fall_dashboard/requirements.txt fall_dashboard/requirements.txt

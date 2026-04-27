@@ -31,7 +31,7 @@ Calibration Accuracy:
     performance exactly.
 
 Usage:
-    from app.sensor_calibration import transform_non_bosch_to_bosch, SensorCalibrator
+    from ml_pipeline.sensor_calibration import transform_non_bosch_to_bosch, SensorCalibrator
 
     # Single sample
     bosch_x, bosch_y, bosch_z = transform_non_bosch_to_bosch(acc_x, acc_y, acc_z)

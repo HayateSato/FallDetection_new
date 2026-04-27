@@ -2,7 +2,7 @@
 Fall Dashboard database layer.
 ==============================
 
-Uses the shared ORM models from shared.db so both the inference_server
+Uses the shared ORM models from shared_db.db so both the inference_server
 (inference_log + feature_snapshot) and the fall_dashboard (fall_history +
 participant_session) write to the same SQLite / Postgres instance.
 
@@ -34,8 +34,8 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Session factory + models — shared with inference_server
 # ---------------------------------------------------------------------------
-from shared.db.session import SessionLocal, init_db as _shared_init_db
-from shared.db.models import FallHistory, ParticipantSession
+from shared_db.db.session import SessionLocal, init_db as _shared_init_db
+from shared_db.db.models import FallHistory, ParticipantSession
 
 
 # ---------------------------------------------------------------------------

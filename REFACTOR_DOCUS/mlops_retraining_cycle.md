@@ -469,13 +469,13 @@ print('Done')
 
 ```powershell
 # Switch to whatever is in the Production alias (recommended)
-.\scripts\switch_model.ps1 -Stage Production
+.\local_dev\dev_scripts\switch_model.ps1 -Stage Production
 
 # Switch to a specific retrained file
-.\scripts\switch_model.ps1 -Version v0_retrained
+.\local_dev\dev_scripts\switch_model.ps1 -Version v0_retrained
 
 # Roll back to original model
-.\scripts\switch_model.ps1 -Version v0
+.\local_dev\dev_scripts\switch_model.ps1 -Version v0
 ```
 
 ### Remove a registry alias (demote)
