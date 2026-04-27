@@ -38,7 +38,7 @@
 - [x] 2.1 Create `local_dev/mock_app/influx_fetcher.py`
 - [x] 2.2 Create `local_dev/mock_app/api_caller.py`
 - [x] 2.3 Create `local_dev/mock_app/poller.py` with `_simulate_patient_confirmation` (10s timeout)
-- [x] 2.4 Publish to `fall/alert/<patient_id>` after timeout with `patient_confirmed`, `needs_help`
+- [x] 2.4 Publish to `fall/alert/<patient_id>` after timeout with `patient_confirmed`, `needs_help`, `observation_id`
 - [x] 2.5 Create `local_dev/mock_app/main.py` with paho MQTT publisher + graceful shutdown
 
 ---
@@ -58,8 +58,12 @@
 
 ## Step 4 — InfluxDB Config (N/A — CLOSED) ✓
 
-Isa owns the FOCUS-hosted InfluxDB. Mock_app uses our own InfluxDB with existing settings.
-Sample rate confirmed 50Hz → `HARDWARE_ACC_SAMPLE_RATE=50` set in `.env`.
+No InfluxDB config handover required.
+- Our `.env` InfluxDB vars are used only by `local_dev/mock_app` as a dev workaround (cannot receive BLE data from real wearable).
+- In production, the real mobile app reads from the wearable directly and POSTs to `/predict` — no InfluxDB on our side.
+- FOCUS-hosted InfluxDB is written by their mobile app and read by their patient dashboard backend — entirely in their namespace, never touches our config or env.
+- FOCUS does not need to give us any InfluxDB credentials. We do not need theirs.
+- Sample rate confirmed 50 Hz → `HARDWARE_ACC_SAMPLE_RATE=50` set in `.env`.
 
 ---
 
@@ -75,11 +79,11 @@ Sample rate confirmed 50Hz → `HARDWARE_ACC_SAMPLE_RATE=50` set in `.env`.
 - **fall_dashboard** = our backend service (:8002). Not a standalone UI — feeds the fall panel only.
 
 **Mock FHIR server implemented (2026-04-16):**
-`mock_focus/fhir_server.py` — FastAPI, port 8003. Simulates FOCUS namespace for local dev.
+`local_dev/mock_focus/fhir_server.py` — FastAPI, port 8003. Simulates FOCUS namespace for local dev.
 - `GET /fhir/Patient` — Bundle of all patients
 - `GET /fhir/Patient/{id}` — single Patient resource (name, DOB, gender, ward)
 - `GET /fhir/Observation?patient={id}` — height, weight, heart rate
-Run: `uvicorn mock_focus.fhir_server:app --host 0.0.0.0 --port 8003`
+Run: `uvicorn local_dev.mock_focus.fhir_server:app --host 0.0.0.0 --port 8003`
 Or via docker-compose (mock_focus_fhir service).
 **Replace with real FOCUS FHIR URL in K8s — this mock never ships.**
 
@@ -254,13 +258,13 @@ Dockerfiles are at `inference_server/Dockerfile` and `fall_dashboard/Dockerfile`
 
 ## Step 10 — End-to-End Integration Test (H + I)
 
-- [ ] 10.1 Point mock_app at FOCUS InfluxDB (service name in their namespace)
+- [ ] 10.1 Verify real mobile app (Isa) sends raw ACC to `/predict` directly — no InfluxDB involved on our side at all
 - [ ] 10.2 Trigger a test fall (manually inject data or CSV replay)
 - [ ] 10.3 Verify: Inference API returns FHIR Observation with correct patient ID
-- [ ] 10.4 Verify: mock_app publishes `fall/alert/<patient_id>` after confirmation window
+- [ ] 10.4 Verify: mobile app publishes `fall/alert/<patient_id>` after confirmation window, with `observation_id`
 - [ ] 10.5 Verify: Caregiver dashboard receives real-time SSE alert
 - [ ] 10.6 Verify: Fall history in Postgres, retrievable via `GET /api/falls`
-- [ ] 10.7 Verify: `inference_id` FK correctly links `fall_history` → `inference_log`
+- [ ] 10.7 Verify: `observation_id` UUID correctly cross-references `fall_history` ↔ `inference_log`
 - [ ] 10.8 Verify: Admin sees service health; Caregiver sees only their patients
 - [ ] 10.9 Verify: Prometheus `/metrics` scraped; Grafana shows latency + fall rate
 
@@ -332,12 +336,12 @@ mlflow ui --backend-store-uri ./mlruns
 ## Summary by Owner
 
 ### Hayate (H)
-Step 5 (FHIR — blocked), **Step 6b (Postgres — start now)**, Step 6c, Step 7.3,
-Step 8.1–8.3 (API docs for Isa), Step 9 (Helm), Step 10, Step 11.
+Step 5 (FHIR — blocked on FOCUS answers), Step 8.1–8.3 (API docs + integration notes for Isa),
+Step 9 (Helm — blocked on FOCUS DevOps), Step 10, Step 11, Step 12 (Dockerfile verify), Step 13 (pre-deploy checklist).
 
 ### Isa (I)
-Step 8 (dashboard UI). Step 10.5 (dashboard alert test).
-Also: writes fall detection result + patient confirmation to FOCUS InfluxDB from mobile app.
+Step 8.4–8.6 (dashboard UI). Step 10.5 (dashboard alert test).
+Mobile app: change from InfluxDB-only write → HTTP POST raw ACC to `/predict`, then MQTT publish after patient confirmation.
 
 ---
 
@@ -345,13 +349,134 @@ Also: writes fall detection result + patient confirmation to FOCUS InfluxDB from
 
 | Task | Notes |
 |------|-------|
-| **Step 8.1–8.3 (API docs for Isa)** | Write up current endpoints + response field shapes |
-| **Step 10 (End-to-end test)** | Steps 1–3, 6b, 6c, 11 complete — can run full local test now |
+| **Step 12.1 — Verify Dockerfiles build** | `docker build` both images after folder rename; must pass before Step 9.15 |
+| **Step 13.1 — Local smoke test** | `docker-compose up` + 3 terminals + mock_app; watch SSE in browser |
+| **Step 8.1–8.3 (API docs + integration notes for Isa)** | Write /predict contract + MQTT payload schema for Isa |
 | **Test MLflow pipeline** | `seed_test_data.py --synthetic 100` then `retrain.py` — no blockers |
 | **Test Grafana** | `docker-compose -f infrastructure/docker-compose.yml up`, then start inference_server, run a few /predict calls |
 
 
----- 
+---
+
+## Step 12 — Dockerfile Verification after Folder Rename (H)
+
+After renaming `app/` → `ml_pipeline/` and `shared/` → `shared_db/`, the COPY directives
+in both Dockerfiles must be verified. **Must pass before Step 9.15 (push to registry).**
+
+- [ ] 12.1 Build inference_server image and confirm it starts:
+      ```powershell
+      # from _6G_Integration_v2_mqtt/ as cwd
+      docker build -f inference_server/Dockerfile -t fd-inference-test:latest .
+      docker run --rm -e MODEL_VERSION=v0 -e DATABASE_URL=sqlite:///./test.db `
+        -e API_KEYS=testkey -p 8001:8001 fd-inference-test:latest
+      curl.exe http://localhost:8001/health
+      ```
+- [ ] 12.2 Build fall_dashboard image and confirm it starts:
+      ```powershell
+      docker build -f fall_dashboard/Dockerfile -t fd-dashboard-test:latest .
+      docker run --rm -e DATABASE_URL=sqlite:///./test.db `
+        -e MQTT_BROKER_HOST=localhost -p 8002:8002 fd-dashboard-test:latest
+      curl.exe http://localhost:8002/api/patients
+      ```
+- [ ] 12.3 If either build fails: check COPY paths in the Dockerfile reference `ml_pipeline/` and `shared_db/`
+
+---
+
+## Step 13 — Isa Integration Handover (H → I)
+
+**Prerequisite:** Step 12 (Dockerfiles verified) + local smoke test passes.
+
+### 13a — Local end-to-end smoke test (H, before any handover)
+
+- [ ] 13.1 Run full local stack:
+      ```powershell
+      # Terminal 1
+      docker-compose -f infrastructure/docker-compose.yml up
+      # Terminal 2
+      uvicorn inference_server.server:app --host 0.0.0.0 --port 8001
+      # Terminal 3
+      python -m fall_dashboard.main
+      # Terminal 4
+      python -m local_dev.mock_app.main
+      ```
+- [ ] 13.2 Open `http://localhost:8002/` in a browser — watch a fall alert arrive via SSE
+- [ ] 13.3 Confirm fall row in Postgres: `GET /api/falls` returns record with `observation_id` populated
+- [ ] 13.4 Confirm `inference_log` and `fall_history` rows share the same `observation_id`
+
+### 13b — Mobile app integration notes for Isa (H writes, Isa implements)
+
+**What Isa must change:** mobile app currently writes raw ACC to InfluxDB only. He must add:
+1. HTTP POST raw ACC to `/predict` after each wearable reading
+2. Patient confirmation popup (10-second window or whatever SmarKo UX defines)
+3. MQTT PUBLISH to `fall/alert/<patient_id>` with the payload below
+
+- [ ] 13.5 Give Isa the `/predict` request contract:
+      - Endpoint: `POST /predict` with header `X-API-Key: <key>`
+      - `acc_x`, `acc_y`, `acc_z`: raw LSB integers (not g), 450 samples = 9 s at 50 Hz
+      - `timestamps_ms`: required, one per sample
+      - `pressure` / `pressure_timestamps_ms`: optional — v0 model ignores them
+      - Response field to carry forward: `observation_id` (UUID string) — **must be included in MQTT payload**
+- [ ] 13.6 Give Isa the MQTT alert payload schema (must match exactly what `fall_dashboard` expects):
+      ```json
+      {
+        "observation_id":    "<UUID from /predict response>",
+        "patient_id":        "...",
+        "mac_id":            "...",
+        "fall_detected":     true,
+        "patient_confirmed": "yes|no|not_answered",
+        "needs_help":        true,
+        "timestamp":         "<ISO8601>"
+      }
+      ```
+      `observation_id` is the retraining cross-reference key — if omitted, the JOIN breaks silently.
+- [ ] 13.7 Clarify with Isa: who implements the patient confirmation popup UI — SmarKo app already has one,
+      or does Isa add new UI? Document the answer here.
+- [ ] 13.8 Give Isa the API key value (from `.env` `INFERENCE_API_KEY`) and the cluster inference URL
+      once 9.12 is filled in.
+
+### 13c — Patient dashboard integration notes for Isa (H writes, Isa implements)
+
+- [ ] 13.9 Document `GET /api/patients` response shape:
+      `[{ "patient_id": "...", "mac_id": "...", "fall_count": 3 }]`
+- [ ] 13.10 Document `GET /api/falls` response fields:
+      `id`, `patient_id`, `mac_id`, `fall_detected`, `patient_confirmed`, `needs_help`,
+      `observation_id`, `detection_time`, `alert_time`
+      Query params: `?patient_id=&only_falls=true&limit=200`
+- [ ] 13.11 Document SSE stream `GET /api/stream`:
+      Browser `EventSource` compatible. Each event: `data: { ...same shape as /api/falls row... }\n\n`
+      No auth required. Reconnects automatically via EventSource.
+- [ ] 13.12 Confirm CORS: `CORS_ALLOWED_ORIGINS=*` is set — Isa can call from any origin in local dev.
+      For production, set to the exact Patient Dashboard origin before deploy.
+- [ ] 13.13 Give Isa the fall dashboard cluster URL once `ingress.host` is confirmed (9.12).
+
+---
+
+## Step 14 — Pre-Production Checklist (H + FOCUS DevOps)
+
+### 14a — Answers needed from FOCUS before anything below can proceed
+
+- [ ] 14.1 Blockers 0.4, 0.5, 0.6: Patient ID format, FHIR server required?, where results should land
+- [ ] 14.2 Blocker 9.12: registry URL, namespace names, ingress host, StorageClass names
+- [ ] 14.3 Blocker 9.14: Does cluster enforce NetworkPolicy? (if yes → add NetworkPolicy allowing FOCUS ns → our ns)
+
+### 14b — Deployment sequence (after 14a answers received)
+
+- [ ] 14.4 Fill in `helm/fall-detection/values.yaml` placeholders (registry, namespaces, host, storageClass)
+- [ ] 14.5 Build + push images (Step 9.15)
+- [ ] 14.6 Run `helm install` on the FOCUS cluster (Step 9.16) — watch all pods reach Running/Completed
+- [ ] 14.7 Verify Alembic migrate-job completed: `kubectl logs -n <ns> job/fall-detection-migrate`
+- [ ] 14.8 Verify MinIO bucket-creation job completed: `kubectl logs -n <ns> job/create-mlflow-bucket`
+- [ ] 14.9 Promote initial model to Production in MLflow UI (or run `switch_model.ps1 -Stage Production`)
+          so inference_server loads the intended model, not just the baked-in fallback
+- [ ] 14.10 End-to-end test on real cluster with Isa's updated mobile app (Step 10)
+
+### 14c — Retraining (separate track — data agreement required)
+
+- [ ] 14.11 Obtain Charite data-sharing agreement before running `retrain.py` on patient data
+- [ ] 14.12 Once agreement signed: run `retrain.py --dataset charite`, evaluate in MLflow UI,
+           promote to Production via `switch_model.ps1 -Stage Production` (Step 11.10)
+
+---
 
 ## Helm install test steps
 
@@ -410,3 +535,6 @@ kubectl logs -n fall-detection deploy/fall-dashboard`
 
 `helm uninstall fall-detection -n fall-detection
 kubectl delete namespace fall-detection`
+
+----
+there should be another if condition when a fall is detected in two or more consecutive predictions, the alert should not be sent for the second or later prediction as it would annoy the user and it is not realistic for user to respond if they are already falling - misrepresentation of fall counts as well
