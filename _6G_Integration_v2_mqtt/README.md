@@ -59,6 +59,7 @@ _6G_Integration_v2_mqtt/
 │   ├── mock_app/                   ← simulates the SmarKo mobile app
 │   │   ├── main.py                 ← entry point: python -m local_dev.mock_app.main
 │   │   ├── poller.py               ← fetch ACC from InfluxDB → infer → confirm → MQTT publish
+│   │   ├── patient_server.py       ← patient confirmation popup server (:8005) — browser UI at http://localhost:8005/
 │   │   ├── influx_fetcher.py       ← queries our cloud InfluxDB for raw ACC windows
 │   │   ├── api_caller.py           ← HTTP client to inference_server /predict
 │   │   └── requirements.txt
@@ -114,9 +115,9 @@ The `fall_dashboard` service (:8002) is the backend that feeds the fall panel. I
     │                                   [Postgres: inference_log
     │                                    + feature_snapshot]
     │
-    │  10s patient confirmation window
-    │  (real app: popup on patient's phone)
-    │  (mock: waits MOCK_PATIENT_RESPONSE_TIMEOUT seconds)
+    │  patient confirmation window (MOCK_PATIENT_RESPONSE_TIMEOUT seconds)
+    │  (real app: native popup on patient's phone)
+    │  (mock: browser popup at http://localhost:8005/ — Yes/No/countdown)
     │
     │  MQTT PUBLISH  fall/alert/<patient_id>
     │  payload: { observation_id, patient_confirmed, needs_help, ... }
@@ -125,8 +126,10 @@ The `fall_dashboard` service (:8002) is the backend that feeds the fall panel. I
     │  route to subscribers of fall/alert/#
     ▼
 [fall_dashboard :8002]  ← real system uses the actual SmarKo app instead of mock_app
-    │  DB write → fall_history (Postgres/SQLite)
-    │  SSE fan-out → Patient Dashboard browser
+    │  DB write → fall_history (Postgres/SQLite)   ← always, for all confirmed alerts
+    │  SSE fan-out → caregiver browser             ← only when caregiver action needed:
+    │                                                   patient_confirmed="not_answered"
+    │                                                   OR confirmed="yes" + needs_help=True
     ▼
 [Patient Dashboard — caregiver browser]
     fall panel: "patient-001 fell at 10:00:10, confirmed, needs help"
@@ -235,13 +238,14 @@ MQTT_BROKER_HOST=localhost
 # Terminal 1 — inference server
 uvicorn inference_server.server:app --host 0.0.0.0 --port 8001
 
-# Terminal 2 — fall dashboard
+# Terminal 2 — fall dashboard (caregiver view)
 python -m fall_dashboard.main
 # API: http://localhost:8002/api/patients
 # Local test UI: http://localhost:8002/
 
 # Terminal 3 — mock mobile app (local testing only — simulates the SmarKo app)
 python -m local_dev.mock_app.main
+# Patient confirmation popup: http://localhost:8005/   ← open this in a browser when a fall fires
 ```
 
 ### Verify
@@ -399,6 +403,7 @@ MOCK APP = `local_dev/mock_app` — local testing only, never runs in production
 | `INFERENCE_API_KEY` | | X | | Must match `API_KEYS` on server |
 | `API_KEYS` | X | | | Accepted X-API-Key values |
 | `MOCK_PATIENT_RESPONSE_TIMEOUT` | | X | | Seconds before treating as not_answered |
+| `MOCK_PATIENT_SERVER_PORT` | | X | | Patient popup server port (default 8005) |
 | `DATABASE_URL` | X | | X | SQLite default; Postgres in production |
 | `MQTT_BROKER_HOST` | | X | X | Broker hostname or IP |
 | `MQTT_BROKER_PORT` | | X | X | Default 1883 |

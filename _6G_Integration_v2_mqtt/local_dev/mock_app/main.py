@@ -24,6 +24,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from local_dev.mock_app.api_caller import InferenceServerClient
+from local_dev.mock_app.patient_server import PatientConfirmationServer
 from local_dev.mock_app.poller import MockAppPoller
 
 # ---------------------------------------------------------------------------
@@ -60,6 +61,7 @@ MQTT_USERNAME                = os.getenv("MQTT_USERNAME", "").strip()
 MQTT_PASSWORD                = os.getenv("MQTT_PASSWORD", "").strip()
 MQTT_ALERT_TOPIC             = os.getenv("MQTT_ALERT_TOPIC", "fall/alert")
 MOCK_PATIENT_RESPONSE_TIMEOUT = int(os.getenv("MOCK_PATIENT_RESPONSE_TIMEOUT", "10"))
+MOCK_PATIENT_SERVER_PORT      = int(os.getenv("MOCK_PATIENT_SERVER_PORT", "8005"))
 
 
 # ---------------------------------------------------------------------------
@@ -110,9 +112,10 @@ def _banner() -> None:
     print(f"  Poll interval:        {POLL_INTERVAL_SECONDS}s")
     print(f"  MQTT broker:          {_mqtt_info}")
     print(f"  Alert topic:          {MQTT_ALERT_TOPIC}/<patient_id>")
-    print(f"  Confirmation timeout: {MOCK_PATIENT_RESPONSE_TIMEOUT}s (simulated patient response)")
+    print(f"  Confirmation timeout: {MOCK_PATIENT_RESPONSE_TIMEOUT}s")
+    print(f"  Patient popup:        http://localhost:{MOCK_PATIENT_SERVER_PORT}/")
     print()
-    print("  FLOW: InfluxDB → /predict → [wait for patient] → MQTT alert → caregiver")
+    print("  FLOW: InfluxDB → /predict → patient popup → MQTT alert → caregiver")
     print("=" * 64)
 
 
@@ -141,6 +144,9 @@ def main() -> None:
     signal.signal(signal.SIGINT,  _graceful)
     signal.signal(signal.SIGTERM, _graceful)
 
+    patient_server = PatientConfirmationServer(port=MOCK_PATIENT_SERVER_PORT)
+    patient_server.start()
+
     inference = InferenceServerClient()
     poller    = MockAppPoller(
         inference_client     = inference,
@@ -151,6 +157,7 @@ def main() -> None:
         lookback_seconds     = POLL_LOOKBACK_SECONDS,
         alert_topic          = MQTT_ALERT_TOPIC,
         confirmation_timeout = MOCK_PATIENT_RESPONSE_TIMEOUT,
+        patient_server       = patient_server,
     )
     poller.start()
     poller.join()

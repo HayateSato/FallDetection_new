@@ -10,12 +10,13 @@ What the real mobile app will do:
 
 What this mock does:
   - Step 1: fetches from InfluxDB instead of BLE wearable
-  - Step 3: simulates patient response by waiting MOCK_PATIENT_RESPONSE_TIMEOUT seconds
-  - Step 4: always publishes alert after timeout (mock: no patient input)
+  - Step 3: routes through PatientConfirmationServer (browser popup at http://localhost:8005/)
+             if patient_server is provided; otherwise times out immediately (conservative)
+  - Step 4: publishes MQTT alert with the actual patient response (or not_answered on timeout)
 
 MQTT topics:
-  fall/events/<patient_id>  — published by inference server (fall detected)
-  fall/alert/<patient_id>   — published by THIS mock (patient confirmed or timed out)
+  fall/alert/<patient_id>   — published by THIS mock after patient confirmation / timeout
+                              (fall_dashboard subscribes to fall/alert/#)
 """
 
 import json
@@ -53,6 +54,7 @@ class MockAppPoller(threading.Thread):
         lookback_seconds:      int = 15,
         alert_topic:           str = "fall/alert",
         confirmation_timeout:  int = 10,
+        patient_server=None,                      # PatientConfirmationServer | None
     ):
         super().__init__(daemon=True, name="MockAppPoller")
         self.client               = inference_client
@@ -63,6 +65,7 @@ class MockAppPoller(threading.Thread):
         self.lookback_seconds     = lookback_seconds
         self._alert_topic         = alert_topic
         self._confirmation_timeout = confirmation_timeout
+        self._patient_server      = patient_server
         self._stop                = threading.Event()
         self._uses_barometer:     Optional[bool] = None
 
@@ -88,29 +91,45 @@ class MockAppPoller(threading.Thread):
           - If Yes or timeout: publish fall/alert → caregiver is notified
           - If No at first popup: no alert sent to caregiver
 
-        Mock behaviour:
-          - Waits MOCK_PATIENT_RESPONSE_TIMEOUT seconds (no user input)
-          - Treats timeout as "not_answered" → publishes alert anyway (conservative)
+        Mock behaviour (with patient_server):
+          - Browser popup appears at http://localhost:<MOCK_PATIENT_SERVER_PORT>/
+          - Waits up to confirmation_timeout seconds for the patient to respond in browser
+          - Uses actual response (yes/no/not_answered) in the MQTT payload
+
+        Mock behaviour (without patient_server):
+          - Waits confirmation_timeout seconds, then publishes not_answered (conservative)
         """
-        logger.info(
-            f"[Patient confirmation window open — {self._confirmation_timeout}s]  "
-            f"patient={patient_id}"
-        )
-        time.sleep(self._confirmation_timeout)
+        if self._patient_server is not None:
+            self._patient_server.notify_fall(event)
+            confirmation = self._patient_server.wait_for_response(timeout=self._confirmation_timeout)
+            patient_confirmed = confirmation["patient_confirmed"]
+            needs_help        = confirmation["needs_help"]
+            logger.info(
+                f"[Patient confirmation received]  patient={patient_id}  "
+                f"confirmed={patient_confirmed}  needs_help={needs_help}"
+            )
+        else:
+            logger.info(
+                f"[Patient confirmation window open — {self._confirmation_timeout}s]  "
+                f"patient={patient_id}  (no patient_server — will time out)"
+            )
+            time.sleep(self._confirmation_timeout)
+            patient_confirmed = "not_answered"
+            needs_help        = True  # conservative: assume help needed on timeout
 
         alert_payload = {
             **event,
-            "alert_time":       datetime.now(timezone.utc).isoformat(),
-            "patient_confirmed": "not_answered",  # mock always times out
-            "needs_help":        True,            # conservative: assume help needed on timeout
+            "alert_time":        datetime.now(timezone.utc).isoformat(),
+            "patient_confirmed": patient_confirmed,
+            "needs_help":        needs_help,
         }
 
         topic = f"{self._alert_topic}/{patient_id}"
         try:
-            result = self._mqtt.publish(topic, json.dumps(alert_payload, default=str))
+            self._mqtt.publish(topic, json.dumps(alert_payload, default=str))
             logger.info(
                 f"*** ALERT published  topic={topic}  patient={patient_id}  "
-                f"(no patient response after {self._confirmation_timeout}s)"
+                f"confirmed={patient_confirmed}"
             )
         except Exception as exc:
             logger.warning(f"Alert publish failed for {patient_id}: {exc}")

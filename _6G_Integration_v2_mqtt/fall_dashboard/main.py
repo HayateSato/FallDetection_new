@@ -113,9 +113,27 @@ async def _start_mqtt_with_callback() -> None:
         )
         event["fall_id"] = fall_id
 
-        asyncio.run_coroutine_threadsafe(broker.publish_local(event), _loop)
-
-        logger.info(f"Fall recorded  patient={patient_id}  fall_id={fall_id}  confirmed={patient_confirmed}")
+        # Caregiver alert conditions (SSE fan-out → dashboard):
+        #   not_answered → patient could not respond at all → treat as serious fall
+        #   yes + needs_help=True → patient confirmed fall AND explicitly asked for help
+        # Not alerted (stored in DB for retraining only):
+        #   no → patient says they didn't fall (false positive)
+        #   yes + needs_help=False → patient confirmed fall but says they are okay
+        should_alert = (
+            patient_confirmed == "not_answered"
+            or (patient_confirmed == "yes" and needs_help is True)
+        )
+        if should_alert:
+            asyncio.run_coroutine_threadsafe(broker.publish_local(event), _loop)
+            logger.info(
+                f"Fall ALERT → caregiver  patient={patient_id}  fall_id={fall_id}  "
+                f"confirmed={patient_confirmed}  needs_help={needs_help}"
+            )
+        else:
+            logger.info(
+                f"Fall recorded (no caregiver alert)  patient={patient_id}  fall_id={fall_id}  "
+                f"confirmed={patient_confirmed}  needs_help={needs_help}"
+            )
 
     broker.on_fall = _on_fall_mqtt
     await broker.start()
