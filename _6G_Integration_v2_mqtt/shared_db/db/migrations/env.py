@@ -22,12 +22,18 @@ import sys
 from pathlib import Path
 from logging.config import fileConfig
 
+from dotenv import load_dotenv
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 
 # Add project root to sys.path so 'shared' can be imported
 root_dir = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(root_dir))
+
+# Load .env so DATABASE_URL is picked up the same way the live services do.
+# Without this, alembic falls back to the SQLite default and the migration
+# runs against the wrong database.
+load_dotenv(root_dir / ".env")
 
 from shared_db.db.models import Base
 

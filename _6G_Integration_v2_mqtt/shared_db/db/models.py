@@ -43,7 +43,7 @@ class InferenceLog(Base):
     observation_id = Column(String(36), unique=True, nullable=False, index=True)  # UUID from /predict
     patient_id     = Column(String(100), nullable=False, index=True)
     device_id      = Column(String(100))
-    model_version  = Column(String(20))
+    model_version  = Column(String(64))
     fall_detected  = Column(Boolean, nullable=False)
     confidence     = Column(Float)
     window_size    = Column(Integer)                # number of ACC samples used
