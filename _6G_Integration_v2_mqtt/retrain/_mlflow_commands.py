@@ -35,5 +35,5 @@ import mlflow
 mlflow.set_tracking_uri('sqlite:///./mlruns.db')
 client = mlflow.tracking.MlflowClient()
 # Replace X with the version number from the output above
-client.set_registered_model_alias('fall-detection-xgboost', 'Production', 6)
+client.set_registered_model_alias('fall-detection-xgboost', 'Production', 8)
 print('Done')

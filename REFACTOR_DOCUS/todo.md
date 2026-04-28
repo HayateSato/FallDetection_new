@@ -301,6 +301,9 @@ Dockerfiles are at `inference_server/Dockerfile` and `fall_dashboard/Dockerfile`
 - [x] 11.11 Wire `POST /model/switch` to load from registry by name/stage — implemented (2026-04-17):
            `{"mlflow_stage": "Production"}` downloads latest .pkl from MLflow registry and hot-swaps it.
            File-based `{"version": "v0_retrained"}` still works as before. mlflow>=2.10 added to inference_server/requirements.txt.
+           **End-to-end verified (2026-04-28):** retrain → register → set Production alias →
+           `switch_model.ps1 -Stage Production` → `/model/info` shows `loaded_as: mlflow:Production:vX(v0)` →
+           rollback to `-Version v0` works. Full registry-based hot-swap pipeline confirmed working.
 
 ### 11d — Retraining data pipeline ✓
 
