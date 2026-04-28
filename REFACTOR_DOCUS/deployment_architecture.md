@@ -89,43 +89,75 @@ the cluster over the network.
 
 ---
 
-## Future: Mock FOCUS Namespace
+## Mock FOCUS Namespace — local dry-run setup (added 2026-04-28)
 
-Once the system is working end-to-end, the goal is to test true cross-namespace
-communication by creating a third namespace that simulates what the real FOCUS
-environment looks like. This replaces the cloud InfluxDB shortcut with a proper
-in-cluster setup.
+**Status:** implemented as a second Helm chart (`helm/mock-focus/`). Used for
+local two-namespace dry-run on Docker Desktop K8s **before** handing the real
+chart to FOCUS DevOps. Tracked in todo.md Step 12.5.
+
+**Why:** the local `docker-compose` setup is single-namespace. The production
+setup is two-namespace (`mcs-fall-detection` ↔ FOCUS namespace). DNS-based
+service discovery, Helm install, NetworkPolicy enforcement, StatefulSet PVCs,
+and cross-namespace SSE only get exercised in real K8s — never in compose.
+The mock-focus chart fills that gap so failures surface on a laptop, not in
+FOCUS's cluster.
 
 ```
-  SmarKo wearable  (physical — external)
-      │ BLE
-      ▼
-  Mobile App  (patient's phone — external)
-      │
-      ▼
-┌──────────────────────────┐     ┌─────────────────────────────────────────────┐
-│   MOCK FOCUS NAMESPACE   │     │              OUR NAMESPACE                  │
-│                          │     │                                             │
-│  InfluxDB                │◄────┼── mobile app writes sensor data             │
-│  (new packaged instance) │     │                                             │
-│                          │     │  inference_server                           │
-│  FHIR Server (mock)      │     │  fall_dashboard                             │
-│                          │     │  Postgres                                   │
-│  Patient Dashboard       │     │  MQTT broker                                │
-│  (one web app shown to   │     │  MLflow / Prometheus / Grafana              │
-│   the caregiver —        │     │                                             │
-│   patient info panel     │     │                                             │
-│   + fall panel)          │     │                                             │
-│                          │     │                                             │
-└──────────────────────────┘     └─────────────────────────────────────────────┘
+┌──────────────────────────────┐     ┌─────────────────────────────────────────┐
+│      MOCK FOCUS NAMESPACE    │     │     MCS-FALL-DETECTION NAMESPACE        │
+│      (helm/mock-focus/)      │     │     (helm/fall-detection/)              │
+│                              │     │                                         │
+│  mock-fhir-server            │◄────┼── inference_server (optional FHIR push)│
+│   :8003                      │     │   :8001                                 │
+│                              │     │                                         │
+│  mock-influxdb               │     │  fall_dashboard                         │
+│   :8086 (StatefulSet, 1Gi)   │     │   :8002                                 │
+│                              │     │                                         │
+│  mock-patient-dashboard      │     │  Postgres / MQTT / MLflow /             │
+│   :8090 (NodePort 30090)     │─────┼─► /api/patients, /api/falls, /api/stream│
+│   ─ FastAPI proxy + HTML SPA │     │   (cross-namespace HTTP + SSE)          │
+│   ─ consumes SSE from        │     │                                         │
+│     fall_dashboard via FQDN  │     │  Prometheus / Grafana / MinIO           │
+└──────────────────────────────┘     └─────────────────────────────────────────┘
+       installed by helm                  installed by helm
+       helm install mock-focus            helm install mcs-fall-detection
+       --namespace mock-focus             --namespace mcs-fall-detection
 ```
 
-The Patient Dashboard (Isa's real UI) is one web app shown to the caregiver. It
-combines two panels: patient info (demographics from FHIR, biosignals like HR from
-InfluxDB) and the fall panel (fall history + real-time alerts, data from our
-fall_dashboard API). It lives in the mock FOCUS namespace — mirroring production.
-Our namespace only contains backend services. This validates that cross-namespace
-HTTP and MQTT connections work correctly before the real FOCUS deployment.
+The mock-patient-dashboard at `http://localhost:30090/` is the visible signal
+that cross-namespace traffic works: when a fall is confirmed via mock_app, the
+patient card flashes red live in the browser — proving DNS, service discovery,
+and SSE all work across namespace boundaries.
+
+### What's in `helm/mock-focus/`
+
+| File | Purpose |
+|------|---------|
+| `Chart.yaml`, `values.yaml` | Helm chart metadata + image names + cross-NS FQDNs |
+| `templates/namespace.yaml` | creates the `mock-focus` namespace |
+| `templates/mock-fhir.yaml` | Deployment + Service for the FHIR mock |
+| `templates/mock-influxdb.yaml` | StatefulSet + Service for InfluxDB 2.7 with auto-init |
+| `templates/mock-patient-dashboard.yaml` | Deployment + NodePort Service |
+| `dockerfiles/` | Dockerfiles + Python proxy + HTML SPA |
+| `extras/deny-all-cross-namespace.yaml` | NetworkPolicy that blocks all cross-NS ingress |
+| `extras/allow-mock-focus.yaml` | NetworkPolicy that re-allows the dashboard |
+| `build.ps1` / `install.ps1` / `test.ps1` / `teardown.ps1` | orchestration |
+| `README.md` | run order and troubleshooting |
+
+### What this is NOT
+
+- **Not a production deliverable.** Never ships to FOCUS. The mock images
+  (`fd-mock-fhir`, `fd-mock-patient-dashboard`) live only in the local Docker
+  cache.
+- **Not a substitute for real FOCUS services.** Mock FHIR returns 2 hardcoded
+  patients; mock InfluxDB starts empty. Just enough to exercise the network /
+  Helm / DNS path.
+- **Not a stand-in for the real Patient Dashboard.** Isa's app does much more
+  (demographics, biosignals, full fall list). The mock just proves the SSE
+  channel works end-to-end across namespaces.
+
+After the dry-run passes, the mock-focus chart is uninstalled. The real chart
+(`helm/fall-detection/`) is what gets shipped to FOCUS DevOps.
 
 ---
 

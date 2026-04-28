@@ -1,0 +1,24 @@
+# Default-deny NetworkPolicy for the mcs-fall-detection namespace.
+# Apply this to verify our chart still works when traffic is locked down.
+#
+# After applying this, cross-namespace traffic from mock-focus to mcs-fall-detection
+# will be BLOCKED — the mock Patient Dashboard at http://localhost:30090/ will
+# fail to reach /api/patients and SSE will not connect.
+#
+# Apply:
+#   kubectl apply -f helm/mock-focus/extras/deny-all-cross-namespace.yaml
+# Remove:
+#   kubectl delete -f helm/mock-focus/extras/deny-all-cross-namespace.yaml
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-cross-namespace-ingress
+  namespace: mcs-fall-detection
+spec:
+  podSelector: {}             # all pods in the namespace
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}     # only allow traffic from pods in the SAME namespace

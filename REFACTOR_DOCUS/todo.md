@@ -403,11 +403,22 @@ based on path AND role:
         guide (collapsible help section).
         Still open: 11.5.1 (ingress), 11.5.3 (server health page), 11.5.4 (auth gate),
         11.5.5 (production confirm dialogs are present but audit-log + JWT validation not yet).
-- [ ] 11.5.3 Build `server_health` (small FastAPI page):
-        - Aggregates `/health` endpoints of inference_server, fall_dashboard,
-          mqtt broker, postgres, mlflow tracking, minio.
-        - Single status page: "All systems operational" / "Postgres unreachable" etc.
-        - Plain-language status for clinical admin — not SRE-level metrics.
+- [x] 11.5.3 Build `server_health` (small FastAPI page) — **MVP done 2026-04-28**:
+        Folder: `_6G_Integration_v2_mqtt/server_health/` (port 8006). Run via
+        `python -m server_health.main`.
+        - Probes 6 services in parallel via `asyncio.gather`:
+          inference_server (/health), fall_dashboard (/api/patients),
+          postgres (`SELECT 1`), mqtt_broker (TCP socket probe),
+          mlflow (/health), minio (/minio/health/live).
+        - `GET /api/status` returns overall ("healthy" / "degraded" / "down")
+          plus a per-service array with status + plain-language details + latency.
+        - HTML page with traffic-light banner (green/amber/red), per-service
+          cards, and a help section explaining what's NOT here (latency / drift /
+          logs — those live in Grafana / kubectl).
+        - Auto-refresh every 30 seconds (read-only probe, cheap to run).
+        - Dockerfile + .env entries (`SERVER_HEALTH_PORT=8006`, `FALL_DASHBOARD_URL`).
+        - Auth gate still NOT implemented — warning banner shown in UI.
+          See 11.5.4 (shared with ml_dashboard).
 - [ ] 11.5.4 Auth gate (mandatory before exposing to anything beyond localhost):
         - Verify JWT or session cookie has `role=admin` claim.
         - Reject with 403 if missing. Log every state-changing call (retrain trigger,
@@ -451,6 +462,97 @@ in both Dockerfiles must be verified. **Must pass before Step 9.15 (push to regi
       ```
 - [x] 12.3 If either build fails: check COPY paths in the Dockerfile reference `ml_pipeline/` and `shared_db/`
       (no failures — both Dockerfiles already use renamed paths correctly)
+
+---
+
+## Step 12.5 — Local two-namespace dry-run BEFORE handover (H, recommended)
+
+**Why:** before handing the chart to FOCUS DevOps we should prove cross-namespace
+traffic actually works in K8s. The current local stack is single-namespace
+(`docker-compose`); the production setup is two-namespace
+(`mcs-fall-detection` ↔ FOCUS namespace). Helm install + NetworkPolicy + DNS-based
+service discovery only get exercised in a real K8s cluster — never in compose.
+
+This is a "dress rehearsal" so when FOCUS deploys, it works first time.
+
+### What to set up
+
+A local K8s cluster (Docker Desktop K8s, kind, or minikube) with **two namespaces**:
+
+```
+┌────────────────────┐    ┌────────────────────────────────┐
+│ mock-focus         │    │ mcs-fall-detection             │
+│ (simulates FOCUS)  │    │ (our real chart, unchanged)    │
+│                    │    │                                │
+│  mock-fhir-server  │◄───┤  inference_server (FHIR push)  │
+│  mock-influxdb     │    │  fall_dashboard                │
+│  mock-patient-     │───►│  ┌── /api/falls + SSE          │
+│   dashboard        │    │  ┌── consumed by mock-patient  │
+│                    │    │  postgres, mqtt, mlflow, etc.  │
+└────────────────────┘    └────────────────────────────────┘
+```
+
+The right column is our existing chart, completely unmodified.
+The left column is a NEW small chart simulating what FOCUS provides.
+
+### Tasks
+
+- [x] 12.5.1 Chose Docker Desktop K8s (recommended for ease of use; switch to
+        `kind` only for NetworkPolicy testing in 12.5.7 if Docker Desktop's
+        default CNI doesn't enforce policies).
+- [x] 12.5.2 **Built `helm/mock-focus/`** (2026-04-28) containing:
+        - `mock-fhir-server` Deployment + Service (port 8003) — packaged from
+          `local_dev/mock_focus/fhir_server.py` via Dockerfile
+        - `mock-influxdb` StatefulSet + Service (port 8086, 1Gi PVC) — `influxdb:2.7`
+          with auto-init org/bucket/token via env vars
+        - `mock-patient-dashboard` Deployment + NodePort Service (30090 → 8090) —
+          FastAPI proxy + HTML page that consumes `/api/patients`, `/api/falls`,
+          and SSE from `fall-dashboard.mcs-fall-detection.svc.cluster.local:8002`
+        - `extras/deny-all-cross-namespace.yaml` and `extras/allow-mock-focus.yaml`
+          for the NetworkPolicy step (12.5.7)
+        - `build.ps1` / `install.ps1` / `test.ps1` / `teardown.ps1` orchestration
+        - `README.md` with run order and troubleshooting
+- [ ] 12.5.3 Update our chart's values to use FQDNs for cross-namespace targets:
+        - `FHIR_SERVER_URL=http://mock-fhir-server.mock-focus.svc.cluster.local:8003/fhir`
+        - (in production these are replaced by real FOCUS hostnames)
+- [ ] 12.5.4 Install both charts:
+        ```powershell
+        helm install mock-focus  ./helm/mock-focus  --namespace mock-focus  --create-namespace
+        helm install mcs-fall    ./helm/fall-detection --namespace mcs-fall-detection --create-namespace
+        ```
+- [ ] 12.5.5 Verify all pods reach Running:
+        ```powershell
+        kubectl get pods -n mock-focus
+        kubectl get pods -n mcs-fall-detection
+        ```
+- [ ] 12.5.6 Cross-namespace tests — these are the failure modes that bite during
+        a real FOCUS deploy if not validated locally:
+        - [ ] FHIR push: trigger a /predict that fall_detected=True; confirm
+              mock-fhir-server received the Observation (`kubectl logs -n mock-focus deploy/mock-fhir-server`)
+        - [ ] SSE cross-namespace: open mock-patient-dashboard in browser; trigger
+              a fall via mock_app; confirm the patient flag turns red within 1–2s
+        - [ ] DNS resolution: `kubectl exec -n mcs-fall-detection deploy/inference-server -- nslookup mock-fhir-server.mock-focus.svc.cluster.local` returns an IP
+        - [ ] Reverse direction: `kubectl exec -n mock-focus deploy/mock-patient-dashboard -- curl http://fall-dashboard.mcs-fall-detection.svc.cluster.local:8002/api/patients` returns JSON
+- [ ] 12.5.7 Apply a NetworkPolicy to `mcs-fall-detection` that **blocks all traffic
+        from mock-focus** by default. Confirm the SSE breaks. Then add an allow rule
+        for `mock-patient-dashboard` and confirm SSE works again. This validates that
+        our chart can be enhanced with NetworkPolicies without breaking the integration.
+- [ ] 12.5.8 Document any chart changes needed (extra service annotations, FQDNs that
+        need to be configurable, etc.) — these become deltas in our handover email
+        to FOCUS DevOps.
+- [ ] 12.5.9 Tear down both charts and verify clean removal:
+        ```powershell
+        helm uninstall mcs-fall  -n mcs-fall-detection
+        helm uninstall mock-focus -n mock-focus
+        kubectl delete namespace mock-focus mcs-fall-detection
+        ```
+
+### Success criteria
+
+If all of 12.5.6 + 12.5.7 pass, the chart is ready to hand to FOCUS DevOps.
+Anything that fails reveals a gap: a hardcoded URL, a missing FQDN configuration,
+a NetworkPolicy assumption, etc. Better to find these on your laptop than in
+their production cluster.
 
 ---
 
