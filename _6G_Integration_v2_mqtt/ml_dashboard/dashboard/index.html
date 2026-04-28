@@ -148,11 +148,12 @@
     <!-- ─── Registered versions ───────────────────────────────── -->
     <section class="card">
       <div class="card-header">
-        <h2><span class="section-step">Step 4</span> Registered versions — fall-detection-xgboost</h2>
+        <h2><span class="section-step">Step 4</span> Promote to Production</h2>
         <button class="btn-mini" onclick="loadVersions()">Refresh</button>
       </div>
       <p class="hint">Click "Set Production" on the version chosen after metric comparison in MLflow UI.<br>
         This moves the alias only — the inference server still runs the previous model until you hot-swap.</p>
+      <h3 class="table-subheader">Registered versions — fall-detection-xgboost</h3>
       <table class="data-table">
         <thead>
           <tr>
@@ -166,6 +167,7 @@
           <tr><td colspan="4" class="loading">Loading...</td></tr>
         </tbody>
       </table>
+      <div id="promote-status" class="status-line"></div>
     </section>
 
     <!-- ─── Hot-swap ──────────────────────────────────────────── -->

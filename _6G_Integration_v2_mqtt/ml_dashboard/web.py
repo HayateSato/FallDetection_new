@@ -78,6 +78,12 @@ def _spawn_retrain(model_version: str, dataset: str, do_register: bool) -> str:
             "exit_code":  None,
         }
 
+    # Force UTF-8 in the child + on our read pipe. Without this, on Windows the
+    # child Python writes through cp1252 and dies on Unicode arrows (←) and the
+    # MLflow 🏃 emoji that ships in mlflow.tracking output.
+    child_env = os.environ.copy()
+    child_env["PYTHONIOENCODING"] = "utf-8"
+
     def _run():
         try:
             proc = subprocess.Popen(
@@ -87,6 +93,9 @@ def _spawn_retrain(model_version: str, dataset: str, do_register: bool) -> str:
                 stderr=subprocess.STDOUT,
                 text=True,
                 bufsize=1,
+                encoding="utf-8",
+                errors="replace",
+                env=child_env,
             )
             for line in proc.stdout:
                 with _jobs_lock:

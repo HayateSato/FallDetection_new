@@ -87,18 +87,25 @@ async function loadVersions() {
       tbody.innerHTML = '<tr><td colspan="4" class="loading">No registered versions yet — run a retrain with --register</td></tr>';
       return;
     }
-    tbody.innerHTML = data.versions.map(v => `
-      <tr>
-        <td><strong>v${v.version}</strong></td>
-        <td>${formatTime(v.creation_time)}</td>
-        <td>${(v.aliases || []).map(a =>
-          `<span class="alias-tag ${a.toLowerCase()}">${escapeHtml(a)}</span>`).join('') || '—'}</td>
-        <td>
-          <button class="btn-mini" onclick="promote(${v.version}, 'Production')">Set Production</button>
-          <button class="btn-mini" onclick="promote(${v.version}, 'Staging')">Set Staging</button>
-        </td>
-      </tr>
-    `).join('');
+    tbody.innerHTML = data.versions.map(v => {
+      const aliases  = v.aliases || [];
+      const isProd   = aliases.includes('Production');
+      const isStage  = aliases.includes('Staging');
+      const prodBtn  = isProd
+        ? `<button class="btn-mini btn-active-prod" disabled>✓ Currently Production</button>`
+        : `<button class="btn-mini" onclick="promote(${v.version}, 'Production')">Set Production</button>`;
+      const stageBtn = isStage
+        ? `<button class="btn-mini btn-active-stage" disabled>✓ Currently Staging</button>`
+        : `<button class="btn-mini" onclick="promote(${v.version}, 'Staging')">Set Staging</button>`;
+      return `
+        <tr>
+          <td><strong>v${v.version}</strong></td>
+          <td>${formatTime(v.creation_time)}</td>
+          <td>${aliases.map(a =>
+            `<span class="alias-tag ${a.toLowerCase()}">${escapeHtml(a)}</span>`).join('') || '—'}</td>
+          <td>${prodBtn} ${stageBtn}</td>
+        </tr>`;
+    }).join('');
   } catch (e) {
     tbody.innerHTML = `<tr><td colspan="4" class="status-line error">Failed: ${e.message}</td></tr>`;
   }
@@ -110,6 +117,8 @@ async function promote(version, alias) {
                `This will route /model/switch to v${version} on the next hot-swap.`)) {
     return;
   }
+  const statusEl = document.getElementById('promote-status');
+  setStatus(statusEl, `Setting ${alias} alias on v${version}...`, '');
   try {
     const r = await fetch(API.promote, {
       method: 'POST',
@@ -117,15 +126,24 @@ async function promote(version, alias) {
       body: JSON.stringify({ version, alias }),
     });
     if (!r.ok) {
-      const t = await r.text();
-      alert(`Promote failed: ${t}`);
+      setStatus(statusEl, `Promote failed: ${await r.text()}`, 'error');
       return;
     }
+    const nextHint = alias === 'Production'
+      ? ' — now click "Swap to Production alias" in Step 5 to apply'
+      : '';
+    setStatus(statusEl, `${alias} alias is now on v${version}${nextHint}`, 'ok');
     await loadVersions();
     await refreshStatus();
   } catch (e) {
-    alert(`Promote failed: ${e.message}`);
+    setStatus(statusEl, `Promote failed: ${e.message}`, 'error');
   }
+}
+
+function setStatus(el, text, cls) {
+  if (!el) return;
+  el.textContent = text;
+  el.className = 'status-line' + (cls ? ' ' + cls : '');
 }
 
 // ---------------------------------------------------------------------------
@@ -221,8 +239,7 @@ async function hotswapVersion() {
 
 async function doSwitch(body) {
   const statusEl = document.getElementById('switch-status');
-  statusEl.textContent = 'Switching...';
-  statusEl.className = 'status-line';
+  setStatus(statusEl, 'Switching...', '');
   try {
     const r = await fetch(API.switch, {
       method: 'POST',
@@ -231,16 +248,21 @@ async function doSwitch(body) {
     });
     const text = await r.text();
     if (!r.ok) {
-      statusEl.textContent = `Failed: ${text}`;
-      statusEl.className = 'status-line error';
+      setStatus(statusEl, `Failed: ${text}`, 'error');
       return;
     }
-    statusEl.textContent = `OK: ${text}`;
-    statusEl.className = 'status-line ok';
+    let parsed = null;
+    try { parsed = JSON.parse(text); } catch (_) {}
+    if (parsed && (parsed.new_version || parsed.previous_version)) {
+      const next = parsed.new_version      || '?';
+      const prev = parsed.previous_version || '?';
+      setStatus(statusEl, `Hot-swap OK — now serving ${next} (was ${prev})`, 'ok');
+    } else {
+      setStatus(statusEl, 'Hot-swap OK', 'ok');
+    }
     setTimeout(refreshStatus, 500);
   } catch (e) {
-    statusEl.textContent = `Failed: ${e.message}`;
-    statusEl.className = 'status-line error';
+    setStatus(statusEl, `Failed: ${e.message}`, 'error');
   }
 }
 

@@ -153,6 +153,21 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 .btn-mini:hover { background: #475569; }
 
+/* Buttons that indicate the row currently holds the alias.
+   Disabled (no re-click) and coloured to match the alias-tag in the same row. */
+.btn-mini.btn-active-prod  {
+  background: #166534;
+  color: #bbf7d0;
+  opacity: 1;     /* override generic :disabled opacity */
+  cursor: default;
+}
+.btn-mini.btn-active-stage {
+  background: #78350f;
+  color: #fde68a;
+  opacity: 1;
+  cursor: default;
+}
+
 /* Status grid */
 .status-grid {
   display: grid;
@@ -209,6 +224,17 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 .alias-tag.production { background: #166534; color: #bbf7d0; }
 .alias-tag.staging    { background: #78350f; color: #fde68a; }
 
+/* Subheader between hint and a table inside the same card */
+.table-subheader {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  margin-top: 8px;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
 /* Logs */
 .log {
   background: #020617;
@@ -230,7 +256,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
   font-size: 13px;
   margin-top: 8px;
   font-family: ui-monospace, monospace;
+  word-break: break-word;
+  overflow-wrap: anywhere;
 }
+.status-line:empty { display: none; }
 .status-line.ok    { color: #4ade80; }
 .status-line.warn  { color: #fbbf24; }
 .status-line.error { color: #f87171; }
@@ -314,7 +343,7 @@ details summary {
   vertical-align: 2px;
 }
 .playbook .step-loc.here,
-.playbook .step-loc.external { background: #334155; color: #f1f5f9; }
+.playbook .step-loc.external { background: #3d4755; color: #f1f5f9; }
 .playbook p {
   margin-top: 4px;
   color: #94a3b8;
