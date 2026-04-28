@@ -188,16 +188,18 @@ After the dry-run passes, the mock-focus chart is uninstalled. The real chart
 
 ### Our Namespace (what we build and deliver via Helm)
 
-| Component | What it does | Status |
-|-----------|-------------|--------|
-| `inference_server` | Receives `/predict` HTTP, runs XGBoost, returns FHIR observation; writes `inference_log` to Postgres via BackgroundTask | Implemented — Postgres write pending |
-| `fall_dashboard` | Subscribes to MQTT `fall/alert/#`; writes `fall_history` to Postgres; serves dashboard API + SSE | Implemented — Postgres migration pending |
-| `mqtt_broker` | eclipse-mosquitto; routes `fall/alert/<patient_id>` between mobile app and fall_dashboard | Running locally |
-| `Postgres` | One instance, two logical databases: `fall_detection` (our data) + `mlflow` (MLflow internals) | Pending |
-| `MLflow tracking server` | Logs training runs, metrics, model artifacts; hosts Model Registry | Pending — blocked on data sharing agreement |
-| `Prometheus` | Scrapes `/metrics` from inference_server every 15s | Pending (code ready — no infra yet) |
-| `Grafana` | 3 dashboards: server overview, model performance, fall events timeline | Pending |
-| `MinIO` | Artifact store for MLflow model `.pkl` files. MLflow uses `s3://mlflow-artifacts/` bucket on MinIO. inference_server downloads `.pkl` from MLflow (which reads from MinIO) via `POST /model/switch`. Base model baked into image as fallback if MinIO/MLflow unavailable at startup. | **Decided — in our namespace** (2026-04-17) |
+| Component | Port | Audience | What it does | Status |
+|-----------|:----:|:--------:|-------------|--------|
+| `inference_server` | 8001 | mobile app | `/predict` HTTP, runs XGBoost, returns FHIR observation; writes `inference_log` via BackgroundTask | Implemented |
+| `fall_dashboard` | 8002 | caregiver | Subscribes to MQTT `fall/alert/#`; writes `fall_history`; `/api/falls` + `/api/stream` SSE | Implemented |
+| `ml_dashboard` | 8004 | **admin** | Retrain + register + promote alias + hot-swap inference server (one UI). See [ml_dashboard/README.md](../_6G_Integration_v2_mqtt/ml_dashboard/README.md) | Implemented (2026-04-28) — auth gate deferred (todo 11.5.4) |
+| `server_health` | 8006 | **admin** | Aggregate `/health` probes of 6 services with traffic-light banner. See [server_health/README.md](../_6G_Integration_v2_mqtt/server_health/README.md) | Implemented (2026-04-28) — auth gate deferred (todo 11.5.4) |
+| `mqtt_broker` | 1883 | internal | eclipse-mosquitto; routes `fall/alert/<patient_id>` between mobile app and fall_dashboard | Running locally |
+| `Postgres` | 5432 | internal | One instance, two logical databases: `fall_detection` (our data) + `mlflow` (MLflow internals) | Implemented |
+| `MLflow tracking server` | 5000 | retrain.py + inference_server | Postgres-backed run + registry store; Dockerfile in `infrastructure/mlflow/` | Implemented (2026-04-28) |
+| `Prometheus` | 9090 | Grafana | Scrapes `/metrics` from inference_server every 15s; 30-day retention | Implemented |
+| `Grafana` | 3000 | admin | 3 dashboards: server overview, model performance, fall events timeline | Implemented |
+| `MinIO` | 9000 | MLflow + inference_server | Artifact store for `.pkl` files. Bucket `mlflow-artifacts`. | Implemented (2026-04-17) |
 
 ---
 

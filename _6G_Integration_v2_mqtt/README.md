@@ -27,18 +27,21 @@ _6G_Integration_v2_mqtt/
 │   │   └── db_writer.py            ← BackgroundTask: writes inference_log + feature_snapshot
 │   └── requirements.txt
 │
-├── fall_dashboard/                 ← backend for the fall panel (:8002) — ships to K8s
+├── fall_dashboard/                 ← MQTT subscriber + caregiver fall API (:8002) — ships to K8s
+│   ├── README.md                   ← see this for endpoints + filter rules
 │   ├── main.py                     ← entry point: python -m fall_dashboard.main
-│   ├── mqtt_listener.py            ← FallEventBroker: MQTT → SSE fan-out
-│   ├── web.py                      ← FastAPI: /api/falls, /api/patients, /api/stream
-│   ├── db.py                       ← writes fall_history + participant_session
-│   ├── inference_client.py         ← (unused in MQTT flow — legacy)
-│   ├── influx_poller.py            ← (unused in MQTT flow — legacy)
-│   ├── dashboard/                  ← standalone HTML/JS for local testing
-│   │   ├── index.html
-│   │   ├── app.js
-│   │   └── style.css
-│   └── requirements.txt
+│   ├── mqtt_listener.py, web.py, db.py, ...
+│   └── dashboard/                  ← local-test HTML/JS (replaced by Isa's web app in prod)
+│
+├── ml_dashboard/                   ← ADMIN UI: retrain + promote + hot-swap (:8004) — ships to K8s
+│   ├── README.md                   ← see this for the operator playbook
+│   ├── main.py, web.py             ← FastAPI app + MLflow client + subprocess runner
+│   └── dashboard/                  ← HTML page with playbook, retrain, versions, hot-swap
+│
+├── server_health/                  ← ADMIN UI: aggregate service status (:8006) — ships to K8s
+│   ├── README.md                   ← see this for probe list + auto-refresh behaviour
+│   ├── main.py, web.py, checks.py  ← parallel probes against 6 services
+│   └── dashboard/                  ← traffic-light banner + per-service cards
 │
 ├── shared_db/                      ← shared code imported by both inference_server and fall_dashboard
 │   └── db/
@@ -232,7 +235,9 @@ INFLUXDB_BUCKET=...
 MQTT_BROKER_HOST=localhost
 ```
 
-### Step 5 — Start Python services (3 terminals)
+### Step 5 — Start Python services
+
+Five terminals (only the first three are required for the data path; the last two are admin UIs).
 
 ```powershell
 # Terminal 1 — inference server
@@ -246,6 +251,14 @@ python -m fall_dashboard.main
 # Terminal 3 — mock mobile app (local testing only — simulates the SmarKo app)
 python -m local_dev.mock_app.main
 # Patient confirmation popup: http://localhost:8005/   ← open this in a browser when a fall fires
+
+# Terminal 4 — ml_dashboard (admin UI for retrain + hot-swap)
+python -m ml_dashboard.main
+# Web UI: http://localhost:8004/    (see ml_dashboard/README.md)
+
+# Terminal 5 — server_health (admin status dashboard)
+python -m server_health.main
+# Web UI: http://localhost:8006/    (see server_health/README.md)
 ```
 
 ### Verify
