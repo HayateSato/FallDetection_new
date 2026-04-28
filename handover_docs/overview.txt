@@ -10,25 +10,28 @@ Below shows a list of component in each layer.
 
 1. Patient layer
 -------------------
-- SmarKo        collecting physiological data and sends to mobile app
-- mobile app    transmits the collected data to influxDB 
-                directly POST request to inference API to detect a fall
-                displays fall confirmation popup and alert caregive if confirmed & injects the marker into influxDB 
-- MQTT client_1 
+- SmarKo                    collecting physiological data and sends to mobile app
+- mobile app                transmits the collected data to influxDB 
+                            directly POST request to inference API to detect a fall
+                            displays fall confirmation popup and alert caregive if confirmed & injects the marker into influxDB 
+- MQTT client_1             publishes event (help needed) to web app server
 
 2. Backend layer
 -------------------
-- FHIR server   stores demographic infomration of patients 
-- influxDB      stores physiological infomration of patients
-- postgres
-- minIO
-- infrence server
-- MQTT broker 
-- MQTT client_2
-- mlflow 
-- grafana
-- promotheus
-- web app server 
+- FHIR server               stores demographic infomration of patients 
+- influxDB                  stores physiological infomration of patients
+- postgres                  stored user (caregiver)/session infomration 
+                            stores inference api server log
+                            stores input data used during inference
+                            stores retained model information 
+- minIO                     stores model artifacts (old models)
+- infrence server           API server for fall detection, talks to mobile app 
+- MQTT broker               infrastructure for MQTT protocol 
+- MQTT client_2             event subscriber and expose the event to web app server 
+- mlflow                    manages ml model lifecycle 
+- grafana                   monitoring server for ml health performance
+- promotheus                scrapes all the health data of ml inference server and model drift
+- web app server            backend component for caregiver frontend 
 
 
 3. Caregiver layer
@@ -36,6 +39,7 @@ Below shows a list of component in each layer.
 - web app 
   - patinet dashboard           displays registered patients and their personal information (gender, BMI etc.) and health monitoring status (HR, SpO2 etc.)
                                 in the event of a fall, it should indicate which patient has fallen  
-  - fall dashboard              displays 
-  - ml dashbord 
-  - server health dashbaord 
+  - fall dashboard              displays all the falls, can be filited by period, patient, whether help requetsed or not 
+  - ml dashbord                 frontend for admin user to retrain models and hot-swap 
+  - server health dashbaord     monitoring server performance
+  - grafana dashboard           monitoring ml model performance

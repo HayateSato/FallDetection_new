@@ -389,19 +389,20 @@ based on path AND role:
         - Single `dashboard.charite.de` (or similar) hostname
         - Path-based routing: `/` → FOCUS namespace, `/admin/*` → our namespace
         - Shared SSO / auth provider — JWT carries role claim (`caregiver` | `admin`)
-- [ ] 11.5.2 Build `ml_dashboard` (FastAPI + minimal HTML/JS):
-        - "Retrain" button → triggers `retrain.retrain` as a background job
-          (subprocess or K8s Job). Streams stdout into the page.
-        - "Register" button → calls MLflow API to register the latest run.
-        - "Promote / Rollback" controls — list registered versions; one-click move
-          of the `Production` alias between versions.
-        - "Hot-swap" button → POSTs `/model/switch` to inference_server so the live
-          model reloads without a separate terminal command.
-        - Status panel: current `Production` version, currently-loaded version on
-          inference server, warning banner if they diverge (alias moved but server
-          not yet swapped).
-        - Cross-link button: "View Grafana metrics" → opens Grafana in new tab
-          (do not embed — keep separate).
+- [x] 11.5.2 Build `ml_dashboard` (FastAPI + minimal HTML/JS) — **MVP done 2026-04-28**:
+        Folder: `_6G_Integration_v2_mqtt/ml_dashboard/` (port 8004). Run via
+        `python -m ml_dashboard.main`. Endpoints:
+        - `GET  /api/status`           — current loaded model + Production alias version + drift warning
+        - `GET  /api/versions`         — list of registered versions with aliases
+        - `POST /api/retrain`          — spawns `retrain.retrain` as subprocess; returns job_id
+        - `GET  /api/retrain/{job_id}` — poll status + accumulated stdout
+        - `POST /api/promote`          — set alias on a version
+        - `POST /api/switch`           — POSTs to inference_server `/model/switch`
+        UI: Retrain panel (form + log streamer), Versions table (per-version Promote
+        buttons), Hot-swap buttons, status panel with drift warning, embedded drift
+        guide (collapsible help section).
+        Still open: 11.5.1 (ingress), 11.5.3 (server health page), 11.5.4 (auth gate),
+        11.5.5 (production confirm dialogs are present but audit-log + JWT validation not yet).
 - [ ] 11.5.3 Build `server_health` (small FastAPI page):
         - Aggregates `/health` endpoints of inference_server, fall_dashboard,
           mqtt broker, postgres, mlflow tracking, minio.
