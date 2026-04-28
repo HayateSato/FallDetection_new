@@ -38,7 +38,7 @@ YOUR LAPTOP                         FOCUS CLUSTER (separate machines)
 - `helm` v3 installed
 - Docker images built and pushed to a container registry (see Step 1)
 - FOCUS DevOps has confirmed:
-  - [ ] Kubernetes namespace names (placeholders used below: `focus-ns`, `fall-detection`)
+  - [ ] Kubernetes namespace names (placeholders used below: `focus-ns` for theirs, `mcs-fall-detection` for ours)
   - [ ] Container registry URL (placeholder: `registry.example.com`)
   - [ ] Ingress controller type (nginx / traefik / other)
   - [ ] Ingress host / domain for our services
@@ -51,7 +51,7 @@ YOUR LAPTOP                         FOCUS CLUSTER (separate machines)
 ```
 ┌─────────────────────────────┐     ┌──────────────────────────────────────────┐
 │   FOCUS NAMESPACE           │     │   OUR NAMESPACE                          │
-│   (focus-ns)                │     │   (fall-detection)                       │
+│   (focus-ns)                │     │   (mcs-fall-detection)                   │
 │                             │     │                                          │
 │   InfluxDB                  │     │   inference-server   ClusterIP :8001     │
 │   FHIR Server               │     │   fall-dashboard     ClusterIP :8002     │
@@ -207,7 +207,7 @@ This is the single file you change per environment (dev / staging / production).
 
 # ── Namespaces ────────────────────────────────────────────────────────────────
 namespaces:
-  ours: fall-detection        # confirm with FOCUS DevOps
+  ours: mcs-fall-detection    # confirm with FOCUS DevOps
   focus: focus-ns             # confirm with FOCUS DevOps
 
 # ── Container registry ───────────────────────────────────────────────────────
@@ -650,7 +650,7 @@ Two addresses exist simultaneously. Which one Isa uses depends on where the Pati
 
 | Address | Used by |
 |---------|---------|
-| `http://fall-dashboard.fall-detection.svc.cluster.local:8002` | Server-side app running inside the FOCUS namespace |
+| `http://fall-dashboard.mcs-fall-detection.svc.cluster.local:8002` | Server-side app running inside the FOCUS namespace |
 | `https://fall-detection.example.com/api` | Browser app (JavaScript in the user's browser, outside the cluster) |
 
 **Clarify with Isa:** Is the Patient Dashboard a browser app (React/Vue SPA) or a server-side app?
@@ -669,24 +669,24 @@ For SSE (`/api/stream`), the `nginx.ingress.kubernetes.io/proxy-buffering: "off"
 
 ```bash
 # Create the namespace first (if not auto-created by the template)
-kubectl create namespace fall-detection
+kubectl create namespace mcs-fall-detection
 
 # Dry run — check what would be deployed
 helm install fall-detection ./helm/fall-detection \
-  --namespace fall-detection \
+  --namespace mcs-fall-detection \
   --dry-run --debug
 
 # Install
 helm install fall-detection ./helm/fall-detection \
-  --namespace fall-detection \
+  --namespace mcs-fall-detection \
   --set postgres.password=<real-password> \
   --set inferenceServer.apiKeys=<real-api-key> \
   --set grafana.adminPassword=<real-password> \
   --set minio.rootPassword=<real-password>     # do not forget this — was missing in earlier version
 
 # Verify everything is running
-kubectl get pods -n fall-detection
-kubectl get services -n fall-detection
+kubectl get pods -n mcs-fall-detection
+kubectl get services -n mcs-fall-detection
 ```
 
 ---
@@ -700,7 +700,7 @@ docker push registry.example.com/inference-server:v1.1
 
 # Upgrade the release with new image tag
 helm upgrade fall-detection ./helm/fall-detection \
-  --namespace fall-detection \
+  --namespace mcs-fall-detection \
   --set images.inferenceServer.tag=v1.1
 ```
 

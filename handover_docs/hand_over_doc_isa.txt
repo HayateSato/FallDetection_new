@@ -40,7 +40,7 @@ Working folder: _6G_Integration_v2_mqtt/
 2. ARCHITECTURE
 =======================================================================
 
-a) OUR NAMESPACE (ships to Kubernetes — fall-detection namespace)
+a) OUR NAMESPACE (ships to Kubernetes — mcs-fall-detection namespace)
 -----------------------------------------------------------------
 
   inference_server  (:8001)

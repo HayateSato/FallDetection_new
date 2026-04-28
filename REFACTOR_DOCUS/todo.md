@@ -240,7 +240,7 @@ Dockerfiles are at `inference_server/Dockerfile` and `fall_dashboard/Dockerfile`
 - [ ] 9.16 Run `helm install` on the cluster:
           ```bash
           helm install fall-detection ./helm/fall-detection \
-            --namespace fall-detection \
+            --namespace mcs-fall-detection \
             --set postgres.password=<real> \
             --set inferenceServer.apiKeys=<real> \
             --set grafana.adminPassword=<real> \
@@ -589,7 +589,7 @@ kubectl config use-context docker-desktop
 
 # from _6G_Integration_v2_mqtt/ as cwd
 helm install fall-detection ./helm/fall-detection `
-  --namespace fall-detection `
+  --namespace mcs-fall-detection `
   --create-namespace `
   --set postgres.password=testpass `
   --set minio.rootPassword=testpass `
@@ -598,15 +598,15 @@ helm install fall-detection ./helm/fall-detection `
 
 **Step 4 — Check:**
 
-`kubectl get pods -n fall-detection          # all should reach Running or Completed
-kubectl get pvc   -n fall-detection         # postgres-data, minio-data should be Bound
-kubectl logs -n fall-detection deploy/inference-server
-kubectl logs -n fall-detection deploy/fall-dashboard`
+`kubectl get pods -n mcs-fall-detection          # all should reach Running or Completed
+kubectl get pvc   -n mcs-fall-detection         # postgres-data, minio-data should be Bound
+kubectl logs -n mcs-fall-detection deploy/inference-server
+kubectl logs -n mcs-fall-detection deploy/fall-dashboard`
 
 **Step 5 — Tear down:**
 
-`helm uninstall fall-detection -n fall-detection
-kubectl delete namespace fall-detection`
+`helm uninstall fall-detection -n mcs-fall-detection
+kubectl delete namespace mcs-fall-detection`
 
 ----
 there should be another if condition when a fall is detected in two or more consecutive predictions, the alert should not be sent for the second or later prediction as it would annoy the user and it is not realistic for user to respond if they are already falling - misrepresentation of fall counts as well

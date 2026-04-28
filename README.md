@@ -7,6 +7,26 @@ For full setup instructions see [Docu/HOW_TO_RUN.md](Docu/HOW_TO_RUN.md).
 
 ---
 
+## ⚠️ Which version are you looking at?
+
+This repository contains **three separate use cases** living in different folders / branches.
+**This README describes the full research stack only** (what's at the repo root). Pick the
+right one before you start:
+
+| Use case | Active folder / branch | Event bus | Read this README? |
+|----------|-----------------------|:---------:|:-----------------:|
+| **Charite / FOCUS clinical integration** ← **active production work** | [`_6G_Integration_v2_mqtt/`](_6G_Integration_v2_mqtt/) | **MQTT** | no — see [`_6G_Integration_v2_mqtt/README.md`](_6G_Integration_v2_mqtt/README.md) |
+| Charite / FOCUS — earlier Redis-based design (frozen reference) | [`_6G_Integration_v2_redis/`](_6G_Integration_v2_redis/) | Redis | no — frozen, do not run |
+| Internal company integration (stripped-down, no Docker) | [`_EcoSystem_Integration/`](_EcoSystem_Integration/) on branch `6G-integration` | none | no — see folder README |
+| **Full research stack** (this README) | repo root + `system_operator/ml_server/` | Redis | **yes** |
+
+> **Note (2026-04-28):** for the 6G/Charite integration, **Redis was replaced by MQTT**.
+> The active version is `_6G_Integration_v2_mqtt/`. The `fall_redis` container described
+> below in this README belongs to the full research stack only — it is **not** part of the
+> 6G/Charite production build.
+
+---
+
 ## How to Run
 
 Two options:

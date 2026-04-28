@@ -289,7 +289,7 @@ When deployed to Kubernetes, replace localhost URLs with:
 
 | Service | Kubernetes URL |
 |---------|----------------|
-| fall_dashboard | `http://fall-dashboard.fall-detection.svc.cluster.local:8002` |
+| fall_dashboard | `http://fall-dashboard.mcs-fall-detection.svc.cluster.local:8002` |
 | Mock FHIR (replaced by real FOCUS FHIR in prod) | real FOCUS FHIR URL in their namespace |
 
 ---
