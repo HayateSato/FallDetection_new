@@ -11,60 +11,67 @@ const API = {
 let _retrainPollHandle = null;
 
 // ---------------------------------------------------------------------------
-// Status panel
+// Status panel — updates the fixed cells in place (no DOM rebuild)
 // ---------------------------------------------------------------------------
 async function refreshStatus() {
-  const panel = document.getElementById('status-panel');
-  panel.innerHTML = '<div class="loading">Loading...</div>';
+  setCell('cell-loaded', 'loading…', '');
+  setCell('cell-base',   'loading…', '');
+  setCell('cell-baro',   'loading…', '');
+  setCell('cell-uptime', 'loading…', '');
+  setCell('cell-prod',   'loading…', '');
+  setCell('cell-sync',   'loading…', '');
+
   try {
     const r = await fetch(API.status);
     const data = await r.json();
-
     const inf  = data.inference_server || {};
     const reg  = data.registry || {};
-    const cells = [];
 
-    // Inference server status
+    // Inference server cells
     if (inf.error) {
-      cells.push(cell('Inference server', `unreachable: ${inf.error}`, 'error'));
+      setCell('cell-loaded', `unreachable: ${inf.error}`, 'error');
+      setCell('cell-base',   '—', '');
+      setCell('cell-baro',   '—', '');
+      setCell('cell-uptime', '—', '');
     } else {
-      cells.push(cell('Currently loaded', inf.loaded_as || inf.model_version || '—',
-                      inf.loaded_as && inf.loaded_as.startsWith('mlflow:') ? 'ok' : 'warn'));
-      cells.push(cell('Model version (base)', inf.model_version || '—'));
-      cells.push(cell('Uses barometer', String(inf.uses_barometer ?? '—')));
-      cells.push(cell('Uptime',
-                      inf.uptime_seconds != null ? Math.round(inf.uptime_seconds) + 's' : '—'));
+      const loaded = inf.loaded_as || inf.model_version || '—';
+      const loadedCls = (inf.loaded_as && inf.loaded_as.startsWith('mlflow:')) ? 'ok' : 'warn';
+      setCell('cell-loaded', loaded, loadedCls);
+      setCell('cell-base',   inf.model_version || '—', '');
+      setCell('cell-baro',   String(inf.uses_barometer ?? '—'), '');
+      setCell('cell-uptime',
+              inf.uptime_seconds != null ? Math.round(inf.uptime_seconds) + 's' : '—', '');
     }
 
-    // Registry status
+    // Registry cell
     if (reg.error) {
-      cells.push(cell('Production alias', `not set (${reg.error})`, 'warn'));
+      setCell('cell-prod', `not set (${reg.error})`, 'warn');
     } else if (reg.version != null) {
-      cells.push(cell('Production version', `v${reg.version}`, 'ok'));
+      setCell('cell-prod', `v${reg.version}`, 'ok');
+    } else {
+      setCell('cell-prod', '—', '');
     }
 
-    // Drift between alias and loaded
+    // Sync cell
     if (data.alias_matches_loaded === false) {
-      cells.push(cell(
-        'Sync',
-        'Production alias has moved but inference server still on old version — click hot-swap',
-        'warn'
-      ));
+      setCell('cell-sync',
+              'Alias moved — click hot-swap to apply',
+              'warn');
     } else if (data.alias_matches_loaded === true) {
-      cells.push(cell('Sync', 'Server is on the Production version', 'ok'));
+      setCell('cell-sync', 'Server is on the Production version', 'ok');
+    } else {
+      setCell('cell-sync', '—', '');
     }
-
-    panel.innerHTML = cells.join('');
   } catch (e) {
-    panel.innerHTML = `<div class="status-cell"><div class="status-value error">Failed: ${e.message}</div></div>`;
+    setCell('cell-loaded', `Failed: ${e.message}`, 'error');
   }
 }
 
-function cell(label, value, cls) {
-  return `<div class="status-cell">
-    <div class="status-label">${escapeHtml(label)}</div>
-    <div class="status-value ${cls || ''}">${escapeHtml(String(value))}</div>
-  </div>`;
+function setCell(id, value, cls) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = value;
+  el.className = 'status-value' + (cls ? ' ' + cls : '');
 }
 
 // ---------------------------------------------------------------------------
@@ -252,8 +259,8 @@ function escapeHtml(s) {
 }
 
 // ---------------------------------------------------------------------------
-// Boot
+// Boot — initial load only. No periodic auto-refresh: status updates only when
+// the user clicks "Refresh", or after a click-initiated action completes.
 // ---------------------------------------------------------------------------
 refreshStatus();
 loadVersions();
-setInterval(refreshStatus, 10000);
