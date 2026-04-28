@@ -121,6 +121,40 @@ services:
       timeout: 10s
       retries: 3
 
+  # ── MLflow Tracking Server — experiment store + model registry ─────────────
+  # Backend store: Postgres "mlflow" database (created by init.sql)
+  # Artifact root: MinIO bucket "mlflow-artifacts" (created on first MinIO start)
+  # UI:            http://localhost:5000
+  #
+  # On switch from SQLite (mlruns.db): existing experiments and registered model
+  # versions do NOT migrate. After switching, re-run retrain.py --register and
+  # re-set the Production alias for the new Version 1.
+  mlflow:
+    build: ./mlflow
+    container_name: fall_mlflow
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID:      minioadmin
+      AWS_SECRET_ACCESS_KEY:  minioadmin
+    command:
+      - server
+      - --backend-store-uri
+      - postgresql+psycopg2://fall_user:fall_pass@postgres:5432/mlflow
+      - --default-artifact-root
+      - s3://mlflow-artifacts/
+      - --host
+      - 0.0.0.0
+      - --port
+      - "5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
   # ── Grafana — 3 dashboards: server overview, model performance, fall timeline ─
   grafana:
     image: grafana/grafana:10.4.0

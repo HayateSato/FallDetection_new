@@ -1,8 +1,10 @@
 # Retraining pipeline dependencies
 # pip install -r retrain/requirements.txt
 
-# MLflow — experiment tracking, model registry, artifact store
-mlflow>=2.10
+# MLflow — experiment tracking, model registry, artifact store.
+# Pin must match infrastructure/mlflow/Dockerfile and inference_server/requirements.txt
+# to avoid REST API drift between client and server.
+mlflow==3.11.1
 
 # ML
 xgboost>=1.7

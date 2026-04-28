@@ -32,8 +32,9 @@
 # The new version will have the run_id that matches your latest retrain. Then promote it:
 import mlflow
 
-mlflow.set_tracking_uri('sqlite:///./mlruns.db')
+# mlflow.set_tracking_uri('sqlite:///./mlruns.db') # use this only when the default local file-based store is used
+mlflow.set_tracking_uri('http://localhost:5000') # use this when connected to a remote/dockernized MLflow server (e.g. Docker container with Postgres backend)
 client = mlflow.tracking.MlflowClient()
 # Replace X with the version number from the output above
-client.set_registered_model_alias('fall-detection-xgboost', 'Production', 8)
+client.set_registered_model_alias('fall-detection-xgboost', 'Production', 1)
 print('Done')
