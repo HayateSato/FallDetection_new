@@ -234,3 +234,214 @@ If a fall row appears in `fall_history` with no matching `observation_id` in `in
 | `retrain/seed_test_data.py` | `--synthetic N` (Postgres-only) or `--influxdb` (dev simulation). |
 | `local_dev/dev_scripts/switch_model.ps1` | Wrapper around `POST /model/switch`. `-Stage Production` or `-Version v0_retrained`. |
 | `infrastructure/docker-compose.yml` | Local stack: Postgres, MQTT, Prometheus, Grafana, MinIO. Run this before any local test. |
+
+
+----
+
+## mlflow component 
+
+Two separate things here. Let me be precise — my earlier wording conflated them.
+
+**Where the model version lives right now:**
+
+| Piece | Storage | Why |
+| --- | --- | --- |
+| Registry entry (`fall-detection-xgboost` v1, alias=Production, metrics, params) | **SQLite** at `mlruns.db` | Tracking backend |
+| Model artifact (the `.pkl` file itself) | **MinIO** bucket `s3://mlflow-artifacts/` | Artifact store |
+
+The version *number* you see in the MLflow UI lives in `mlruns.db`. The actual file the inference server downloads and loads lives in MinIO. Two stores, different purposes.
+
+**Why still SQLite — the honest answer:**
+
+When I said "your Postgres has the mlflow database ready" I meant the *empty database container* exists (created by `init.sql`). But there is no MLflow tracking server pod actually connecting to it. The full Postgres-backed setup needs three pieces:
+
+`[retrain.py / inference_server]
+        │
+        │ HTTP
+        ▼
+[MLflow tracking server pod] ← does NOT exist yet
+        │
+        │ SQL
+        ▼
+[Postgres "mlflow" database] ← exists but empty`
+
+Right now we have only the bottom box. The middle box — an actual `mlflow server --backend-store-uri postgresql://...` process — has not been deployed. Local dev skips the middle box entirely and writes to SQLite directly, which works because `retrain.py` and `inference_server` are on the same machine and can both reach the same file.
+
+**To switch to Postgres you would need to:**
+
+1. Add an `mlflow` service to `docker-compose.yml` (or the Helm chart) running `mlflow server --backend-store-uri postgresql://fall_user:fall_pass@postgres:5432/mlflow --default-artifact-root s3://mlflow-artifacts/`
+2. Change `MLFLOW_TRACKING_URI=http://mlflow:5000` in `.env`
+3. Re-register your models (the SQLite ones don't auto-migrate)
+
+This is a deferred deployment task — fine to leave on SQLite while testing the switch flow locally. The pipeline you're verifying right now (registry → alias → `/model/switch`) works identically against either backend, because both `retrain.py` and `inference_server` just speak `MLFLOW_TRACKING_URI`.
+
+
+
+--- 
+
+## mlflow steps 
+
+1. Find the version number
+
+
+mlflow ui --backend-store-uri sqlite:///./mlruns.db --workers 1
+# → http://localhost:5000
+Open the Models tab → fall-detection-xgboost → note the version number (e.g. Version 1).
+
+2. Promote that version to the Production alias
+
+
+# Replace 1 with your actual version number
+python -c "
+import mlflow
+mlflow.set_tracking_uri('sqlite:///./mlruns.db')
+mlflow.tracking.MlflowClient().set_registered_model_alias('fall-detection-xgboost', 'Production', 1)
+print('Done')
+"
+3. Hot-swap the live model on the inference server
+
+Make sure the inference server is running on :8001, then:
+
+
+.\local_dev\dev_scripts\switch_model.ps1 -Stage Production
+Or the curl equivalent:
+
+
+curl.exe -X POST http://localhost:8001/model/switch `
+  -H "Content-Type: application/json" `
+  -H "X-API-Key: 626e6c481b78c77d52db774d0e54a06cefb0553cb245fa15d5c7050fc7424e7a" `
+  -d '{\"mlflow_stage\": \"Production\"}'
+4. Verify
+
+
+curl.exe http://localhost:8001/model/info
+Look for "loaded_as": "mlflow:Production:v1(v0)" in the response. If you see something like that, the switch worked. If you see "loaded_as": "v0", it didn't pick up the registry version.
+
+5. Roll back to confirm switching works both ways
+
+
+.\local_dev\dev_scripts\switch_model.ps1 -Version v0
+curl.exe http://localhost:8001/model/info   # should now show "loaded_as": "v0"
+
+
+--- 
+
+## structures between retraining and model switch via mlflow
+
+## Conceptual model — your two-layer mental model needs adjustment
+
+Your version: "Layer 1 = models that might be used / Layer 2 = trained but not used."
+
+The real structure has **three things**, not two layers:
+
+`┌─────────────────────────────────────────────────────────────┐
+│ EXPERIMENT RUNS  (every training attempt — kept forever)    │
+│   run-abc1: recall=0.82, AUC=0.91, .pkl in MinIO            │
+│   run-abc2: recall=0.79, AUC=0.88, .pkl in MinIO            │
+│   run-abc3: recall=0.85, AUC=0.93, .pkl in MinIO   ★        │
+│   run-abc4: recall=0.91, AUC=0.95, .pkl in MinIO   ★        │
+└─────────────────────────────────────────────────────────────┘
+          ★ = registered (you ran retrain.retrain --register)
+          │
+          ▼
+┌─────────────────────────────────────────────────────────────┐
+│ MODEL REGISTRY: "fall-detection-xgboost"                    │
+│   Version 1 ← from run-abc3                                  │
+│   Version 2 ← from run-abc4         ◄── alias: Production   │
+└─────────────────────────────────────────────────────────────┘
+                                          │
+                                          ▼
+                                [inference_server loads this]`
+
+**Three concepts:**
+
+1. **Experiment runs** — every `retrain.retrain` call creates one. ALL runs stay forever. `-register` ALSO copies that run into the registry.
+2. **Registered model versions** — Version 1, 2, 3, … under the name `fall-detection-xgboost`. Once registered, a version stays forever (until you explicitly delete it).
+3. **Aliases** — *labels that point to one specific version*. `Production` is just a name. When you "promote v2 to Production," you're moving the label from v1 to v2. Nothing is deleted. v1 is still registered, still in MinIO.
+
+**Answers to your specific questions:**
+
+- *"Is registration = promotion?"* — **No, two different actions.**
+    - Register = "add this run to the registry as the next version number" (`-register` flag)
+    - Promote = "attach the Production alias to this version" (UI click or Python one-liner)
+- *"Where do old/switched models go after I switch?"* — **Nowhere. They stay registered.** When you switch from v1 → v2:
+    - v1 is still Version 1 in the registry
+    - v1's `.pkl` is still in MinIO
+    - v1 simply has no alias on it anymore (or you can give it `Archived`)
+    - You can switch back to v1 anytime via `{"version": 1}` or by moving the Production alias back
+- *"Are unused trained models in a separate layer?"* — **No.** Whether something is "in use" is determined by which version the Production alias points to. There's no separate bucket for unused models — they're all registered versions, just without the Production label.
+
+The mental model is: **one registry, many versions, aliases are pointers.** Switching = moving a pointer, not moving a model.
+
+in experiment runs bucket = all models trained 
+inside it, there is another bucket called model registry = all models ready to be used 
+isnide it, you can tell mlflow to pick one model (any model that is assigned as "Production" as its alias is the choosen one?)
+
+is my paraphrasing correct?
+
+Show less
+
+Yes — your paraphrasing is correct. Let me just sharpen one detail on the third bullet:
+
+| Layer | What it holds | How something gets in |
+| --- | --- | --- |
+| **Experiment runs** | All models ever trained | Every `retrain.retrain` call lands here automatically |
+| **Model Registry** | Models ready to be used | You explicitly opt in with `--register` (or click "Register Model" in the UI) |
+| **Aliases** | Pointer to which version is "the chosen one" | You manually assign — UI click or Python one-liner |
+
+**One tweak on bullet 3:** MLflow doesn't decide anything. *You* tell MLflow which version to label `Production`, and the inference server then asks "which version has the Production alias?" when you call `/model/switch {"mlflow_stage": "Production"}`. So:
+
+- You assign the alias → MLflow just stores the pointer
+- inference_server reads the pointer when asked → loads that version's `.pkl` from MinIO
+
+Multiple aliases can coexist on different versions — `Production` on v3, `Staging` on v5 (under evaluation), `Archived` on v1 (kept for rollback). The aliases are arbitrary labels; `Production` is convention, not a built-in concept.
+
+So the full mental picture, with your wording:
+
+`Experiment Runs  (all trained models — every retrain run)
+   │
+   │  --register  (you opt in)
+   ▼
+Model Registry   (models ready to be used)
+   │
+   │  set_registered_model_alias("Production", v3)   ← you choose
+   ▼
+Production alias points to v3
+   │
+   │  /model/switch {"mlflow_stage": "Production"}
+   ▼
+inference_server loads v3's .pkl from MinIO`
+
+
+---
+## can we add add a new data in pilpline. 
+
+
+Conceptually MLflow is **agnostic** to what data you train on — you can register a v0 (16 features, ACC only), a v3 (20 features, ACC + barometer), and a future v6 (30 features, ACC + barometer + heart rate) under the same registry. It will happily store all three.
+
+The constraints don't come from MLflow. They come from **the boundary contracts** between components. Four to remember:
+
+**1. Hot-swap requires schema compatibility**
+If the live system is running v0 (16 features) and you hot-swap to v3 (20 features), the mobile app is still sending only ACC data. The new model expects barometer columns and gets nothing → shape mismatch → every `/predict` fails. Hot-swap only works between models with the *same input contract*. Adding barometer is therefore not a hot-swap — it's a coordinated rollout (mobile app + inference server upgrade together).
+
+**2. Data pipeline lives in code, not MLflow**
+MLflow stores the trained `.pkl` and metrics. The code that *extracts* the 20 features from raw ACC + barometer lives in `ml_pipeline/`. If you add a new feature, you change that code, redeploy the inference server, and now the database starts receiving the new shape. MLflow doesn't help with this — it's an ordinary code/deployment change.
+
+**3. Database schema follows the feature set**`feature_snapshot` is long-format (one row per feature), so adding new features doesn't require a migration there — it just stores more rows per inference. But if a new sensor needs its own table (e.g., raw pressure window for re-extraction later), that's Alembic territory, separate from MLflow.
+
+**4. Registry naming**
+Different feature contracts should be different registered model names. `fall-detection-xgboost-acc-only` vs `fall-detection-xgboost-acc-baro`. Otherwise the `Production` alias becomes dangerous — does it mean v3 (acc+baro) or v0 (acc only)? The inference server can't tell from the alias alone, and someone's going to hot-swap an incompatible version one day.
+
+---
+
+**The clean mental model:**
+
+| Change type | MLflow handles it? | What does the work? |
+| --- | --- | --- |
+| Retrain same model on new data (more rows) | yes — just register a new version | `retrain.py` |
+| Tune hyperparameters | yes — new run, new version | `retrain.py` |
+| Add new feature (e.g. barometer) | **partially** — registry stores it, but contract change requires coordinated upgrade | Code change + Alembic + mobile app + new registry name |
+| Switch from XGBoost to neural network | yes — MLflow stores any model framework | Code change in inference loading logic |
+| Change input from raw ACC to FFT spectrogram | partially — same caveat as barometer | Major code change + new registry |
+
+**The rule of thumb:** if the change keeps the input shape and feature semantics the same, MLflow + hot-swap covers it end-to-end. If the change alters the contract (new sensor, new feature, different units), MLflow stores it but you still need an old-fashioned coordinated deployment — registry + alias alone aren't enough.

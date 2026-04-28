@@ -1,0 +1,41 @@
+The system is composed of three layers in a big picture
+ 1. Patinet layer
+ 2. Backend layer
+ 3. Caregiver layer
+
+Below shows a list of component in each layer. 
+
+=======================================================
+
+
+1. Patient layer
+-------------------
+- SmarKo        collecting physiological data and sends to mobile app
+- mobile app    transmits the collected data to influxDB 
+                directly POST request to inference API to detect a fall
+                displays fall confirmation popup and alert caregive if confirmed & injects the marker into influxDB 
+- MQTT client_1 
+
+2. Backend layer
+-------------------
+- FHIR server   stores demographic infomration of patients 
+- influxDB      stores physiological infomration of patients
+- postgres
+- minIO
+- infrence server
+- MQTT broker 
+- MQTT client_2
+- mlflow 
+- grafana
+- promotheus
+- web app server 
+
+
+3. Caregiver layer
+-------------------
+- web app 
+  - patinet dashboard           displays registered patients and their personal information (gender, BMI etc.) and health monitoring status (HR, SpO2 etc.)
+                                in the event of a fall, it should indicate which patient has fallen  
+  - fall dashboard              displays 
+  - ml dashbord 
+  - server health dashbaord 

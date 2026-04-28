@@ -361,27 +361,95 @@ Mobile app: change from InfluxDB-only write → HTTP POST raw ACC to `/predict`,
 
 ---
 
+## Step 11.5 — ml_dashboard + server health (admin) UI (H — future, deferred)
+
+**Decision (2026-04-28):** Standalone admin web app — does NOT integrate Grafana.
+Grafana stays separate (better at time-series ops monitoring than anything we'd build).
+ml_dashboard handles ML lifecycle actions; server health dashboard is a clinical-admin-friendly
+status view. Both are admin-only.
+
+### Role-based access — all four dashboards under one URL
+
+Single ingress hostname (e.g. `dashboard.charite.de`) routes to different services
+based on path AND role:
+
+| Route | Component | Role allowed | Lives in |
+|-------|-----------|-------------|----------|
+| `/` (patient info + fall panel) | Patient Dashboard (Isa's app) | **caregiver** only | FOCUS namespace |
+| `/admin/ml` | ml_dashboard | **admin** only | our namespace |
+| `/admin/health` | server health dashboard | **admin** only | our namespace |
+
+- Caregiver does NOT see `/admin/*` routes (hidden + 403 if accessed directly).
+- Admin does NOT see `/` (Patient Dashboard) — different role, different concerns.
+- Cross-namespace routing handled by Traefik (already confirmed as the FOCUS ingress).
+
+### Tasks
+
+- [ ] 11.5.1 Coordinate ingress design with Isa + FOCUS DevOps:
+        - Single `dashboard.charite.de` (or similar) hostname
+        - Path-based routing: `/` → FOCUS namespace, `/admin/*` → our namespace
+        - Shared SSO / auth provider — JWT carries role claim (`caregiver` | `admin`)
+- [ ] 11.5.2 Build `ml_dashboard` (FastAPI + minimal HTML/JS):
+        - "Retrain" button → triggers `retrain.retrain` as a background job
+          (subprocess or K8s Job). Streams stdout into the page.
+        - "Register" button → calls MLflow API to register the latest run.
+        - "Promote / Rollback" controls — list registered versions; one-click move
+          of the `Production` alias between versions.
+        - "Hot-swap" button → POSTs `/model/switch` to inference_server so the live
+          model reloads without a separate terminal command.
+        - Status panel: current `Production` version, currently-loaded version on
+          inference server, warning banner if they diverge (alias moved but server
+          not yet swapped).
+        - Cross-link button: "View Grafana metrics" → opens Grafana in new tab
+          (do not embed — keep separate).
+- [ ] 11.5.3 Build `server_health` (small FastAPI page):
+        - Aggregates `/health` endpoints of inference_server, fall_dashboard,
+          mqtt broker, postgres, mlflow tracking, minio.
+        - Single status page: "All systems operational" / "Postgres unreachable" etc.
+        - Plain-language status for clinical admin — not SRE-level metrics.
+- [ ] 11.5.4 Auth gate (mandatory before exposing to anything beyond localhost):
+        - Verify JWT or session cookie has `role=admin` claim.
+        - Reject with 403 if missing. Log every state-changing call (retrain trigger,
+          alias change, hot-swap) with the admin's identifier.
+- [ ] 11.5.5 Production safety: this UI controls the live model that real patients
+        depend on. Hot-swap and promote actions MUST require an explicit confirmation
+        click ("Are you sure? This will change the model serving real patients").
+        Audit log every action.
+
+### Why standalone, not embedded in Grafana
+
+Considered: bolt MLflow + control buttons onto Grafana via custom panels. Rejected:
+Grafana plugin development is heavy, the resulting UI looks like dashboards (wrong
+mental model for an action UI), and Grafana auth is harder to hook into the FOCUS
+SSO than a bespoke FastAPI service. Keeping ml_dashboard standalone — Grafana stays
+the time-series ops tool, ml_dashboard is the action tool.
+
+---
+
 ## Step 12 — Dockerfile Verification after Folder Rename (H)
 
 After renaming `app/` → `ml_pipeline/` and `shared/` → `shared_db/`, the COPY directives
 in both Dockerfiles must be verified. **Must pass before Step 9.15 (push to registry).**
 
-- [ ] 12.1 Build inference_server image and confirm it starts:
+- [x] 12.1 Build inference_server image and confirm it starts (verified 2026-04-28 on port 8011):
       ```powershell
       # from _6G_Integration_v2_mqtt/ as cwd
       docker build -f inference_server/Dockerfile -t fd-inference-test:latest .
       docker run --rm -e MODEL_VERSION=v0 -e DATABASE_URL=sqlite:///./test.db `
-        -e API_KEYS=testkey -p 8001:8001 fd-inference-test:latest
-      curl.exe http://localhost:8001/health
+        -e API_KEYS=testkey -p 8011:8001 fd-inference-test:latest
+      curl.exe http://localhost:8011/health
+      # → {"status":"ok","model_version":"v0",...}
       ```
-- [ ] 12.2 Build fall_dashboard image and confirm it starts:
+- [x] 12.2 Build fall_dashboard image and confirm it starts (verified 2026-04-28 on port 8012):
       ```powershell
       docker build -f fall_dashboard/Dockerfile -t fd-dashboard-test:latest .
       docker run --rm -e DATABASE_URL=sqlite:///./test.db `
-        -e MQTT_BROKER_HOST=localhost -p 8002:8002 fd-dashboard-test:latest
-      curl.exe http://localhost:8002/api/patients
+        -e MQTT_BROKER_HOST=localhost -p 8012:8002 fd-dashboard-test:latest
+      curl.exe http://localhost:8012/api/patients
+      # → {"patients":[]}
       ```
-- [ ] 12.3 If either build fails: check COPY paths in the Dockerfile reference `ml_pipeline/` and `shared_db/`
+- [x] 12.3 If either build fails: check COPY paths in the Dockerfile reference `ml_pipeline/` and `shared_db/`
+      (no failures — both Dockerfiles already use renamed paths correctly)
 
 ---
 

@@ -309,6 +309,68 @@ MLFLOW_ARTIFACT_ROOT=s3://mlflow-artifacts/     # bucket name
 
 ---
 
+## Unified Caregiver/Admin URL — Role-Based Routing (decided 2026-04-28)
+
+All four dashboards live behind a single ingress hostname (e.g. `dashboard.charite.de`).
+Path-based routing dispatches to different namespaces; role claims in the auth token
+gate access. **Caregivers and admins are mutually exclusive** — neither sees the other's
+views.
+
+```
+              dashboard.charite.de  (single Traefik ingress)
+                          │
+        ┌─────────────────┼─────────────────┐
+        │                 │                 │
+        ▼                 ▼                 ▼
+       /             /admin/ml          /admin/health
+   (caregiver)        (admin)             (admin)
+        │                 │                 │
+        ▼                 ▼                 ▼
+  ┌────────────┐    ┌────────────┐    ┌────────────────┐
+  │ Patient    │    │ ml_         │    │ server_health  │
+  │ Dashboard  │    │ dashboard   │    │ dashboard      │
+  │ (Isa's UI) │    │ (FastAPI)   │    │ (FastAPI)      │
+  │            │    │             │    │                │
+  │ FOCUS NS   │    │ OUR NS      │    │ OUR NS         │
+  └────────────┘    └────────────┘    └────────────────┘
+        │
+        │  fall panel calls  → /api/falls, /api/stream
+        └──────────────────► fall_dashboard (OUR NS)
+```
+
+| Route | Purpose | Role | Namespace |
+|-------|---------|------|-----------|
+| `/` | Patient Dashboard — patient info panel + fall panel + biosignals | **caregiver** | FOCUS |
+| `/admin/ml` | ml_dashboard — retrain, register, promote, hot-swap | **admin** | ours |
+| `/admin/health` | Server health — aggregate `/health` endpoints, plain-language status | **admin** | ours |
+
+### Why split this way
+
+- **Patient Dashboard (caregiver-only):** clinical staff need patient demographics,
+  biosignals, and fall alerts. They do not need (and should not see) MLOps controls
+  that could change the live model.
+- **ml_dashboard (admin-only):** controls that affect the live model serving real
+  patients. Hot-swap, promote, retrain are state-changing actions that require an
+  audit trail and must be restricted.
+- **server_health (admin-only):** SRE-level visibility into pod status. Caregivers
+  don't need this; they have a different mental model (patients, not pods).
+- **Grafana stays separate:** still admin-only but lives at its own URL or behind
+  `/admin/grafana`. It serves a different purpose (time-series ops investigation)
+  and is not part of the unified routing decision above.
+
+### Auth flow (planned)
+
+1. User logs into the FOCUS SSO once
+2. SSO returns a JWT with a `role` claim (`caregiver` | `admin`)
+3. Traefik middleware extracts the role and 403s on disallowed paths
+4. Each backend (Patient Dashboard, ml_dashboard, server_health) re-validates the
+   role from the JWT — defence in depth, never trust the proxy alone
+
+This requires coordination with FOCUS DevOps + Isa (he owns the Patient Dashboard
+auth integration). Tracked in todo.md Step 11.5.
+
+---
+
 ## Open Decisions Still Needed
 
 | Decision | Who decides | Impact |
@@ -319,3 +381,35 @@ MLFLOW_ARTIFACT_ROOT=s3://mlflow-artifacts/     # bucket name
 | Kubernetes namespace names | FOCUS DevOps | Helm chart `values.yaml` |
 | ~~Model files: Docker image or mounted volume?~~ | ~~FOCUS DevOps + us~~ | **Decided:** Option B — MinIO in our namespace. See Step 7.3 in todo.md. |
 | Data sharing agreement with Charite | Charite + FOCUS | Unlocks Step 11 (MLflow retraining) |
+
+
+---
+
+**ALL** the services go to K8s. But there's a distinction between "we build the image ourselves" and "we use a prebuilt vendor image":
+
+| Service | Image source | Who builds it | Where it lives in production |
+| --- | --- | --- | --- |
+| **inference_server** | `inference_server/Dockerfile` (our code) | **us** | FOCUS's container registry |
+| **fall_dashboard** | `fall_dashboard/Dockerfile` (our code) | **us** | FOCUS's container registry |
+| **mlflow** | `infrastructure/mlflow/Dockerfile` (our small wrapper) | **us** | FOCUS's container registry |
+| Postgres | `postgres:16-alpine` | postgres-org | Docker Hub (pulled by K8s) |
+| MQTT broker | `eclipse-mosquitto:2` | eclipse-org | Docker Hub |
+| MinIO | `minio/minio:latest` | minio-org | Docker Hub |
+| Prometheus | `prom/prometheus:latest` | prom-org | Docker Hub |
+| Grafana | `grafana/grafana:10.4.0` | grafana-org | Docker Hub |
+
+**Production startup ordering — what runs where:**
+
+`FOCUS K8s cluster (our namespace)
+├── postgres pod          ← official image, pulled from Docker Hub
+├── mqtt pod              ← official image, pulled from Docker Hub
+├── minio pod             ← official image, pulled from Docker Hub
+├── prometheus pod        ← official image, pulled from Docker Hub
+├── grafana pod           ← official image, pulled from Docker Hub
+├── mlflow pod            ← OUR image, pulled from FOCUS registry
+├── inference_server pod  ← OUR image, pulled from FOCUS registry
+└── fall_dashboard pod    ← OUR image, pulled from FOCUS registry`
+
+All eight pods run inside FOCUS's K8s cluster. The Helm chart just declares them as Deployments/StatefulSets and points each one at the right image. K8s itself handles the pulls.
+
+**Corrected version of my earlier statement:** "the three pieces we package ourselves (inference_server, fall_dashboard, mlflow) need their Docker images built and pushed before deployment. Step 12 specifically verifies the two that contain our application code — the third is too thin to need explicit verification beyond `docker-compose up`, which you already ran successfully."

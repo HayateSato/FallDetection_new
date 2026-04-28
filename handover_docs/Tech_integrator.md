@@ -381,3 +381,39 @@ A few decisions you might want to question:
 - **Hayate** — overall architecture, inference server, MLflow, Helm chart. Primary integration contact during this hand-over period.
 - **Isa** — mobile app + Patient Dashboard UI.
 - **Charite** — clinical data, sample rate decisions, data sharing agreements.
+
+
+
+----
+
+
+
+
+**ALL** the services go to K8s. But there's a distinction between "we build the image ourselves" and "we use a prebuilt vendor image":
+
+| Service | Image source | Who builds it | Where it lives in production |
+| --- | --- | --- | --- |
+| **inference_server** | `inference_server/Dockerfile` (our code) | **us** | FOCUS's container registry |
+| **fall_dashboard** | `fall_dashboard/Dockerfile` (our code) | **us** | FOCUS's container registry |
+| **mlflow** | `infrastructure/mlflow/Dockerfile` (our small wrapper) | **us** | FOCUS's container registry |
+| Postgres | `postgres:16-alpine` | postgres-org | Docker Hub (pulled by K8s) |
+| MQTT broker | `eclipse-mosquitto:2` | eclipse-org | Docker Hub |
+| MinIO | `minio/minio:latest` | minio-org | Docker Hub |
+| Prometheus | `prom/prometheus:latest` | prom-org | Docker Hub |
+| Grafana | `grafana/grafana:10.4.0` | grafana-org | Docker Hub |
+
+**Production startup ordering — what runs where:**
+
+`FOCUS K8s cluster (our namespace)
+├── postgres pod          ← official image, pulled from Docker Hub
+├── mqtt pod              ← official image, pulled from Docker Hub
+├── minio pod             ← official image, pulled from Docker Hub
+├── prometheus pod        ← official image, pulled from Docker Hub
+├── grafana pod           ← official image, pulled from Docker Hub
+├── mlflow pod            ← OUR image, pulled from FOCUS registry
+├── inference_server pod  ← OUR image, pulled from FOCUS registry
+└── fall_dashboard pod    ← OUR image, pulled from FOCUS registry`
+
+All eight pods run inside FOCUS's K8s cluster. The Helm chart just declares them as Deployments/StatefulSets and points each one at the right image. K8s itself handles the pulls.
+
+**Corrected version of my earlier statement:** "the three pieces we package ourselves (inference_server, fall_dashboard, mlflow) need their Docker images built and pushed before deployment. Step 12 specifically verifies the two that contain our application code — the third is too thin to need explicit verification beyond `docker-compose up`, which you already ran successfully."
