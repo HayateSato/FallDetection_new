@@ -15,6 +15,29 @@ exact commands to install it locally on Docker Desktop.
 
 ---
 
+## Quickstart (Docker Desktop K8s)
+
+For routine use after the first install. Run from `_6G_Integration_v2_mqtt/`:
+
+```powershell
+.\helm\fall-detection\build.ps1            # build all 4 custom images
+.\helm\fall-detection\install.ps1          # helm upgrade --install + wait + show pods
+.\helm\fall-detection\port-forward.ps1     # opens 7 tunnels in separate windows
+.\helm\fall-detection\test.ps1             # 8 in-cluster health probes
+.\helm\fall-detection\teardown.ps1         # uninstall + delete namespace
+```
+
+After a code change for one service, rebuild + roll just that deployment:
+
+```powershell
+.\helm\fall-detection\build.ps1
+kubectl rollout restart deploy/<service-name> -n mcs-fall-detection
+```
+
+The sections below explain what each step does and the gotchas behind them.
+
+---
+
 ## 1. Mental model — Compose vs Helm
 
 You already know how to run the stack with Compose:

@@ -159,6 +159,32 @@ and SSE all work across namespace boundaries.
 After the dry-run passes, the mock-focus chart is uninstalled. The real chart
 (`helm/fall-detection/`) is what gets shipped to FOCUS DevOps.
 
+### What's in `helm/fall-detection/`
+
+Same orchestration script pattern as mock-focus, scoped to just the production
+chart so a developer can spin the whole stack up or down with one command per
+phase:
+
+| File | Purpose |
+|------|---------|
+| `Chart.yaml`, `values.yaml` | Helm chart metadata + every parameter (ports, resources, secrets) in one file |
+| `templates/<service>/` | Deployment + Service per service (10 services total) |
+| `templates/configmap.yaml` | Shared env vars (MQTT, DB, MLflow, INFERENCE_SERVER_URL, etc.) |
+| `templates/secrets.yaml` | Postgres/MinIO/Grafana/API-key secrets |
+| `templates/migrate-job.yaml` | Alembic post-install hook (with `before-hook-creation` delete policy) |
+| `files/grafana/dashboards/` | 3 Grafana dashboards mounted into the grafana pod |
+| `build.ps1` | builds all 4 custom Python images (`registry.example.com/` prefix for Docker Desktop K8s) |
+| `install.ps1` | `helm upgrade --install` + `--wait` + shows pod status; refuses to run on non-`docker-desktop` context |
+| `port-forward.ps1` | opens 7 tunnels (8001/8002/8004/8006/5000/3000/1883) in separate windows |
+| `test.ps1` | 8 in-cluster health probes (self + cross-service via K8s DNS + Grafana provisioning sanity) |
+| `teardown.ps1` | uninstalls + deletes namespace (also drops PVCs) |
+| `README.md` | quickstart at top + manual command walkthrough below |
+
+For production deployment to the real FOCUS cluster, the scripts are not
+appropriate (they assume `pullPolicy: Never`, the `registry.example.com`
+placeholder, and Docker Desktop context). See `handover_docs_2/01_k8s.md` §6
+for the production-tag manual workflow.
+
 ---
 
 ## What Lives Where
