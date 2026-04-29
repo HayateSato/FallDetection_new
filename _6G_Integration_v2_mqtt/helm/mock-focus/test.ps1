@@ -62,7 +62,7 @@ if ($out -match '"status":"ok"') {
 # In-namespace sanity check that the StatefulSet came up correctly.
 Write-Host ""
 Write-Host "[4/4] InfluxDB health (within mock-focus namespace)"
-$out = kubectl exec -n mock-focus statefulset/mock-influxdb -- sh -c 'wget -qO- http://localhost:8086/health' 2>&1
+$out = kubectl exec -n mock-focus statefulset/mock-influxdb -- curl -s http://localhost:8086/health 2>&1
 if ($out -match '"status":"pass"') {
     Pass "InfluxDB healthy"
 } else {
