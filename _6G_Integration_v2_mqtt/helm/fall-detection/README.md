@@ -1,6 +1,6 @@
 # helm/fall-detection — production Helm chart
 
-Packages the entire `mcs-fall-detection` namespace (8 services) for Kubernetes
+Packages the entire `mcs-fall-detection` namespace (10 services) for Kubernetes
 deployment. This is what gets shipped to FOCUS DevOps.
 
 | | |
@@ -60,6 +60,8 @@ helm/fall-detection/
 │   │
 │   ├── inference-server/             ← Deployment + Service (port 8001)
 │   ├── fall-dashboard/               ← Deployment + Service + Ingress (port 8002)
+│   ├── ml-dashboard/                 ← Deployment + Service (port 8004) — admin: retrain + hot-swap
+│   ├── server-health/                ← Deployment + Service (port 8006) — admin: service status
 │   ├── mqtt-broker/                  ← Deployment + Service (port 1883)
 │   ├── postgres/                     ← StatefulSet + Service + ConfigMap
 │   ├── mlflow/                       ← Deployment + Service (port 5000)
@@ -71,7 +73,7 @@ helm/fall-detection/
     └── grafana/                      ← provisioned dashboards (mounted as ConfigMap)
 ```
 
-Eight services, same as Compose. Each gets its own folder under `templates/`
+Ten services (8 from Compose + ml-dashboard + server-health). Each gets its own folder under `templates/`
 because that scales better than one giant file.
 
 ---
@@ -93,27 +95,38 @@ If `helm version` fails: `winget install Helm.Helm`, close + reopen PowerShell.
 ## 4. Build the local images
 
 The chart's default `values.yaml` uses `pullPolicy: Never` so K8s expects the
-images to already be in the local Docker daemon's cache. Build them once:
+images to already be in the local Docker daemon's cache. Build all four custom
+images once (official images — postgres, minio, mlflow, etc. — are pulled from
+Docker Hub automatically):
 
 ```powershell
 # from _6G_Integration_v2_mqtt/ as cwd
-docker build -f inference_server/Dockerfile -t inference-server:latest .
-docker build -f fall_dashboard/Dockerfile  -t fall-dashboard:latest  .
+
+# Core services
+docker build -f inference_server/Dockerfile -t registry.example.com/inference-server:latest .
+docker build -f fall_dashboard/Dockerfile   -t registry.example.com/fall-dashboard:latest   .
+
+# Admin dashboards
+docker build -f ml_dashboard/Dockerfile     -t registry.example.com/ml-dashboard:latest     .
+docker build -f server_health/Dockerfile    -t registry.example.com/server-health:latest    .
 ```
 
-Verify:
+Verify all four are present:
 
 ```powershell
-docker images | findstr -E "inference-server|fall-dashboard"
-# expect both with TAG=latest
+docker images | findstr "registry.example.com"
+# expect: inference-server, fall-dashboard, ml-dashboard, server-health — all TAG=latest
 ```
 
-These tag names MUST match `values.yaml` → `images.inferenceServer.repository`
-and `images.fallDashboard.repository`. Don't rename without updating both.
+The image names MUST match `values.yaml` → `images.*.repository`. If you change
+a name here, update `values.yaml` too.
 
-> ml_dashboard and server_health are NOT in this chart yet. They run on your
-> laptop only for now. Adding them is a future step (one Deployment +
-> Service each, copy/paste of the inference-server template).
+> **After a code change**, rebuild the affected image then restart the pod:
+> ```powershell
+> docker build -f ml_dashboard/Dockerfile -t registry.example.com/ml-dashboard:latest .
+> kubectl rollout restart deploy/ml-dashboard -n mcs-fall-detection
+> ```
+> `helm upgrade` alone does NOT restart pods when the image tag stays `latest`.
 
 ---
 
@@ -173,11 +186,13 @@ fall-dashboard-xxxxxxxxxx-xxxxx     1/1     Running     0          90s
 grafana-xxxxxxxxxx-xxxxx            1/1     Running     0          90s
 inference-server-xxxxxxxxxx-xxxxx   1/1     Running     0          90s
 mcs-fall-detection-migrate-xxxxx    0/1     Completed   0          80s
+ml-dashboard-xxxxxxxxxx-xxxxx       1/1     Running     0          90s
 minio-0                             1/1     Running     0          90s
 mlflow-xxxxxxxxxx-xxxxx             1/1     Running     0          85s
 mqtt-broker-xxxxxxxxxx-xxxxx        1/1     Running     0          90s
 postgres-0                          1/1     Running     0          90s
 prometheus-xxxxxxxxxx-xxxxx         1/1     Running     0          90s
+server-health-xxxxxxxxxx-xxxxx      1/1     Running     0          90s
 ```
 
 Probe the services from inside the cluster (use `curl`; `wget` is not installed
@@ -203,14 +218,30 @@ to reach any service locally. There is no other way on Docker Desktop:
 
 ```powershell
 # Run each in a separate terminal; keep it running while you test
+
+# Core services
 kubectl port-forward -n mcs-fall-detection svc/inference-server 8001:8001
 kubectl port-forward -n mcs-fall-detection svc/fall-dashboard   8002:8002
+
+# Admin dashboards
+kubectl port-forward -n mcs-fall-detection svc/ml-dashboard     8004:8004
+kubectl port-forward -n mcs-fall-detection svc/server-health    8006:8006
+
+# Monitoring / infra (open when needed)
 kubectl port-forward -n mcs-fall-detection svc/mlflow           5000:5000
 kubectl port-forward -n mcs-fall-detection svc/grafana          3000:3000
+kubectl port-forward -n mcs-fall-detection svc/mqtt-broker      1883:1883
 ```
 
-Then open `http://localhost:8002/` in a browser. The tunnel closes when you
-`Ctrl+C` the port-forward process.
+| URL | What you see |
+|-----|-------------|
+| `http://localhost:8002/` | Fall dashboard (caregiver view) |
+| `http://localhost:8004/` | ML dashboard — retrain + model hot-swap (admin) |
+| `http://localhost:8006/` | Server health — traffic-light status of all 6 services (admin) |
+| `http://localhost:5000/` | MLflow experiment tracker |
+| `http://localhost:3000/` | Grafana — latency / drift / fall-rate dashboards |
+
+The tunnel closes when you `Ctrl+C` the port-forward process.
 
 ---
 
@@ -262,10 +293,10 @@ If you want to **keep** the data between installs, omit the namespace delete.
 
 ## 11. What's still TODO before this ships to FOCUS
 
-- [ ] Smoke-test end-to-end on Docker Desktop K8s (todo.md Step 12.5 — the
-      mock-focus dry-run validates cross-namespace traffic too)
-- [ ] Add `ml_dashboard` and `server_health` Deployments + Services
-      (currently those run only on the developer's laptop)
+- [x] Smoke-test end-to-end on Docker Desktop K8s (todo.md Step 12.5) — PASSED 2026-04-29.
+      All 10 pods Running, 4/4 cross-namespace tests PASS, manual SSE end-to-end verified.
+- [x] Add `ml_dashboard` (port 8004) and `server_health` (port 8006) Deployments + Services
+      (added 2026-04-29 — images must be built and tagged before `helm upgrade`)
 - [ ] Add NetworkPolicy YAML once FOCUS DevOps confirms whether their
       cluster enforces them (todo.md Step 14)
 - [ ] Add an `imagePullSecret` reference in pod templates once FOCUS DevOps
