@@ -222,3 +222,6 @@ mlflow.db
 
 # SQLite fallback database (dev only — production uses Postgres)
 *.db
+
+# Docker image dumps (`docker save -o foo.tar`) — never commit, GitHub rejects files >100 MB
+*.tar
