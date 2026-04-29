@@ -13,6 +13,10 @@ spec:
       labels:
         app: ml-dashboard
     spec:
+      # Disable kubelet's <SERVICE>_PORT env-var injection — it sets ML_DASHBOARD_PORT
+      # to "tcp://10.x.x.x:8004", which breaks int(os.getenv("ML_DASHBOARD_PORT")) in main.py.
+      # We use DNS via INFERENCE_SERVER_URL etc. for cross-service discovery anyway.
+      enableServiceLinks: false
       containers:
         - name: ml-dashboard
           image: {{ .Values.registry }}/{{ .Values.images.mlDashboard.repository }}:{{ .Values.images.mlDashboard.tag }}

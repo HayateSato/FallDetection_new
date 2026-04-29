@@ -13,6 +13,10 @@ spec:
       labels:
         app: server-health
     spec:
+      # Disable kubelet's <SERVICE>_PORT env-var injection — it sets SERVER_HEALTH_PORT
+      # to "tcp://10.x.x.x:8006", which breaks int(os.getenv("SERVER_HEALTH_PORT")) in main.py.
+      # We use DNS via INFERENCE_SERVER_URL / FALL_DASHBOARD_URL for cross-service discovery.
+      enableServiceLinks: false
       containers:
         - name: server-health
           image: {{ .Values.registry }}/{{ .Values.images.serverHealth.repository }}:{{ .Values.images.serverHealth.tag }}
