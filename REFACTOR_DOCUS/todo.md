@@ -302,9 +302,13 @@ Dockerfiles are at `inference_server/Dockerfile` and `fall_dashboard/Dockerfile`
 - [x] 11.11 Wire `POST /model/switch` to load from registry by name/stage — implemented (2026-04-17):
            `{"mlflow_stage": "Production"}` downloads latest .pkl from MLflow registry and hot-swaps it.
            File-based `{"version": "v0_retrained"}` still works as before. mlflow>=2.10 added to inference_server/requirements.txt.
-           **End-to-end verified (2026-04-28):** retrain → register → set Production alias →
+           **End-to-end verified locally (2026-04-28):** retrain → register → set Production alias →
            `switch_model.ps1 -Stage Production` → `/model/info` shows `loaded_as: mlflow:Production:vX(v0)` →
-           rollback to `-Version v0` works. Full registry-based hot-swap pipeline confirmed working.
+           rollback to `-Version v0` works.
+           **End-to-end verified on K8s (2026-04-29):** triggered retrain from ml-dashboard UI → MLflow
+           run logged in `mlflow` pod → promoted to Production → `/model/switch` (called by ml-dashboard)
+           hot-swapped inference-server to the new model → rollback to v0 also worked. Full registry-based
+           hot-swap pipeline confirmed working in-cluster, not just on laptop.
 
 ### 11d — Retraining data pipeline ✓
 
@@ -402,8 +406,16 @@ based on path AND role:
         UI: Retrain panel (form + log streamer), Versions table (per-version Promote
         buttons), Hot-swap buttons, status panel with drift warning, embedded drift
         guide (collapsible help section).
-        Still open: 11.5.1 (ingress), 11.5.3 (server health page), 11.5.4 (auth gate),
-        11.5.5 (production confirm dialogs are present but audit-log + JWT validation not yet).
+        **K8s deployment verified end-to-end (2026-04-29):** added Deployment + Service
+        templates to `helm/fall-detection/`, ml-dashboard reachable at port 8004 via
+        port-forward, retrain triggered from UI logs successfully to in-cluster MLflow,
+        hot-swap to new model + rollback to v0 both work against in-cluster
+        inference-server. Required fixes during K8s deploy:
+        - install `retrain/requirements.txt` in the Dockerfile (xgboost was missing)
+        - `enableServiceLinks: false` (kubelet was injecting `ML_DASHBOARD_PORT=tcp://...`)
+        - inject `INFERENCE_API_KEY` env var from secrets (was missing → /model/switch returned 401)
+        - MLflow server `--allowed-hosts` flag (DNS rebinding protection rejected `Host: mlflow:5000`)
+        Still open: 11.5.1 (ingress), 11.5.4 (auth gate), 11.5.5 (audit log + JWT validation).
 - [x] 11.5.3 Build `server_health` (small FastAPI page) — **MVP done 2026-04-28**:
         Folder: `_6G_Integration_v2_mqtt/server_health/` (port 8006). Run via
         `python -m server_health.main`.
@@ -420,6 +432,10 @@ based on path AND role:
         - Dockerfile + .env entries (`SERVER_HEALTH_PORT=8006`, `FALL_DASHBOARD_URL`).
         - Auth gate still NOT implemented — warning banner shown in UI.
           See 11.5.4 (shared with ml_dashboard).
+        **K8s deployment verified (2026-04-29):** added Deployment + Service templates,
+        all 6 service probes return healthy from inside the cluster (uses K8s DNS for
+        targets via `INFERENCE_SERVER_URL` and `FALL_DASHBOARD_URL` from configmap).
+        Same `enableServiceLinks: false` fix needed as ml-dashboard.
 - [ ] 11.5.4 Auth gate (mandatory before exposing to anything beyond localhost):
         - Verify JWT or session cookie has `role=admin` claim.
         - Reject with 403 if missing. Log every state-changing call (retrain trigger,
@@ -467,6 +483,17 @@ in both Dockerfiles must be verified. **Must pass before Step 9.15 (push to regi
 ---
 
 ## Step 12.5 — Local two-namespace dry-run BEFORE handover (H, recommended)
+
+**Status (2026-04-29): EVERYTHING THAT WORKED LOCALLY IS NOW WORKING IN K8s.**
+Confirmed end-to-end inside the cluster:
+- All 10 pods of `mcs-fall-detection` namespace running (incl. ml-dashboard + server-health)
+- All 3 pods of `mock-focus` namespace running
+- Cross-namespace traffic: 4/4 test.ps1 tests PASS
+- MQTT alert flow: mock_app → inference_server → MQTT → fall_dashboard → SSE → mock-patient-dashboard (red card appears, click to acknowledge clears it)
+- fall_history written to Postgres, retrievable via /api/falls
+- ml-dashboard UI: retrain triggered → MLflow run logged → promote to Production → hot-swap inference-server to new model → rollback to v0 — all confirmed
+- server-health: all 6 service probes return healthy
+- (Skipped: NetworkPolicy enforcement — Docker Desktop CNI doesn't enforce, needs kind+Calico)
 
 **Why:** before handing the chart to FOCUS DevOps we should prove cross-namespace
 traffic actually works in K8s. The current local stack is single-namespace

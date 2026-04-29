@@ -1328,3 +1328,84 @@ helm install mcs-fall-detection .\helm\fall-detection `
 If you forget step 1, step 3 hangs at "waiting for pods" because the image-less pods never become Ready. The recovery is just `docker build`-ing then — K8s retries automatically every ~30s.
 
 **Side note on Docker Compose Postgres:** you don't need to stop it. The K8s Postgres lives at `postgres.mcs-fall-detection.svc.cluster.local:5432` (in-cluster only), while Docker Compose's binds to host `localhost:5432`. They don't conflict. But if you accidentally point your Python venv (`.env` → `DATABASE_URL`) at one while running services that wrote to the other, you'll see "where's my data?" confusion. Pick one path at a time.
+
+----
+
+## requirement,txt installed or required?
+
+Audit complete — the answer is good news: **only ml-dashboard had the gap**. Here's the summary:
+
+| Service | Imports shared_db? | Imports ml_pipeline? | Spawns subprocess? | Status |
+| --- | --- | --- | --- | --- |
+| `inference-server` | yes (sqlalchemy) | yes (full pipeline → numpy/pandas/scipy/xgboost) | no | ✅ all deps in requirements |
+| `fall-dashboard` | yes (sqlalchemy) | yes — but only `influx_client_manager` + `data_converter` (need numpy, pandas, influxdb-client; **scipy NOT needed**) | no | ✅ all deps in requirements |
+| `ml-dashboard` | no | no | yes — `python -m retrain.retrain` (xgboost, sklearn, pandas, numpy, sqlalchemy, boto3) | ⚠️ fixed earlier this turn |
+| `server-health` | no | no | no — only stdlib + httpx + sqlalchemy | ✅ all deps in requirements |
+
+The reason fall-dashboard is OK despite copying the whole `ml_pipeline/` folder: it only touches `influx_client_manager` and `data_converter`, which need `numpy`, `pandas`, and `influxdb-client` — all already in `fall_dashboard/requirements.txt`. The heavier modules (`acc_resampler` needs scipy, `inference_engine` needs xgboost) are never imported by fall_dashboard, so Python never tries to load scipy/xgboost.
+
+So no further action needed — your previous `helm upgrade` + ml-dashboard rebuild closes the only gap.
+
+
+
+----
+
+**Where the URL `http://mlflow:5000` is defined:**
+
+templates/configmap.yaml:16 — our Helm chart sets:
+
+`MLFLOW_TRACKING_URI: "http://mlflow:{{ .Values.mlflow.port }}"
+# → http://mlflow:5000 after templating`
+
+**Who wants to access it:**
+
+The retrain subprocess inside the **ml-dashboard pod**. Chain:
+
+1. User clicks "Retrain" in browser → `POST /api/retrain` to ml-dashboard
+2. ml-dashboard's `web.py` spawns subprocess: `python -m retrain.retrain ...`
+3. The subprocess inherits ml-dashboard's env, including `MLFLOW_TRACKING_URI=http://mlflow:5000` (loaded into the pod by `envFrom: configMapRef: fall-detection-config`)
+4. retrain.py:175: `os.getenv("MLFLOW_TRACKING_URI", "./mlruns")` reads it
+5. `MlflowClient(tracking_uri)` is constructed with that URL
+6. Client calls `client.get_experiment_by_name(...)` → underneath it makes an HTTP request:
+    
+    `GET http://mlflow:5000/api/2.0/mlflow/experiments/get-by-name?...`
+    
+
+**Where `Host: mlflow:5000` comes from:**
+
+You don't see it set anywhere because the **HTTP client library auto-populates it from the URL**. This is HTTP/1.1 spec — the `Host:` header carries the `host:port` part of the URL the client requested. In Python's `requests`/`urllib3`, when you do `requests.get("http://mlflow:5000/...")`, the library splits the URL and the resulting wire request looks like:
+
+`GET /api/2.0/mlflow/experiments/get-by-name?... HTTP/1.1
+Host: mlflow:5000
+User-Agent: python-requests/...
+...`
+
+So:
+
+- `http://mlflow:5000` (the URL) — set by US in the configmap, lives in the env var, used by the MLflow client to construct the URL.
+- `Host: mlflow:5000` (the HTTP header) — set automatically by the HTTP client from the URL's authority component. We never write this directly.
+
+**Who reads `Host: mlflow:5000`:**
+
+The **MLflow tracking server** (gunicorn process inside the `mlflow` pod). MLflow 3.x has DNS-rebinding-protection middleware that compares `Host:` against an allowlist. The default allowlist is just localhost variants — so a Host of `mlflow:5000` (which is what every cross-pod call uses inside the cluster) gets rejected with 403. That's why we add `--allowed-hosts "mlflow:*,..."` to the server's launch flags.
+
+**Summary diagram:**
+
+`configmap.yaml
+   MLFLOW_TRACKING_URI=http://mlflow:5000
+            │
+            ▼ envFrom
+[ ml-dashboard pod ]
+   $MLFLOW_TRACKING_URI = http://mlflow:5000
+            │
+            ▼ spawns subprocess (inherits env)
+   retrain.py → MlflowClient("http://mlflow:5000")
+            │
+            ▼ HTTP/1.1 client splits URL
+   GET /api/2.0/... HTTP/1.1
+   Host: mlflow:5000          ← auto-populated by urllib3
+            │
+            ▼ K8s DNS resolves "mlflow" to a service ClusterIP
+[ mlflow pod ]
+   gunicorn → middleware checks Host header
+              "mlflow:5000" not in allowlist → 403`
