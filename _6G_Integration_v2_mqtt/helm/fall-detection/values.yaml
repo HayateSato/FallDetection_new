@@ -21,6 +21,12 @@ images:
   fallDashboard:
     repository: fall-dashboard
     tag: latest
+  mlDashboard:
+    repository: ml-dashboard
+    tag: latest
+  serverHealth:
+    repository: server-health
+    tag: latest
 
 # ── Inference server ──────────────────────────────────────────────────────────
 inferenceServer:
@@ -36,10 +42,18 @@ inferenceServer:
 # ── Fall dashboard ────────────────────────────────────────────────────────────
 fallDashboard:
   port: 8002
-  patientIds: "test_patient-002"   # comma-separated
+  patientIds: "sato_helm_test"   # comma-separated
   macIds: "6c:1d:eb:04:a9:e6"      # comma-separated, positional with patientIds
   pollIntervalSeconds: "10"
   mockPatientResponseTimeout: "10"
+
+# ── ML dashboard (admin — retrain + model hot-swap) ───────────────────────────
+mlDashboard:
+  port: 8004
+
+# ── Server health dashboard (admin — service status) ──────────────────────────
+serverHealth:
+  port: 8006
 
 # ── MQTT broker ───────────────────────────────────────────────────────────────
 mqtt:
@@ -111,6 +125,12 @@ resources:
   grafana:
     requests: { cpu: 100m,  memory: 128Mi }
     limits:   { cpu: 500m,  memory: 512Mi }
+  mlDashboard:
+    requests: { cpu: 250m,  memory: 256Mi }
+    limits:   { cpu: "1",   memory: 512Mi }
+  serverHealth:
+    requests: { cpu: 100m,  memory: 128Mi }
+    limits:   { cpu: 500m,  memory: 256Mi }
 
 # ── Ingress ───────────────────────────────────────────────────────────────────
 # Ingress controller: Traefik (confirmed 2026-04-27).

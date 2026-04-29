@@ -13,6 +13,17 @@ spec:
       labels:
         app: fall-dashboard
     spec:
+      initContainers:
+        - name: alembic-migrate
+          image: {{ .Values.registry }}/{{ .Values.images.fallDashboard.repository }}:{{ .Values.images.fallDashboard.tag }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef:
+                name: fall-detection-config
+          env:
+            - name: DATABASE_URL
+              value: "postgresql+psycopg2://{{ .Values.postgres.user }}:{{ .Values.postgres.password }}@postgres:{{ .Values.postgres.port }}/{{ .Values.postgres.database }}"
       containers:
         - name: fall-dashboard
           image: {{ .Values.registry }}/{{ .Values.images.fallDashboard.repository }}:{{ .Values.images.fallDashboard.tag }}

@@ -29,3 +29,5 @@ data:
   PUBLIC_ENDPOINT_ENABLED:    "true"
   RATE_LIMIT_PER_MINUTE:      "60"
   CORS_ALLOWED_ORIGINS:       "*"
+  INFERENCE_SERVER_URL:       "http://inference-server:{{ .Values.inferenceServer.port }}"
+  FALL_DASHBOARD_URL:         "http://fall-dashboard:{{ .Values.fallDashboard.port }}"
