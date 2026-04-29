@@ -30,7 +30,7 @@ foreach ($t in $tunnels) {
 }
 
 Write-Host ""
-Write-Host "URLs (use 127.0.0.1, NOT localhost — Windows IPv4/IPv6 gotcha):"
+Write-Host "URLs (use 127.0.0.1, NOT localhost - Windows IPv4/IPv6 gotcha):"
 Write-Host "  http://127.0.0.1:8002/   fall-dashboard (caregiver view)"
 Write-Host "  http://127.0.0.1:8004/   ml-dashboard (admin: retrain + hot-swap)"
 Write-Host "  http://127.0.0.1:8006/   server-health (admin: traffic-light status)"

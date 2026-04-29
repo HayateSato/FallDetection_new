@@ -1,5 +1,5 @@
 # In-cluster health probes for the fall-detection chart.
-# Each test exec's into a pod and probes a service via K8s DNS — same path
+# Each test exec's into a pod and probes a service via K8s DNS - same path
 # the running services use, so a green run here means real cross-service
 # wiring is good (no port-forward involved).
 #
@@ -26,13 +26,13 @@ function ProbeHttp($execPod, $targetUrl, $expectMatch, $label) {
     if ($out -match $expectMatch) {
         Pass "match: $expectMatch"
     } else {
-        Fail "did not match '$expectMatch' — got: $out"
+        Fail "did not match '$expectMatch' - got: $out"
     }
 }
 
 Write-Host ""
 Write-Host "================================================"
-Write-Host " fall-detection — in-cluster health probes"
+Write-Host " fall-detection - in-cluster health probes"
 Write-Host "================================================"
 
 # --- Custom services ------------------------------------------------------
@@ -49,14 +49,14 @@ ProbeHttp "deploy/server-health"  "http://fall-dashboard:8002/api/patients" '"pa
 ProbeHttp "deploy/ml-dashboard"   "http://mlflow:5000/health"            'OK|ok'          "7/8 ml-dashboard -> mlflow (DNS rebinding allowed)"
 
 # --- Grafana provisioning sanity ------------------------------------------
-# Confirms gotcha #16 fix is in place — Grafana's API reports the 3 dashboards loaded.
+# Confirms gotcha #16 fix is in place - Grafana's API reports the 3 dashboards loaded.
 Write-Host ""
 Write-Host "[8/8] Grafana provisioning loaded dashboards"
 $out = kubectl exec -n mcs-fall-detection deploy/grafana -- wget -qO- --user=admin --password=admin "http://localhost:3000/api/search?type=dash-db" 2>&1
 if ($out -match "ml_server_overview" -and $out -match "model_performance" -and $out -match "fall_events_timeline") {
     Pass "all 3 dashboards present"
 } else {
-    Fail "expected 3 dashboards in /api/search response — got: $out"
+    Fail "expected 3 dashboards in /api/search response - got: $out"
 }
 
 # --- Summary --------------------------------------------------------------
