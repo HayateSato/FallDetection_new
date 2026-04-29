@@ -29,6 +29,12 @@ spec:
             - "0.0.0.0"
             - --port
             - "{{ .Values.mlflow.port }}"
+            # MLflow's DNS rebinding protection (added in 3.x) rejects Host headers it doesn't trust.
+            # Inside the cluster the Host header is "mlflow:5000" or the FQDN — whitelist both with fnmatch wildcards.
+            # Without this, retrain.py from ml-dashboard pod gets:
+            #   403 'Invalid Host header - possible DNS rebinding attack detected'
+            - --allowed-hosts
+            - "mlflow:*,mlflow.{{ .Values.namespaces.ours }}.svc.cluster.local:*,localhost:*,127.0.0.1:*"
           ports:
             - containerPort: {{ .Values.mlflow.port }}
           env:
