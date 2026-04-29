@@ -43,8 +43,14 @@ spec:
           volumeMounts:
             - name: grafana-data
               mountPath: /var/lib/grafana
-            - name: grafana-provisioning
-              mountPath: /etc/grafana/provisioning
+            # Grafana expects provisioning files in SUBDIRECTORIES (datasources/, dashboards/),
+            # not at /etc/grafana/provisioning root. We project each ConfigMap key into the
+            # subdirectory Grafana scans.
+            - name: grafana-provisioning-datasources
+              mountPath: /etc/grafana/provisioning/datasources
+              readOnly: true
+            - name: grafana-provisioning-dashboards
+              mountPath: /etc/grafana/provisioning/dashboards
               readOnly: true
             - name: grafana-dashboards
               mountPath: /var/lib/grafana/dashboards
@@ -52,9 +58,18 @@ spec:
       volumes:
         - name: grafana-data
           emptyDir: {}
-        - name: grafana-provisioning
+        - name: grafana-provisioning-datasources
           configMap:
             name: grafana-provisioning
+            items:
+              - key: datasources.yaml
+                path: datasources.yaml
+        - name: grafana-provisioning-dashboards
+          configMap:
+            name: grafana-provisioning
+            items:
+              - key: dashboards.yaml
+                path: dashboards.yaml
         - name: grafana-dashboards
           configMap:
             name: grafana-dashboards

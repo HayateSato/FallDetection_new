@@ -151,7 +151,11 @@ alembic upgrade head
 ```
 
 - [x] 6.13 Add Prometheus + Grafana to Docker Compose (`infrastructure/docker-compose.yml`)
-       Helm chart wiring deferred to Step 9 (blocked on FOCUS DevOps)
+       Helm chart wiring done 2026-04-29 — provisioning ConfigMap + dashboards ConfigMap verified
+       working in K8s. Required fix: project each provisioning key into its expected
+       subdir (`/etc/grafana/provisioning/datasources/`, `/etc/grafana/provisioning/dashboards/`)
+       via `items` in the volume spec — Grafana scans subdirectories, not the mount root.
+       See project_k8s_local_testing.md gotcha #16.
 - [x] 6.14 Wired 3 dashboards (auto-provisioned via `infrastructure/grafana/provisioning/`):
        - `ml_server_overview.json` — request rate, error rate, p95 latency, falls/hour, confidence buckets
        - `model_performance.json`  — fall rate trend, confidence distribution, low-confidence ratio (drift alert), per-version breakdown
