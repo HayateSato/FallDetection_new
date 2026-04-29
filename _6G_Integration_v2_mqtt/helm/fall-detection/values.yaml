@@ -4,7 +4,7 @@
 
 # ── Namespaces ────────────────────────────────────────────────────────────────
 namespaces:
-  ours: fall-detection        # TODO: confirm with FOCUS DevOps
+  ours: mcs-fall-detection    # confirmed 2026-04-29; FOCUS DevOps may override
   focus: focus-ns             # TODO: confirm with FOCUS DevOps
 
 # ── Container registry ────────────────────────────────────────────────────────
@@ -100,8 +100,8 @@ resources:
     requests: { cpu: 250m,  memory: 512Mi }
     limits:   { cpu: "1",   memory: 2Gi   }
   mlflow:
-    requests: { cpu: 250m,  memory: 256Mi }
-    limits:   { cpu: "1",   memory: 1Gi   }
+    requests: { cpu: 250m,  memory: 512Mi }
+    limits:   { cpu: "1",   memory: 2Gi   }   # 1Gi was being OOM-killed (4 gunicorn workers × ~300MiB each)
   minio:
     requests: { cpu: 250m,  memory: 512Mi }
     limits:   { cpu: "1",   memory: 2Gi   }
