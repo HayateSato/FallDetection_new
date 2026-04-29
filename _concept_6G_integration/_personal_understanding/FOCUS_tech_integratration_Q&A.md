@@ -723,3 +723,608 @@ data:
 **Same separation applies to Postgres passwords, API keys, JWT signing keys, etc.** Chart references names. Cluster holds values. Never put real values in the chart.
 
 This is also why FOCUS DevOps creating the Secret is the right pattern — they create it in the cluster, you reference it by name in the chart, no credential ever travels through email or chat.
+
+
+----
+
+## "Chart lives in Git" — what I meant
+
+A Helm chart is just a folder of YAML files (templates + values + Chart.yaml). Like any code, it's stored in version control. So when I say "the chart lives in Git," I mean:
+
+- Your chart files (`helm/fall-detection/templates/...`, `values.yaml`, etc.) are committed to a Git repository alongside your application code
+- Each commit captures a specific version of the chart
+- You can tag releases (`v1.0.0`), branch for changes, review via pull requests
+- The chart is **source-controlled** — it's text, it's reviewable, it's diffable
+
+In contrast, the cluster contains *running things* — pods, secrets, services. That state is in K8s's database (etcd), not in Git. The flow is "Git → helm install → cluster."
+
+The reason this distinction matters for *secrets*: anything that goes into Git is visible to anyone with repo access. Secrets must never be in Git, so they never go into the chart — they go directly into the cluster via `kubectl create secret`.
+
+## "helm chart = helm — same thing?"
+
+No, two different concepts:
+
+| Thing | What it is | Analogy |
+| --- | --- | --- |
+| **Helm** | The CLI tool. You run `helm install`, `helm upgrade`, `helm list`. | npm, apt, brew |
+| **Helm chart** | A package format. A folder with a specific structure that Helm knows how to install. | a .deb file, a node module |
+
+Helm is *what you use*. A Helm chart is *what you have*.
+
+When someone says "send me the Helm chart," they mean "send me the folder of YAML files." When they say "use Helm to install it," they mean "run the `helm` command."
+
+---
+
+## Source code vs docker image vs helm chart — what we share
+
+**Three separate things, three different audiences:**
+
+| Artifact | Format | Goes where | Recipient |
+| --- | --- | --- | --- |
+| **Source code** | Python files in Git | our internal repo (private) | only us — we read and edit it |
+| **Docker images** | Binary blobs (compiled images) | container registry | FOCUS cluster pulls them at deploy time |
+| **Helm chart** | Folder of YAML | shared as folder/tarball/Helm repo | FOCUS DevOps reviews + installs |
+
+**For the FOCUS handover specifically: we share the chart + image references. We do NOT share the Python source.**
+
+Why this works:
+
+- The Docker image already has the compiled Python inside — the cluster runs the bytecode, FOCUS DevOps doesn't need to read it
+- The Helm chart has just enough info for them to deploy it (image name, ports, env vars, resource requests)
+- Our IP / source code stays in our private repo
+
+The chart will reference images like `registry.charite.de/mcs-fall-detection/inference-server:v1.0.0` — FOCUS DevOps see only the image *reference*, not what's inside it.
+
+---
+
+## Mock FOCUS namespace dry-run — yes, very good idea
+
+This is exactly the kind of test that catches Helm/networking/NetworkPolicy issues before they hit FOCUS's cluster. I'd actually do this *before* sending the chart-handover email — it shows them you've validated cross-namespace traffic works on your side, makes the handover much smoother.
+
+Let me add this as a new step in todo.md.
+
+## Email template — handover (after the dry-run passes)
+
+This goes to the same FOCUS DevOps person, after the questions email and after Step 12.5 verifies the chart works in two-namespace mode. Use it once their answers are integrated:
+
+`Subject: Helm chart ready — taking over the deployment for fall-detection
+
+Hi <DevOps team>,
+
+Thanks for your answers to our setup questions. We've integrated everything
+into the chart and validated it locally with a two-namespace simulation
+(mock FOCUS namespace alongside ours). It now installs cleanly and all
+cross-namespace traffic — FHIR push, SSE — works.
+
+We're ready to hand it over for deployment in your cluster.
+
+------------------------------------------------------------
+What we're delivering
+------------------------------------------------------------
+
+1. The Helm chart at:
+   <git URL or tarball link>
+   tag: v1.0.0
+
+2. The Docker images (already pushed to your registry per your earlier
+   guidance):
+   <registry>/mcs-fall-detection/inference-server:v1.0.0
+   <registry>/mcs-fall-detection/fall-dashboard:v1.0.0
+   <registry>/mcs-fall-detection/mlflow-server:v1.0.0
+
+We're NOT sharing source code — the images contain the compiled artifact,
+which is all the cluster needs. If your security team requires a source
+audit, we can arrange a separate review under NDA.
+
+------------------------------------------------------------
+What you need to do (in your internal Git, never shared back to us)
+------------------------------------------------------------
+
+Create a `values-overrides.yaml` with the values you supplied:
+
+  namespaces:
+    ours:  mcs-fall-detection
+    focus: <your-namespace-name>
+
+  images:
+    pullSecretName: <your-imagePullSecret-name>
+    pullPolicy:     Always
+
+  ingress:
+    host: <your-ingress-hostname>
+
+  storageClass: <your-storageclass>
+
+  postgres:
+    password: <generate-and-store-in-your-Secret>
+
+  inferenceServer:
+    apiKey: <generate-and-store-in-your-Secret>
+
+  fhir:
+    serverUrl: http://<your-fhir-host>/fhir
+
+(The full list of overridable values is in `values.yaml` with comments.
+Anything not in your override file will use our defaults.)
+
+------------------------------------------------------------
+Install
+------------------------------------------------------------
+
+helm install mcs-fall-detection ./helm/fall-detection \
+  --namespace mcs-fall-detection \
+  --create-namespace \
+  --values values.yaml \
+  --values <your-values-overrides.yaml>
+
+Or via your GitOps pipeline if you use ArgoCD/Flux — same set of files.
+
+------------------------------------------------------------
+Smoke test after install
+------------------------------------------------------------
+
+1. kubectl get pods -n mcs-fall-detection
+   All 8 pods should reach Running. The migrate-job and bucket-creation
+   job should reach Completed.
+
+2. kubectl exec -n mcs-fall-detection deploy/inference-server -- curl http://localhost:8001/health
+   Expect: {"status":"ok","model_version":"v0",...}
+
+3. From the FOCUS namespace, test cross-namespace reach:
+   curl http://fall-dashboard.mcs-fall-detection.svc.cluster.local:8002/api/patients
+
+If any of these fail, we're available for a debug session.
+
+------------------------------------------------------------
+What we still need from you (post-install)
+------------------------------------------------------------
+
+- Confirmation the ingress is reachable from outside the cluster
+  (so the mobile app can POST to /predict)
+- The real FHIR server URL (we currently have a placeholder)
+- The SSO issuer URL + JWT role claim format
+  (separate sync — for the admin/caregiver role split)
+
+------------------------------------------------------------
+Support
+------------------------------------------------------------
+
+We're happy to be on a call during the first install if useful.
+Estimated install time: ~10 minutes once values-overrides.yaml is ready.
+
+Thanks,
+<your name>`
+
+**Key tones:**
+
+- Opens with "thanks for your answers" — reciprocates their effort
+- Explicit about not sharing source code (preempts a likely question)
+- Tells them the values they should override but doesn't list FOCUS-side specifics (they fill those in their own Git)
+- Smoke test commands they can run themselves to validate
+- Clear about what's still pending (ingress check, FHIR URL, SSO) so nothing falls through the cracks
+- Offer to be on call — most DevOps appreciate it but won't always take it up
+
+
+
+## 1. What "smoke test" means
+
+A quick, low-effort test that checks the basic "does anything obviously break" health of a system after you've assembled it. The term comes from electrical engineering: you turn on a new circuit board and watch for smoke. If no smoke, you proceed to real testing.
+
+For us, a smoke test of the chart looks like:
+
+1. `helm install ...` succeeds (no errors)
+2. `kubectl get pods` — all 8 pods reach `Running` or `Completed`
+3. `wget /health` on inference-server returns 200
+4. `wget /api/patients` on fall-dashboard returns JSON
+5. Cross-namespace probes (the 4 in `helm/mock-focus/test.ps1`) all pass
+6. Open the mock patient dashboard in the browser, manually trigger a fall via mock_app, see the live SSE flag flash red
+
+That's it. ~5 minutes of work. The point is to catch silly errors (missing files, wrong env vars, broken DNS) before deploying to a real cluster — not to comprehensively test every feature. Comprehensive testing comes after the smoke test passes.
+
+So when the README says "not yet smoke-tested end-to-end," it means: the chart was written, `helm lint` passes, but nobody has run `helm install` and watched it go green-pod-by-green-pod yet. That's exactly what Step 12.5 in `todo.md` is for.
+
+---
+
+## 2. Stop the mock-focus namespace
+
+Use the `teardown.ps1` script that's already in the chart folder:
+
+`.\helm\mock-focus\teardown.ps1`
+
+Equivalently (if you want to be explicit about what's happening):
+
+`helm uninstall mock-focus -n mock-focus
+kubectl delete namespace mock-focus`
+
+Verify it's gone:
+
+`helm list -A
+# should NOT show mock-focus
+
+kubectl get namespaces | findstr mock-focus
+# should print nothing`
+
+You can re-install later with `.\helm\mock-focus\install.ps1` whenever you want to validate cross-namespace traffic again. Tear-down doesn't damage the mock-focus chart itself — only the running cluster state.
+
+---
+
+## 3. "Run each service first vs helm-and-everything-runs" — actually the same pattern
+
+You're right that it *feels* different but it isn't. Both workflows have **two phases**: build images, then helm install. With mock-focus the script chained them together so you didn't notice. Let me draw it:
+
+### What mock-focus actually did
+
+`.\helm\mock-focus\build.ps1
+   │
+   ├── docker build mock-fhir.Dockerfile -t fd-mock-fhir
+   └── docker build mock-patient-dashboard.Dockerfile -t fd-mock-patient-dashboard
+                          ▲
+                          │  these images now in your local Docker cache
+                          │
+.\helm\mock-focus\install.ps1
+   │
+   ├── helm install mock-focus ./helm/mock-focus
+   │      │ K8s pulls 'influxdb:2.7' from Docker Hub
+   │      │ K8s loads 'fd-mock-fhir' from local cache (pullPolicy: Never)
+   │      │ K8s loads 'fd-mock-patient-dashboard' from local cache
+   │      ▼
+   │   pods start running
+   │
+   └── helm install mcs-fall-detection ./helm/fall-detection
+       │  ... but if you didn't build inference-server / fall-dashboard images,
+       │      this part fails with ImagePullBackOff
+       ▼
+       (fails silently here in your case)`
+
+So the build step DID happen for mock-focus — the script just wrapped it. Same pattern applies to the real chart, but I documented it as two separate steps to make the dependency explicit.
+
+### Why we need `docker build` at all (not just `helm install`)
+
+There are **two kinds of images** in the chart:
+
+| Image | Where it lives | Who downloads it |
+| --- | --- | --- |
+| `postgres:16-alpine`, `eclipse-mosquitto:2`, `minio/minio:latest`, `prom/prometheus:latest`, `grafana/grafana:10.4.0`, `ghcr.io/mlflow/mlflow:latest` | **Docker Hub / GHCR** (public) | K8s pulls them automatically when a pod starts |
+| `inference-server:latest`, `fall-dashboard:latest` | **only your laptop's Docker cache** (we haven't pushed them anywhere) | Nobody downloads them — they must already be there |
+
+The public ones K8s knows how to fetch. Our custom images aren't published anywhere yet, so K8s can only find them if they're sitting in the Docker daemon's image cache on the node it's running on. Docker Desktop K8s shares the daemon's cache, which is the only reason this works locally.
+
+**`pullPolicy: Never`** in `values.yaml` is what enforces "don't try to pull from a registry, just use the local cache." If we set it to `Always` (the production default), K8s would try to fetch `inference-server:latest` from a registry and get a 404.
+
+In FOCUS production:
+
+- We push our images to FOCUS's registry: `<focus-registry>/inference-server:v1.0.0`
+- `pullPolicy: Always` (or `IfNotPresent`)
+- `docker build` happens once on a CI runner, not on every developer's laptop
+- Then `helm install` is genuinely a one-step command
+
+So your intuition is correct that **eventually** it should be one command. We're at the local-dev stage where you're standing in for the CI runner — hence the manual `docker build` first.
+
+### The same logic applied to mock-focus
+
+For mock-focus, the same two image categories exist:
+
+| Image | Where it lives | Built by |
+| --- | --- | --- |
+| `influxdb:2.7` | Docker Hub | nobody — auto-pulled |
+| `fd-mock-fhir:latest`, `fd-mock-patient-dashboard:latest` | local Docker cache only | `build.ps1` |
+
+The `build.ps1` script handled the second category in advance. Then `install.ps1` ran `helm install` and everything came up.
+
+---
+
+## Bottom line
+
+When you tear down mock-focus and focus on the real chart, the workflow you'd run is:
+
+`# 1. Tear down mock-focus
+.\helm\mock-focus\teardown.ps1
+
+# 2. Build the two custom images (one-time, or after code changes)
+docker build -f inference_server/Dockerfile -t inference-server:latest .
+docker build -f fall_dashboard/Dockerfile  -t fall-dashboard:latest  .
+
+# 3. Install the real chart
+helm install mcs-fall-detection .\helm\fall-detection `
+    --namespace mcs-fall-detection `
+    --create-namespace `
+    --wait --timeout 5m
+
+# 4. Watch pods come up
+kubectl get pods -n mcs-fall-detection -w
+
+# 5. Smoke-test
+kubectl exec -n mcs-fall-detection deploy/inference-server -- wget -qO- http://localhost:8001/health
+kubectl port-forward -n mcs-fall-detection svc/fall-dashboard 8002:8002
+# then open http://localhost:8002/ in a browser`
+
+If pods don't all reach `Running` within ~5 minutes, paste the output of `kubectl get pods -n mcs-fall-detection` and `kubectl describe pod <stuck-pod-name> -n mcs-fall-detection` — we'll diagnose from there. That's exactly the smoke-test loop the README mentions.
+
+## 1. Yes — only the custom images need pushing to FOCUS's registry
+
+The split is between **public** images (already on Docker Hub) and **our** images (only on your laptop). FOCUS DevOps doesn't need our copies of public images — their cluster pulls those from Docker Hub directly.
+
+| Image | Push to FOCUS registry? | Why |
+| --- | --- | --- |
+| `inference-server` | **yes** | our code |
+| `fall-dashboard` | **yes** | our code |
+| `infrastructure/mlflow/` (the custom MLflow image with psycopg2/boto3) | **yes** | we customised the base image |
+| `ml_dashboard`, `server_health` | **yes** (when added to chart) | our code |
+| `postgres:16-alpine` | no | already on Docker Hub |
+| `eclipse-mosquitto:2` | no | already on Docker Hub |
+| `minio/minio:latest` | no | already on Docker Hub |
+| `prom/prometheus:latest` | no | already on Docker Hub |
+| `grafana/grafana:10.4.0` | no | already on Docker Hub |
+| `fd-mock-fhir`, `fd-mock-patient-dashboard` (mock-focus) | **never** | dev-only, simulates FOCUS, must not ship |
+
+So 3 images we push today (4–5 once ml_dashboard / server_health are added to the chart). The rest FOCUS's cluster pulls from public registries on its own.
+
+---
+
+## 2. `docker build` makes the image; `docker push` ships it — two separate steps
+
+Your understanding is **almost** right. `docker build` creates the image in your local Docker daemon's cache. To get it into a registry, you need a second step that tags it with the registry's address and pushes:
+
+`# Step 1 — build (already done by the chart README's Section 4)
+docker build -f inference_server/Dockerfile -t inference-server:latest .
+
+# Step 2 — tag for the destination registry (FOCUS-supplied URL)
+docker tag inference-server:latest registry.charite.de/mcs-fall-detection/inference-server:v1.0.0
+
+# Step 3 — push
+docker push registry.charite.de/mcs-fall-detection/inference-server:v1.0.0`
+
+Why the extra `docker tag`? Docker images are addressed by `<registry>/<namespace>/<name>:<tag>`. When you build with just `-t inference-server:latest`, the image is implicitly tagged for "no registry, just locally" — that's why `pullPolicy: Never` is the only way K8s finds it. To push, the image needs a name that includes the destination registry, hence the `docker tag` step.
+
+In CI the build/tag/push are typically one script. For local dev they stay separate so you don't accidentally push every test build.
+
+---
+
+## 3. Two namespaces — yes, this is from the values.yaml drift
+
+You're right. Earlier we updated all the **docs** to say `mcs-fall-detection`, but the chart's actual `values.yaml` still says `ours: fall-detection`. That's why both namespaces exist — let me verify and fix.
+
+---
+
+## 1. Yes — only the custom images need pushing to FOCUS's registry
+
+The split is between **public** images (already on Docker Hub) and **our** images (only on your laptop). FOCUS DevOps doesn't need our copies of public images — their cluster pulls those from Docker Hub directly.
+
+| Image | Push to FOCUS registry? | Why |
+| --- | --- | --- |
+| `inference-server` | **yes** | our code |
+| `fall-dashboard` | **yes** | our code |
+| `infrastructure/mlflow/` (the custom MLflow image with psycopg2/boto3) | **yes** | we customised the base image |
+| `ml_dashboard`, `server_health` | **yes** (when added to chart) | our code |
+| `postgres:16-alpine` | no | already on Docker Hub |
+| `eclipse-mosquitto:2` | no | already on Docker Hub |
+| `minio/minio:latest` | no | already on Docker Hub |
+| `prom/prometheus:latest` | no | already on Docker Hub |
+| `grafana/grafana:10.4.0` | no | already on Docker Hub |
+| `fd-mock-fhir`, `fd-mock-patient-dashboard` (mock-focus) | **never** | dev-only, simulates FOCUS, must not ship |
+
+So 3 images we push today (4–5 once ml_dashboard / server_health are added to the chart). The rest FOCUS's cluster pulls from public registries on its own.
+
+---
+
+## 2. `docker build` makes the image; `docker push` ships it — two separate steps
+
+Your understanding is **almost** right. `docker build` creates the image in your local Docker daemon's cache. To get it into a registry, you need a second step that tags it with the registry's address and pushes:
+
+`# Step 1 — build (already done by the chart README's Section 4)
+docker build -f inference_server/Dockerfile -t inference-server:latest .
+
+# Step 2 — tag for the destination registry (FOCUS-supplied URL)
+docker tag inference-server:latest registry.charite.de/mcs-fall-detection/inference-server:v1.0.0
+
+# Step 3 — push
+docker push registry.charite.de/mcs-fall-detection/inference-server:v1.0.0`
+
+Why the extra `docker tag`? Docker images are addressed by `<registry>/<namespace>/<name>:<tag>`. When you build with just `-t inference-server:latest`, the image is implicitly tagged for "no registry, just locally" — that's why `pullPolicy: Never` is the only way K8s finds it. To push, the image needs a name that includes the destination registry, hence the `docker tag` step.
+
+In CI the build/tag/push are typically one script. For local dev they stay separate so you don't accidentally push every test build.
+
+---
+
+## 3. Two namespaces — yes, this is from the values.yaml drift
+
+You're right. Earlier we updated all the **docs** to say `mcs-fall-detection`, but the chart's actual `values.yaml` still says `ours: fall-detection`. That's why both namespaces exist — let me verify and fix.
+
+### Will the legacy pods stop on their own?
+
+**No.** They keep running until you tell K8s to stop them. Pod state is independent of helm releases — even if helm forgets about them, K8s still owns the namespace and the resources inside it.
+
+### How to clean up
+
+First, see what's actually in the legacy namespace:
+
+`kubectl get all -n fall-detection`
+
+You'll likely see a mix of leftover resources from earlier attempts. To delete **everything** in that namespace in one shot, just delete the namespace itself — K8s cascades the deletion to every resource inside it:
+
+`kubectl delete namespace fall-detection`
+
+This is safe **as long as that namespace doesn't have data you care about**. PVCs in there are deleted too, so any Postgres data / MinIO objects in `fall-detection` will be gone. Since this is a leftover dev namespace from before we standardised the name, that's almost certainly fine — but worth eyeballing the output of the `get all` first.
+
+Verify after:
+
+`kubectl get namespaces
+# fall-detection should be gone within a few seconds
+# mcs-fall-detection should remain`
+
+### What going forward looks like
+
+Now that `values.yaml` is fixed:
+
+`# (Optional) tear down the current install
+helm uninstall mcs-fall-detection -n mcs-fall-detection
+kubectl delete namespace mcs-fall-detection
+
+# Re-install — both namespace.yaml template AND --namespace flag now agree on mcs-fall-detection
+helm install mcs-fall-detection .\helm\fall-detection `
+    --namespace mcs-fall-detection `
+    --create-namespace `
+    --wait --timeout 5m`
+
+Only one namespace gets created this time. The chart's own `namespace.yaml` template is technically redundant now (helm's `--create-namespace` flag handles it), but it's harmless — they refer to the same namespace name and Helm just no-ops the duplicate.
+
+If you want, I can remove the `templates/namespace.yaml` file entirely since `--create-namespace` is the standard way to do this — that would prevent this kind of drift from ever happening again. Say the word.
+
+----
+
+## 1. Why `mcs-fall-detection` still exists after uninstall
+
+This is a quirk of `helm install --create-namespace`:
+
+| Resource | Created by | Removed by `helm uninstall`? |
+| --- | --- | --- |
+| `fall-detection` namespace | Chart's `templates/namespace.yaml` (a tracked chart resource) | **yes** — that's why it's in `Terminating` |
+| `mcs-fall-detection` namespace | `--create-namespace` flag (outside the release lifecycle) | **no** |
+| Pods, Services, ConfigMaps, etc. | Chart templates (tracked) | **yes** — already gone |
+| PVCs from StatefulSets | Created by Kubernetes when StatefulSet pods come up | **no** — survives uninstall by design |
+
+So the asymmetry: **the chart's namespace.yaml template was deleted; the helm-flag namespace stayed.** This is the same drift issue from before — the chart's template referenced `fall-detection` (per the old values.yaml) so that's what got cleaned up. The `mcs-fall-detection` namespace persists with the PVCs inside it.
+
+To fully clean up `mcs-fall-detection`:
+
+`kubectl delete namespace mcs-fall-detection`
+
+That deletes the namespace and **everything inside it including PVCs** — which leads us to your second question.
+
+---
+
+## 2. Stop pods without deleting (keep PVCs)
+
+Yes, several options depending on how aggressively you want to "stop":
+
+### Option A — `helm uninstall` keeps PVCs already
+
+You've actually already done this for the right thing. **`helm uninstall` does not delete StatefulSet PVCs by default.** That's a deliberate StatefulSet design: the data outlives the workload. Check what's still there:
+
+`kubectl get pvc -n mcs-fall-detection
+# you should see: data-postgres-0, data-minio-0, etc. — all "Bound"`
+
+So your Postgres data and MinIO objects are safe right now. As long as you DON'T run `kubectl delete namespace mcs-fall-detection`, the PVCs survive. To bring everything back:
+
+`helm install mcs-fall-detection .\helm\fall-detection `
+    --namespace mcs-fall-detection `
+    --wait --timeout 5m`
+
+The new pods will re-attach to the existing PVCs (because StatefulSet PVCs are bound by name: `data-postgres-0` always attaches to `postgres-0`). Postgres comes up with all the data from your last run.
+
+### Option B — Scale to zero (keep release, just pause workloads)
+
+If you don't want to uninstall but just stop the running pods:
+
+`# Stops every Deployment / StatefulSet by setting replicas to 0
+kubectl scale deployment --all --replicas=0 -n mcs-fall-detection
+kubectl scale statefulset --all --replicas=0 -n mcs-fall-detection`
+
+The Deployments / StatefulSets still exist; their pod count goes to zero. PVCs stay attached. To resume:
+
+`kubectl scale deployment --all --replicas=1 -n mcs-fall-detection
+kubectl scale statefulset --all --replicas=1 -n mcs-fall-detection`
+
+This is faster than uninstall + reinstall and preserves the helm release record.
+
+### Quick comparison
+
+| Want | Command | What's kept |
+| --- | --- | --- |
+| Stop pods, keep everything else | `kubectl scale ... --replicas=0` | Deployments, Services, PVCs, helm release |
+| Uninstall workloads, keep data | `helm uninstall` (you've done this) | PVCs, namespace |
+| Full clean wipe | `helm uninstall && kubectl delete namespace` | nothing |
+
+Right now you're at the second row — your data is safe. If you want the pods back without losing data, just `helm install` again.
+
+---
+
+## 3. Is the namespace mismatch fixed?
+
+**Yes**, in the source files. I updated `values.yaml` in my last response:
+
+`namespaces:
+  ours: mcs-fall-detection    # confirmed 2026-04-29; FOCUS DevOps may override`
+
+So from the **next** install onwards, the chart's `namespace.yaml` template will create `mcs-fall-detection` (matching what `--namespace` says), and you won't see two namespaces anymore.
+
+The current cluster state still has the leftover `mcs-fall-detection` namespace from before the fix (because `--create-namespace` made it). To start completely fresh:
+
+`# 1. Wipe the leftover namespace (also deletes its PVCs)
+kubectl delete namespace mcs-fall-detection
+
+# 2. Re-install — values.yaml + --namespace flag now agree
+helm install mcs-fall-detection .\helm\fall-detection `
+    --namespace mcs-fall-detection `
+    --create-namespace `
+    --wait --timeout 5m
+
+# 3. Confirm there's only one namespace, not two
+kubectl get namespaces | findstr -i fall
+# expected: only "mcs-fall-detection   Active   <new age>"`
+
+If `kubectl get pvc -n mcs-fall-detection` shows old PVCs you'd rather keep (you have inference history / model registry data you want preserved), just skip step 1 and reinstall on top — the existing PVCs will be reused.
+
+---
+
+## Optional: prevent this from happening again
+
+The chart contains a `templates/namespace.yaml` that creates the namespace. But `--create-namespace` does the same thing. Having both is what caused the drift to be visible — when values.yaml said `fall-detection` and the flag said `mcs-fall-detection`, two namespaces appeared.
+
+The cleaner pattern is: **delete the chart's namespace.yaml template entirely** and rely on `--create-namespace` only. Then `values.yaml` → `namespaces.ours` becomes a setting that templates use to *target* the namespace (e.g., for NetworkPolicies that reference it), not to *create* it.
+
+Want me to remove `helm/fall-detection/templates/namespace.yaml`? It's a 5-second edit and prevents this confusion forever. Alternatively we leave it alone — the values.yaml fix is enough now that the names match.
+
+## The four system namespaces — DO NOT TOUCH
+
+These are Kubernetes built-ins. Every cluster has them. They're not yours to manage:
+
+| Namespace | Purpose |
+| --- | --- |
+| **`default`** | Where resources go if you don't specify `--namespace` and don't have a namespace set as your context default. Best practice: don't put your own resources here — make a real namespace. |
+| **`kube-system`** | The K8s control plane: API server, scheduler, controller-manager, CoreDNS (the cluster's DNS resolver), kube-proxy. **Do not touch.** Breaking this breaks the cluster. |
+| **`kube-public`** | World-readable namespace, even by unauthenticated users. Holds cluster-info ConfigMaps that bootstrapping nodes need. Almost empty. |
+| **`kube-node-lease`** | Lightweight heartbeats. Each kubelet writes a `Lease` object here every few seconds so the control plane knows the node is alive. Internal mechanism. |
+
+Curiosity check: `kubectl get pods -n kube-system` — you'll see ~10–15 pods, all part of K8s itself (`coredns-...`, `etcd-docker-desktop`, `kube-apiserver-docker-desktop`, etc.). That's how Kubernetes is built — it runs itself as pods inside its own first namespace.
+
+So your `kubectl get namespaces` output is **completely clean and normal**: 4 system namespaces and nothing else. Once you do the build → install → check loop above, you'll see `mcs-fall-detection` appear as the 5th.
+
+## Order of docker k8s operation: build images **first**, then helm install
+
+Build comes first. Why:
+
+`helm install
+   ▼
+K8s scheduler creates pods
+   ▼
+each pod tries to start its container
+   ▼
+container runtime looks for the image
+   │
+   ├─ pullPolicy: Always → pulls from registry
+   └─ pullPolicy: Never → looks in local Docker cache only
+                          │
+                          └─ if not found → ImagePullBackOff (pod stays Pending forever)`
+
+Since the chart uses `pullPolicy: Never`, the images **must already be in the local Docker cache** before `helm install` runs. Otherwise the pods just sit in `ImagePullBackOff` until you manually build the images (and then they self-recover within a minute).
+
+So the right order:
+
+`# 1. Build (puts images in local Docker cache)
+docker build -f inference_server/Dockerfile -t inference-server:latest .
+docker build -f fall_dashboard/Dockerfile  -t fall-dashboard:latest  .
+
+# 2. Verify they're there
+docker images | findstr -E "inference-server|fall-dashboard"
+# expect 2 lines
+
+# 3. Now install — pods can find their images immediately
+helm install mcs-fall-detection .\helm\fall-detection `
+    --namespace mcs-fall-detection `
+    --create-namespace `
+    --wait --timeout 5m`
+
+If you forget step 1, step 3 hangs at "waiting for pods" because the image-less pods never become Ready. The recovery is just `docker build`-ing then — K8s retries automatically every ~30s.
+
+**Side note on Docker Compose Postgres:** you don't need to stop it. The K8s Postgres lives at `postgres.mcs-fall-detection.svc.cluster.local:5432` (in-cluster only), while Docker Compose's binds to host `localhost:5432`. They don't conflict. But if you accidentally point your Python venv (`.env` → `DATABASE_URL`) at one while running services that wrote to the other, you'll see "where's my data?" confusion. Pick one path at a time.
