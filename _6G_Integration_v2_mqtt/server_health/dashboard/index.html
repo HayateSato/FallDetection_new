@@ -36,32 +36,6 @@
       </div>
     </section>
 
-    <section class="card">
-      <details>
-        <summary><h2 style="display:inline">What does each status mean?</h2></summary>
-        <div class="guide">
-          <p><strong>healthy</strong> — service responded to its probe within 3 seconds.</p>
-          <p><strong>degraded</strong> — service is partially configured (e.g. file-based MLflow
-             instead of a tracking server). Not an outage, but worth noting.</p>
-          <p><strong>down</strong> — service did not respond, or responded with an error code.
-             The "details" line tells you why.</p>
-          <p><strong>The overall banner</strong> is healthy only when every service is healthy.
-             If any one service is down, the banner turns red. If only degraded states are present,
-             the banner is amber.</p>
-
-          <h3>What this dashboard does NOT show</h3>
-          <ul>
-            <li>Latency, throughput, request rates → Grafana <code>ml_server_overview</code></li>
-            <li>Model confidence drift → Grafana <code>model_performance</code></li>
-            <li>Logs → <code>kubectl logs</code> in production, or local terminal output</li>
-            <li>Pod CPU/memory → <code>kubectl top pods</code> or Grafana</li>
-          </ul>
-          <p>This is intentional. The job here is "is anything obviously broken right now?"
-             For investigation you go to the right tool — not this page.</p>
-        </div>
-      </details>
-    </section>
-
   </main>
 
   <script src="app.js"></script>

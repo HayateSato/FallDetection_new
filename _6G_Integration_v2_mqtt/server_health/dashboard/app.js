@@ -7,6 +7,36 @@ const OVERALL_TEXT = {
 };
 const OVERALL_ICON = { healthy: '●', degraded: '●', down: '●' };
 
+// Namespace + pod/deployment identifier used by `kubectl logs`.
+// Postgres + MinIO are StatefulSets so we target the pod by index, not the deploy.
+const NAMESPACE = 'mcs-fall-detection';
+const LOG_TARGETS = {
+  inference_server: 'deploy/inference-server',
+  fall_dashboard:   'deploy/fall-dashboard',
+  mqtt_broker:      'deploy/mqtt-broker',
+  postgres:         'pod/postgres-0',
+  mlflow:           'deploy/mlflow',
+  minio:            'pod/minio-0',
+};
+
+function kubectlLogsCmd(serviceName) {
+  const target = LOG_TARGETS[serviceName];
+  if (!target) return null;
+  return `kubectl logs ${target} -n ${NAMESPACE} --tail=200 -f`;
+}
+
+async function copyCmd(btn, cmd) {
+  try {
+    await navigator.clipboard.writeText(cmd);
+    const original = btn.textContent;
+    btn.textContent = 'Copied';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = original; btn.classList.remove('copied'); }, 1200);
+  } catch (e) {
+    btn.textContent = 'Copy failed';
+  }
+}
+
 async function refresh() {
   const overallCard = document.querySelector('.overall-card');
   const services   = document.getElementById('services');
@@ -26,22 +56,41 @@ async function refresh() {
     document.getElementById('overall-sub').textContent   =
       `Last checked ${new Date().toLocaleTimeString()}  •  ${data.services.length} services`;
 
-    services.innerHTML = data.services.map(s => `
-      <div class="service-cell ${s.status}">
-        <div class="service-name">
-          <span class="service-status-dot ${s.status}"></span>
-          ${escapeHtml(s.name)}
-          <span style="margin-left:auto; font-size:12px; color:#94a3b8; font-weight:400;">
-            ${escapeHtml(s.status)}
-          </span>
+    services.innerHTML = data.services.map(s => {
+      const cmd = kubectlLogsCmd(s.name);
+      const logsBlock = cmd ? `
+        <details class="logs-details">
+          <summary>View logs (kubectl)</summary>
+          <div class="logs-cmd-row">
+            <code class="logs-cmd">${escapeHtml(cmd)}</code>
+            <button class="btn-copy" data-cmd="${escapeHtml(cmd)}">Copy</button>
+          </div>
+          <div class="logs-hint">Run in a terminal with cluster access. <code>-f</code> streams; drop it for a snapshot.</div>
+        </details>
+      ` : '';
+      return `
+        <div class="service-cell ${s.status}">
+          <div class="service-name">
+            <span class="service-status-dot ${s.status}"></span>
+            ${escapeHtml(s.name)}
+            <span style="margin-left:auto; font-size:12px; color:#94a3b8; font-weight:400;">
+              ${escapeHtml(s.status)}
+            </span>
+          </div>
+          <div class="service-details">${escapeHtml(s.details || '—')}</div>
+          <div class="service-meta">
+            <span>${escapeHtml(s.url || '')}</span>
+            <span>${s.latency_ms}ms</span>
+          </div>
+          ${logsBlock}
         </div>
-        <div class="service-details">${escapeHtml(s.details || '—')}</div>
-        <div class="service-meta">
-          <span>${escapeHtml(s.url || '')}</span>
-          <span>${s.latency_ms}ms</span>
-        </div>
-      </div>
-    `).join('');
+      `;
+    }).join('');
+
+    // Wire copy buttons after re-render
+    services.querySelectorAll('.btn-copy').forEach(btn => {
+      btn.addEventListener('click', () => copyCmd(btn, btn.dataset.cmd));
+    });
   } catch (e) {
     overallCard.className = 'card overall-card down';
     document.getElementById('overall-text').textContent = 'Cannot reach server_health backend';
