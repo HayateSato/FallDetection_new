@@ -492,12 +492,17 @@ in both Dockerfiles must be verified. **Must pass before Step 9.15 (push to regi
 Confirmed end-to-end inside the cluster:
 - All 10 pods of `mcs-fall-detection` namespace running (incl. ml-dashboard + server-health)
 - All 3 pods of `mock-focus` namespace running
-- Cross-namespace traffic: 4/4 test.ps1 tests PASS
+- Cross-namespace traffic: 4/4 mock-focus test.ps1 tests PASS
+- **fall-detection test.ps1: 8/8 probes PASS** (in-cluster self + cross-service via K8s DNS + Grafana provisioning subdir mount). Confirms gotchas #12-16 fixes are co-existing healthily.
 - MQTT alert flow: mock_app → inference_server → MQTT → fall_dashboard → SSE → mock-patient-dashboard (red card appears, click to acknowledge clears it)
 - fall_history written to Postgres, retrievable via /api/falls
 - ml-dashboard UI: retrain triggered → MLflow run logged → promote to Production → hot-swap inference-server to new model → rollback to v0 — all confirmed
 - server-health: all 6 service probes return healthy
+- Grafana K8s dashboards rendering with 3 dashboards in "Fall Detection" folder
 - (Skipped: NetworkPolicy enforcement — Docker Desktop CNI doesn't enforce, needs kind+Calico)
+
+**Orchestration scripts (added 2026-04-29) at `helm/fall-detection/`:**
+`build.ps1` (4 images), `install.ps1` (helm upgrade --install + --wait + safety check on kubectl context), `port-forward.ps1` (7 tunnels in separate windows), `test.ps1` (8 probes), `teardown.ps1`. Match the pattern of `helm/mock-focus/`.
 
 **Why:** before handing the chart to FOCUS DevOps we should prove cross-namespace
 traffic actually works in K8s. The current local stack is single-namespace

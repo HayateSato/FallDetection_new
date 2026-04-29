@@ -38,7 +38,7 @@ Write-Host "================================================"
 # --- Custom services ------------------------------------------------------
 ProbeHttp "deploy/inference-server" "http://localhost:8001/health"      '"status":"ok"'         "1/8 inference-server self"
 ProbeHttp "deploy/fall-dashboard"   "http://localhost:8002/api/patients" '"patients"'           "2/8 fall-dashboard self"
-ProbeHttp "deploy/ml-dashboard"     "http://localhost:8004/api/status"  '"loaded_version"|"current"|"model"'  "3/8 ml-dashboard self"
+ProbeHttp "deploy/ml-dashboard"     "http://localhost:8004/api/status"  '"inference_server"|"registry"'  "3/8 ml-dashboard self"
 ProbeHttp "deploy/server-health"    "http://localhost:8006/api/status"  '"overall"'             "4/8 server-health self"
 
 # --- Cross-service via K8s DNS -------------------------------------------
@@ -49,14 +49,21 @@ ProbeHttp "deploy/server-health"  "http://fall-dashboard:8002/api/patients" '"pa
 ProbeHttp "deploy/ml-dashboard"   "http://mlflow:5000/health"            'OK|ok'          "7/8 ml-dashboard -> mlflow (DNS rebinding allowed)"
 
 # --- Grafana provisioning sanity ------------------------------------------
-# Confirms gotcha #16 fix is in place - Grafana's API reports the 3 dashboards loaded.
+# Confirms gotcha #16 fix is in place: ConfigMap projection lands the provisioning
+# YAMLs in the SUBDIRECTORY paths Grafana scans (not at the mount root). Checking
+# the filesystem avoids needing the admin password (which the user typically
+# changes from the default on first login).
 Write-Host ""
-Write-Host "[8/8] Grafana provisioning loaded dashboards"
-$out = kubectl exec -n mcs-fall-detection deploy/grafana -- wget -qO- --user=admin --password=admin "http://localhost:3000/api/search?type=dash-db" 2>&1
-if ($out -match "ml_server_overview" -and $out -match "model_performance" -and $out -match "fall_events_timeline") {
-    Pass "all 3 dashboards present"
+Write-Host "[8/8] Grafana provisioning files at expected subdirectory paths"
+$dsExists   = kubectl exec -n mcs-fall-detection deploy/grafana -- test -f /etc/grafana/provisioning/datasources/datasources.yaml 2>&1
+$dsCode = $LASTEXITCODE
+$dashExists = kubectl exec -n mcs-fall-detection deploy/grafana -- test -f /etc/grafana/provisioning/dashboards/dashboards.yaml 2>&1
+$dashCode = $LASTEXITCODE
+$jsonExists = kubectl exec -n mcs-fall-detection deploy/grafana -- ls /var/lib/grafana/dashboards 2>&1
+if ($dsCode -eq 0 -and $dashCode -eq 0 -and $jsonExists -match "ml_server_overview.json" -and $jsonExists -match "model_performance.json" -and $jsonExists -match "fall_events_timeline.json") {
+    Pass "datasources.yaml + dashboards.yaml + 3 dashboard JSONs all mounted at expected paths"
 } else {
-    Fail "expected 3 dashboards in /api/search response - got: $out"
+    Fail "missing provisioning files (ds=$dsCode dash=$dashCode jsons=$jsonExists)"
 }
 
 # --- Summary --------------------------------------------------------------
