@@ -89,7 +89,7 @@ from config.settings import (
     RESAMPLING_METHOD,
     WINDOW_SIZE_SECONDS,
 )
-from fhir_converter import build_fhir_observation
+from inference_server.fhir_converter import build_fhir_observation
 
 # ---------------------------------------------------------------------------
 # Logging

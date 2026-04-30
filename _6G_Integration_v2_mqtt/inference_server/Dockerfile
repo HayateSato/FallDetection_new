@@ -7,7 +7,6 @@ COPY shared_db/ shared_db/
 COPY ml_pipeline/ ml_pipeline/
 COPY config/ config/
 COPY model/ model/
-COPY fhir_converter.py .
 
 COPY inference_server/requirements.txt inference_server/requirements.txt
 RUN pip install --no-cache-dir -r inference_server/requirements.txt
