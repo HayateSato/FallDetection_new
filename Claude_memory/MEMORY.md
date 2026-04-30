@@ -67,6 +67,9 @@ Smoke-test PASSED 2026-04-29; 10 pods Running. Full local-equivalent flow verifi
 Active folder: `_6G_Integration_v2_mqtt/`. Redis version frozen at `_6G_Integration_v2_redis/`.
 **See [project_6g_mqtt.md](project_6g_mqtt.md) for current architecture, run commands, open steps, and gotchas.**
 
+## FOCUS DevOps meeting decisions (2026-04-29)
+Hardware budget ≤15 GB RAM, k3s + Traefik, single namespace, no NetworkPolicy, FHIR opt-out, registry `registry-smarko-health.de` + pull secret `mcs-labs`, new clinical 3-state dashboard requirement. Mohammed taking over K8s integration. See [project_focus_meeting_decisions.md](project_focus_meeting_decisions.md).
+
 **See `REFACTOR_DOCUS/deployment_architecture.md` for two-namespace breakdown and data source table.**
 
 **Architecture (2 MQTT clients only):**
