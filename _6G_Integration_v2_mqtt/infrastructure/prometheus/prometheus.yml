@@ -1,0 +1,40 @@
+# Prometheus scrape configuration — Fall Detection inference server
+#
+# The inference server runs on the HOST (not inside Docker) during local dev.
+# host.docker.internal resolves to the host machine from inside a Docker container
+# on Windows (Docker Desktop) and macOS. On Linux, use the host IP instead.
+#
+# Reload config without restart:
+#   curl -X POST http://localhost:9090/-/reload
+
+global:
+  scrape_interval:     15s   # pull metrics every 15 seconds
+  evaluation_interval: 15s   # evaluate alert rules every 15 seconds
+  scrape_timeout:      10s
+
+  # Labels attached to all time series from this Prometheus instance
+  external_labels:
+    environment: dev
+    project:     fall_detection
+
+# ── Scrape jobs ──────────────────────────────────────────────────────────────
+
+scrape_configs:
+
+  # inference_server — custom fall detection metrics + FastAPI HTTP metrics
+  # Endpoint: GET /metrics  (added by prometheus_fastapi_instrumentator)
+  - job_name: inference_server
+    static_configs:
+      - targets:
+          - host.docker.internal:8001   # Windows/macOS Docker Desktop
+          # - 172.17.0.1:8001           # Linux: use docker0 bridge IP instead
+    metrics_path: /metrics
+    scrape_interval: 15s
+    relabel_configs:
+      - target_label: service
+        replacement:  inference_server
+
+  # Prometheus self-monitoring
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']

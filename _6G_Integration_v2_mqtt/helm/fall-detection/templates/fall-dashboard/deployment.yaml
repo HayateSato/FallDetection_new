@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fall-dashboard
+  namespace: {{ .Values.namespaces.ours }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fall-dashboard
+  template:
+    metadata:
+      labels:
+        app: fall-dashboard
+    spec:
+      initContainers:
+        - name: alembic-migrate
+          image: {{ .Values.registry }}/{{ .Values.images.fallDashboard.repository }}:{{ .Values.images.fallDashboard.tag }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          command: ["alembic", "upgrade", "head"]
+          envFrom:
+            - configMapRef:
+                name: fall-detection-config
+          env:
+            - name: DATABASE_URL
+              value: "postgresql+psycopg2://{{ .Values.postgres.user }}:{{ .Values.postgres.password }}@postgres:{{ .Values.postgres.port }}/{{ .Values.postgres.database }}"
+      containers:
+        - name: fall-dashboard
+          image: {{ .Values.registry }}/{{ .Values.images.fallDashboard.repository }}:{{ .Values.images.fallDashboard.tag }}
+          imagePullPolicy: {{ .Values.images.pullPolicy }}
+          ports:
+            - containerPort: {{ .Values.fallDashboard.port }}
+          envFrom:
+            - configMapRef:
+                name: fall-detection-config
+          resources:
+            requests:
+              cpu:    {{ .Values.resources.fallDashboard.requests.cpu }}
+              memory: {{ .Values.resources.fallDashboard.requests.memory }}
+            limits:
+              cpu:    {{ .Values.resources.fallDashboard.limits.cpu }}
+              memory: {{ .Values.resources.fallDashboard.limits.memory }}
+          readinessProbe:
+            httpGet:
+              path: /api/patients
+              port: {{ .Values.fallDashboard.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /api/patients
+              port: {{ .Values.fallDashboard.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 30

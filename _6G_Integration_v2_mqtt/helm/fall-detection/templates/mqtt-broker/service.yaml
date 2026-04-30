@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mqtt-broker
+  namespace: {{ .Values.namespaces.ours }}
+spec:
+  selector:
+    app: mqtt-broker
+  ports:
+    - name: mqtt
+      port: {{ .Values.mqtt.port }}
+      targetPort: {{ .Values.mqtt.port }}
+    - name: websocket
+      port: {{ .Values.mqtt.websocketPort }}
+      targetPort: {{ .Values.mqtt.websocketPort }}

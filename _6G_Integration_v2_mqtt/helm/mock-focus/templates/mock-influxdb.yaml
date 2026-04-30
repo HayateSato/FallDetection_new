@@ -1,0 +1,67 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: mock-influxdb
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: mock-influxdb
+spec:
+  serviceName: mock-influxdb
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mock-influxdb
+  template:
+    metadata:
+      labels:
+        app: mock-influxdb
+    spec:
+      containers:
+        - name: influxdb
+          image: {{ .Values.mockInfluxDB.image }}
+          imagePullPolicy: {{ .Values.mockInfluxDB.imagePullPolicy }}
+          ports:
+            - containerPort: {{ .Values.mockInfluxDB.port }}
+          env:
+            - name: DOCKER_INFLUXDB_INIT_MODE
+              value: setup
+            - name: DOCKER_INFLUXDB_INIT_ORG
+              value: {{ .Values.mockInfluxDB.initOrg | quote }}
+            - name: DOCKER_INFLUXDB_INIT_BUCKET
+              value: {{ .Values.mockInfluxDB.initBucket | quote }}
+            - name: DOCKER_INFLUXDB_INIT_USERNAME
+              value: {{ .Values.mockInfluxDB.initUser | quote }}
+            - name: DOCKER_INFLUXDB_INIT_PASSWORD
+              value: {{ .Values.mockInfluxDB.initPassword | quote }}
+            - name: DOCKER_INFLUXDB_INIT_ADMIN_TOKEN
+              value: {{ .Values.mockInfluxDB.initToken | quote }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/influxdb2
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: {{ .Values.mockInfluxDB.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 5
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: {{ .Values.mockInfluxDB.storage }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mock-influxdb
+  namespace: {{ .Values.namespace }}
+spec:
+  selector:
+    app: mock-influxdb
+  ports:
+    - port: {{ .Values.mockInfluxDB.port }}
+      targetPort: {{ .Values.mockInfluxDB.port }}
+      protocol: TCP

@@ -1,0 +1,61 @@
+Goal: to integrate fall algorithm in their system 
+current goal: to provide the fall predection result in FIHR format
+
+obstacles:
+ - I do not know their full stack and why they want the algorithm
+
+What I know:
+ - there are two partners (Charite and FOCUS)
+ - Charite conducts medical trials with elderies and elderies wear our wearables to collect physiological data
+ - FOCUS is a technical operator (at least they are the one who developed) and they developed a moniroting system where it shows a list of elderies 
+ - they requested us to provide our fall algorithm 
+ - they have their influxDB running in their stack and some kind of FHIR server. 
+ - they keep mentiong docker so i guess they want the algorithm stack to be dockernized
+ - their monitoring system has a dashobard, which looked like a just a list of registered/active patients and they want to make it noticeable when one of the listed patients experiences a fall on the screen on real time
+ - also, they want to have the history of which patient has had (semi) fall events so i guess i need to keep postgres component in my stack 
+
+
+What i do not know:
+ - the goal & purpose of medical trial 
+ - size of medical trial & details of the trial subjects 
+ - is the trial continous (if so, for how long?) or limited to controlled environment
+ - the purpose of fall detection integration - is it that they want to delegate monitoring tasks to algorihtm from human or do they want to collect other physiological data duing the fall event or they want something else? (they want to fine tune the model etc.)
+ - the components in their stack - what is already living and how their dashboard is built and how i can make my algorithm integrate and communiate with their exsiting stack
+ - my colleague are saying that they are using FHIR server but i do not know which one 
+
+
+What's still missing for later steps: 
+ - PostgreSQL history, 
+ - trigger client for InfluxDB polling, 
+ - Redis for real-time caregiver dashboard notification, 
+ - Docker Compose file for the FOCUS stack.
+
+
+what needs to be changed:
+ - only select one model (clarify if the input is converted into g or left as LSB)
+ - fix the sensor type and senor sampling_rate
+ - remove emergency person 
+ - FHIR format conversion 
+ - user_name / device identifier implementation 
+ - clarify the input/output of predict POST request 
+ ======== NEW ===========================================
+ - create inference client who sends POST request to API server of the ineference component/system. Inference client should also poll from influxDB 
+ - for now suppose that inference client is the caregiver dashboard, when the carefgiver dashboard receives the resposne, the result of ML inference should be converted to FHIR
+ - inference client should also have a storage stack inside where it stores a history of which patient has fallen when and how many times 
+ - Redis real time event publisher from inference server component to event subscriber inside inference client = caregiver dashbaord 
+ - (skip dokcer compose we give out to the FOCUS stack for now)
+
+
+
+ ---- WHAT I WILL NEED ----
+ - explanation about how the model is trained
+ - pipeline of the system 
+ - questions - what i will need to know to integreate this & what they might ask
+
+
+ Lets do this this afternoon
+-------------------------------
+- prep for presentation 
+- prep for meeting agenda
+- prep for the MLops part (who will monitor?)
+

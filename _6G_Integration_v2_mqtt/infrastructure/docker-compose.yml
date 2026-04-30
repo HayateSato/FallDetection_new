@@ -1,0 +1,186 @@
+# Infrastructure services for local development — Fall Detection / 6G Integration
+#
+# This compose file starts the *supporting* services only.
+# Python services (inference_server, fall_dashboard, mock_app) are run manually
+# in separate terminals so you can see logs and restart quickly during development.
+#
+# Run from _6G_Integration_v2_mqtt/ directory:
+#   docker-compose -f infrastructure/docker-compose.yml up
+#
+# Then start the Python services in separate terminals (see project README):
+#   uvicorn inference_server.server:app --host 0.0.0.0 --port 8001
+#   python -m fall_dashboard.main
+#   python -m local_dev.mock_app.main       ← local testing only (simulates mobile app)
+#
+# Service URLs:
+#   Grafana         http://localhost:3000  (admin / admin)
+#   Prometheus      http://localhost:9090
+#   MQTT broker     localhost:1883
+#   Postgres        localhost:5432  (fall_user / fall_pass)
+#
+# Production note: replace host.docker.internal with the actual service name
+# when all services run inside Docker (Step 9 Helm chart).
+
+services:
+
+  # ── PostgreSQL — shared database for inference_log + fall_history + MLflow ──
+  postgres:
+    image: postgres:16-alpine
+    container_name: fall_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:     fall_user
+      POSTGRES_PASSWORD: fall_pass
+      POSTGRES_DB:       fall_detection
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fall_user -d fall_detection"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── MQTT broker — routes fall/alert/<patient_id> between mock_app and caregiver ──
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: fall_mqtt
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "9001:9001"   # WebSocket port (optional — useful for browser-based debug)
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mqtt_data:/mosquitto/data
+      - mqtt_logs:/mosquitto/log
+
+  # ── Prometheus — scrapes /metrics from inference_server ──────────────────────
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: fall_prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=30d"
+      - "--web.enable-lifecycle"   # allows hot-reload via POST /-/reload
+
+  # ── Mock FHIR Server — simulates FOCUS namespace (demographics only) ─────────
+  # NOT part of our production namespace. Replace with real FOCUS FHIR URL in K8s.
+  # Patient Dashboard (Isa's app) calls GET /fhir/Patient/{id} for demographics.
+  mock_focus_fhir:
+    image: python:3.12-slim
+    container_name: mock_focus_fhir
+    restart: unless-stopped
+    working_dir: /app
+    command: >
+      sh -c "pip install fastapi uvicorn python-dotenv --quiet &&
+             uvicorn local_dev.mock_focus.fhir_server:app --host 0.0.0.0 --port 8003"
+    ports:
+      - "8003:8003"
+    volumes:
+      - ..:/app
+    environment:
+      PYTHONPATH: /app
+
+  # ── MinIO — MLflow artifact store (model .pkl files) ────────────────────────
+  # S3-compatible object store. MLflow logs .pkl artifacts here during retrain.
+  # inference_server downloads from here via /model/switch (MLflow registry path).
+  #
+  # Console: http://localhost:9001  (minioadmin / minioadmin)
+  # S3 API:  http://localhost:9000
+  #
+  # First-time setup: open console → create bucket named "mlflow-artifacts"
+  # Add to .env for retrain.py and MLflow:
+  #   MLFLOW_S3_ENDPOINT_URL=http://localhost:9000
+  #   AWS_ACCESS_KEY_ID=minioadmin
+  #   AWS_SECRET_ACCESS_KEY=minioadmin
+  minio:
+    image: minio/minio:latest
+    container_name: fall_minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"   # S3 API
+      - "9002:9002"   # Web console (9001 is taken by MQTT WebSocket)
+    environment:
+      MINIO_ROOT_USER:     minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    command: server /data --console-address ":9002"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── MLflow Tracking Server — experiment store + model registry ─────────────
+  # Backend store: Postgres "mlflow" database (created by init.sql)
+  # Artifact root: MinIO bucket "mlflow-artifacts" (created on first MinIO start)
+  # UI:            http://localhost:5000
+  #
+  # On switch from SQLite (mlruns.db): existing experiments and registered model
+  # versions do NOT migrate. After switching, re-run retrain.py --register and
+  # re-set the Production alias for the new Version 1.
+  mlflow:
+    build: ./mlflow
+    container_name: fall_mlflow
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    environment:
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      AWS_ACCESS_KEY_ID:      minioadmin
+      AWS_SECRET_ACCESS_KEY:  minioadmin
+    command:
+      - server
+      - --backend-store-uri
+      - postgresql+psycopg2://fall_user:fall_pass@postgres:5432/mlflow
+      - --default-artifact-root
+      - s3://mlflow-artifacts/
+      - --host
+      - 0.0.0.0
+      - --port
+      - "5000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+
+  # ── Grafana — 3 dashboards: server overview, model performance, fall timeline ─
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: fall_grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER:     admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP:     "false"
+      # Disable login prompt for local dev (remove in production)
+      GF_AUTH_ANONYMOUS_ENABLED:  "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - postgres
+
+volumes:
+  postgres_data:
+  prometheus_data:
+  grafana_data:
+  mqtt_data:
+  mqtt_logs:
+  minio_data:

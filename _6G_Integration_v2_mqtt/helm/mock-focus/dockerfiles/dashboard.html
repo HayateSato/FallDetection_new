@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Mock Patient Dashboard — FOCUS namespace simulation</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: system-ui, sans-serif; background: #f1f5f9; padding: 24px; color: #0f172a; }
+  h1 { margin-bottom: 8px; }
+  .subtitle { color: #64748b; margin-bottom: 24px; font-size: 14px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; }
+  .card { background: white; padding: 16px; border-radius: 8px; border: 1px solid #cbd5e1; }
+  .card.help     { background: #fee2e2; border-color: #ef4444; cursor: pointer; }
+  .card.unknown  { background: #fef3c7; border-color: #f59e0b; cursor: pointer; }
+  .card.help:hover    { background: #fecaca; }
+  .card.unknown:hover { background: #fde68a; }
+  .card-name  { font-size: 18px; font-weight: 700; margin-bottom: 4px; }
+  .card-mac   { font-size: 12px; color: #64748b; font-family: monospace; }
+  .card-falls { font-size: 13px; color: #334155; margin-top: 8px; }
+  .card-flag  { font-size: 13px; font-weight: 600; margin-top: 8px; }
+  .card.help .card-flag    { color: #b91c1c; }
+  .card.unknown .card-flag { color: #92400e; }
+  .card-ack  { font-size: 11px; color: #64748b; margin-top: 4px; }
+  #status { margin-top: 16px; padding: 8px 12px; background: #e2e8f0; border-radius: 6px; font-size: 13px; font-family: monospace; }
+</style>
+</head>
+<body>
+<h1>Mock Patient Dashboard</h1>
+<p class="subtitle">
+  Running in <code>mock-focus</code> namespace. Fetches data cross-namespace from
+  <code>fall-dashboard.mcs-fall-detection.svc.cluster.local:8002</code>.
+</p>
+
+<div id="grid" class="grid">
+  <div class="card"><div class="card-name">Loading patients…</div></div>
+</div>
+
+<div id="status">Connecting to fall stream…</div>
+
+<script>
+const grid   = document.getElementById('grid');
+const status = document.getElementById('status');
+
+const flags = new Map();   // patient_id → { kind }
+let currentPatients = [];  // cached so re-render doesn't need a refetch
+
+async function loadPatients() {
+  try {
+    const [patients, falls] = await Promise.all([
+      fetch('/proxy/patients').then(r => r.json()),
+      fetch('/proxy/falls').then(r => r.json()),
+    ]);
+
+    // Pre-populate flags from the last 24h of fall_history
+    const cutoff = Date.now() - 24 * 3600 * 1000;
+    for (const f of (falls.falls || [])) {
+      const t = new Date(f.detection_time).getTime();
+      if (t < cutoff) continue;
+      if (f.patient_confirmed === 'yes' && f.needs_help === true) {
+        flags.set(f.patient_id, { kind: 'help' });
+      } else if (f.patient_confirmed === 'not_answered') {
+        flags.set(f.patient_id, { kind: 'unknown' });
+      }
+    }
+
+    currentPatients = patients.patients || [];
+    render(currentPatients);
+  } catch (e) {
+    grid.innerHTML = `<div class="card"><div class="card-name">Failed to load: ${e.message}</div></div>`;
+  }
+}
+
+function render(patients) {
+  if (patients.length === 0) {
+    grid.innerHTML = `<div class="card"><div class="card-name">No patients registered</div></div>`;
+    return;
+  }
+  grid.innerHTML = patients.map(p => {
+    const flag = flags.get(p.patient_id);
+    const cls  = flag ? ' ' + flag.kind : '';
+    const flagText = flag
+      ? (flag.kind === 'help' ? 'FALL — needs help' : 'FALL — unresponsive')
+      : '';
+    return `
+      <div class="card${cls}" data-patient-id="${p.patient_id}">
+        <div class="card-name">${escape(p.patient_id)}</div>
+        <div class="card-mac">${escape(p.mac_id || '')}</div>
+        <div class="card-falls">${p.fall_count} falls (lifetime)</div>
+        ${flagText ? `<div class="card-flag">${flagText}</div><div class="card-ack">Click to acknowledge</div>` : ''}
+      </div>`;
+  }).join('');
+}
+
+function escape(s) {
+  return String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+}
+
+function connectStream() {
+  const es = new EventSource('/proxy/stream');
+  es.addEventListener('connected', () => {
+    status.textContent = 'Connected to fall_dashboard SSE (cross-namespace)';
+  });
+  es.onmessage = (e) => {
+    try {
+      const fall = JSON.parse(e.data);
+      let kind = null;
+      if (fall.patient_confirmed === 'yes' && fall.needs_help === true) kind = 'help';
+      else if (fall.patient_confirmed === 'not_answered')                kind = 'unknown';
+      if (kind) {
+        flags.set(fall.patient_id, { kind });
+        render(currentPatients);
+        status.textContent = `Live alert: ${fall.patient_id} (${kind}) at ${new Date().toISOString()}`;
+      }
+    } catch (err) {
+      console.warn('bad SSE message', e.data);
+    }
+  };
+  es.onerror = () => {
+    status.textContent = 'SSE disconnected — auto-reconnecting…';
+  };
+}
+
+grid.addEventListener('click', (e) => {
+  const card = e.target.closest('.card.help, .card.unknown');
+  if (!card) return;
+  const pid = card.dataset.patientId;
+  if (pid && flags.has(pid)) {
+    flags.delete(pid);
+    render(currentPatients);
+    status.textContent = `Acknowledged: ${pid} at ${new Date().toLocaleTimeString()}`;
+  }
+});
+
+loadPatients();
+connectStream();
+</script>
+</body>
+</html>

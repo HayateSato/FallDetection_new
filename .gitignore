@@ -203,10 +203,25 @@ temp/
 
 
 # Project specific
-
 .claude
 results/
 test.py
 api_key.txt
 _notUsed/
 _ignore/
+Docu/
+_before_refactoring/
+_EcoSystem_Integration/
+emergency/
+_OLD/
+_concept_6G_integration\~$MCS_Fall_Detection.xlsx
+
+# MLflow local experiment store (reproducible — regenerate with retrain.py)
+mlruns/
+mlflow.db
+
+# SQLite fallback database (dev only — production uses Postgres)
+*.db
+
+# Docker image dumps (`docker save -o foo.tar`) — never commit, GitHub rejects files >100 MB
+*.tar

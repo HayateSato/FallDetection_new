@@ -1,0 +1,20 @@
+# 6G Integration — inference server dependencies
+# pip install -r inference_server/requirements.txt
+
+# ML pipeline
+numpy
+pandas
+scipy
+scikit-learn
+xgboost
+joblib
+
+# API server
+fastapi
+uvicorn[standard]
+
+# Async HTTP client (for pushing observations to FHIR server)
+httpx
+
+# Configuration
+python-dotenv

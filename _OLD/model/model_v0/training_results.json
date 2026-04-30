@@ -1,0 +1,89 @@
+{
+  "model_version": "v0",
+  "timestamp": "20260116_175301",
+  "n_samples": 918,
+  "n_fall": 420,
+  "n_adl": 498,
+  "n_features": 16,
+  "feature_names": [
+    "acc_x_min",
+    "acc_x_max",
+    "acc_x_mean",
+    "acc_x_var",
+    "acc_y_min",
+    "acc_y_max",
+    "acc_y_mean",
+    "acc_y_var",
+    "acc_z_min",
+    "acc_z_max",
+    "acc_z_mean",
+    "acc_z_var",
+    "acc_mag_min",
+    "acc_mag_max",
+    "acc_mag_mean",
+    "acc_mag_var"
+  ],
+  "train_size": 734,
+  "test_size": 184,
+  "train_accuracy": 1.0,
+  "train_precision": 1.0,
+  "train_recall": 1.0,
+  "train_f1": 1.0,
+  "test_accuracy": 0.9945652173913043,
+  "test_precision": 1.0,
+  "test_recall": 0.9880952380952381,
+  "test_f1": 0.9940119760479043,
+  "test_auc": 0.9941666666666666,
+  "cv_scores": [
+    1.0,
+    0.988235294117647,
+    1.0,
+    0.9940119760479043,
+    0.9940119760479043
+  ],
+  "cv_mean": 0.9952518492426912,
+  "cv_std": 0.004413535728400775,
+  "confusion_matrix": [
+    [
+      100,
+      0
+    ],
+    [
+      1,
+      83
+    ]
+  ],
+  "feature_importance": {
+    "acc_x_max": 0.25248366594314575,
+    "acc_mag_max": 0.23364078998565674,
+    "acc_y_min": 0.11575713008642197,
+    "acc_z_max": 0.0605839379131794,
+    "acc_y_max": 0.04732043296098709,
+    "acc_mag_var": 0.04469079524278641,
+    "acc_x_min": 0.03696608170866966,
+    "acc_x_mean": 0.036292728036642075,
+    "acc_mag_mean": 0.031240766867995262,
+    "acc_y_var": 0.025388529524207115,
+    "acc_z_min": 0.023863043636083603,
+    "acc_y_mean": 0.02058199793100357,
+    "acc_z_var": 0.01875508762896061,
+    "acc_x_var": 0.018520142883062363,
+    "acc_mag_min": 0.018060538917779922,
+    "acc_z_mean": 0.015854349359869957
+  },
+  "xgb_config": {
+    "n_estimators": 100,
+    "max_depth": 6,
+    "min_child_weight": 1,
+    "learning_rate": 0.1,
+    "subsample": 0.8,
+    "colsample_bytree": 0.8,
+    "reg_alpha": 0.0,
+    "reg_lambda": 1.0,
+    "objective": "binary:logistic",
+    "eval_metric": "logloss",
+    "random_state": 42,
+    "n_jobs": -1,
+    "use_label_encoder": false
+  }
+}
