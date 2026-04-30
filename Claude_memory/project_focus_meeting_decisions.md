@@ -1,6 +1,6 @@
 ---
 name: FOCUS DevOps meeting decisions (2026-04-29)
-description: Production-cluster constraints and architecture decisions confirmed with FOCUS DevOps. Drives values.yaml + chart shape + open work for Mohamed.
+description: Production-cluster constraints and architecture decisions confirmed with FOCUS DevOps. Drives values.yaml + chart shape + open work for Mohammed.
 type: project
 originSessionId: e8f08216-13fd-4c07-b839-eb1955ecf810
 ---
@@ -8,7 +8,7 @@ Meeting with FOCUS DevOps tech partner, ~2026-04-29. These are the answers that 
 
 **Why:** these came from a synchronous meeting that won't be replayed; they're the only authoritative source for the production-cluster shape we have.
 
-**How to apply:** reach for these whenever the question is about production deployment, k8s flavor, namespaces, registry, or "what's left for Mohamed".
+**How to apply:** reach for these whenever the question is about production deployment, k8s flavor, namespaces, registry, or "what's left for Mohammed".
 
 ## Production cluster facts
 
@@ -40,4 +40,4 @@ Files to touch when implementing: `inference_server/server.py`, `fall_dashboard/
 
 ## Handover
 
-Mohamed (MCS) is taking over the K8s integration work from Hayate. Detailed handover: [handover_docs_2/MOHAMED_focus_handover.md](../../../Documents/6G/FallDetection_new/handover_docs_2/MOHAMED_focus_handover.md). Scope is Step 9 (FOCUS-specific values + chart edits) + clinical-requirement architectural change above.
+Mohammed (MCS) is taking over the K8s integration work from Hayate. **Background:** Mohammed previously implemented two algorithms inside the FOCUS system, so he already knows their k3s setup and the FOCUS environment — that's why he's the natural fit for this scope (saves ramp-up time). Detailed handover: [mohammed/00_MOHAMMED_focus_handover.md](../../../Documents/6G/FallDetection_new/mohammed/00_MOHAMMED_focus_handover.md). Scope is Step 9 (FOCUS-specific values + chart edits) + the clinical-requirement architectural change above. Algorithm + ML observability + retraining + dashboards are all done — handover is K8s-only. User priority: **delivering > polishing** (system isn't fully optimised; ship first, refine later).
