@@ -23,6 +23,8 @@ For routine use after the first install. Run from `_6G_Integration_v2_mqtt/`:
 .\helm\fall-detection\build.ps1            # build all 4 custom images
 .\helm\fall-detection\install.ps1          # helm upgrade --install + wait + show pods
 .\helm\fall-detection\port-forward.ps1     # opens 7 tunnels in separate windows
+# OR (single Windows Terminal tab with split panes -- requires wt.exe):
+.\helm\fall-detection\port-forward-wt.ps1  # opens 7 tunnels as split panes in one tab
 .\helm\fall-detection\test.ps1             # 8 in-cluster health probes
 .\helm\fall-detection\teardown.ps1         # uninstall + delete namespace
 ```

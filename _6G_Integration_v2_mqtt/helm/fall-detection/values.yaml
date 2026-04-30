@@ -4,8 +4,8 @@
 
 # ── Namespaces ────────────────────────────────────────────────────────────────
 namespaces:
-  ours: mcs-fall-detection    # confirmed 2026-04-29; FOCUS DevOps may override
-  focus: focus-ns             # TODO: confirm with FOCUS DevOps
+  ours: mcs-fall-detection    # NEW namespace for the fall-detection components we ship this time (FOCUS DevOps may override)
+  focus: focus-ns             # EXISTING FOCUS namespace already running in the cluster (FHIR, InfluxDB, Patient Dashboard) — TODO: confirm with FOCUS DevOps
 
 # ── Container registry ────────────────────────────────────────────────────────
 registry: registry.example.com   # TODO: confirm with FOCUS DevOps
@@ -42,7 +42,7 @@ inferenceServer:
 # ── Fall dashboard ────────────────────────────────────────────────────────────
 fallDashboard:
   port: 8002
-  patientIds: "sato_helm_test"   # comma-separated
+  patientIds: "sato_helm_test_2"   # comma-separated
   macIds: "6c:1d:eb:04:a9:e6"      # comma-separated, positional with patientIds
   pollIntervalSeconds: "10"
   mockPatientResponseTimeout: "10"
