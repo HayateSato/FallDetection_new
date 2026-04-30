@@ -1,13 +1,42 @@
 # Fall Detection System
 
-Real-time fall detection using XGBoost + SmarKo wearable sensor.
-Supports multi-user operation with separate roles for system operators, caregivers, and emergency responders.
-
-For full setup instructions see [Docu/HOW_TO_RUN.md](Docu/HOW_TO_RUN.md).
+Real-time fall detection using XGBoost + SmarKo wearable sensor. The repository holds both the **legacy full-research stack** (this folder) and the **active FOCUS/Charite production integration** in [`_6G_Integration_v2_mqtt/`](_6G_Integration_v2_mqtt/). Most readers want the latter — start with [`_6G_Integration_v2_mqtt/README.md`](_6G_Integration_v2_mqtt/README.md).
 
 ---
 
-## ⚠️ Which version are you looking at?
+## Start here — pick your role
+
+If you joined for a specific handover, jump straight to your starting doc.
+
+| You are... | Read first | Then |
+|------------|-----------|------|
+| **Mohammed** — taking over the K8s integration with FOCUS | [`mohammed/00_MOHAMMED_focus_handover.md`](mohammed/00_MOHAMMED_focus_handover.md) | [`_6G_Integration_v2_mqtt/README.md`](_6G_Integration_v2_mqtt/README.md) → [`_6G_Integration_v2_mqtt/helm/fall-detection/README.md`](_6G_Integration_v2_mqtt/helm/fall-detection/README.md) → [`_6G_Integration_v2_mqtt/helm/fall-detection/REGISTRY_SETUP.md`](_6G_Integration_v2_mqtt/helm/fall-detection/REGISTRY_SETUP.md) |
+| **Isa** — mobile-app developer (React Native) | [`isa/00_ISA_local_setup_quickstart.md`](isa/00_ISA_local_setup_quickstart.md) | [`isa/01_ISA_mobile_app_contract.md`](isa/01_ISA_mobile_app_contract.md) → [`isa/02_ISA_web_app_dashboards.md`](isa/02_ISA_web_app_dashboards.md) |
+| FOCUS DevOps | [`handover_docs_2/01_k8s.md`](handover_docs_2/01_k8s.md) | [`_6G_Integration_v2_mqtt/helm/fall-detection/README.md`](_6G_Integration_v2_mqtt/helm/fall-detection/README.md) |
+| New to the project, want the active production system | [`_6G_Integration_v2_mqtt/README.md`](_6G_Integration_v2_mqtt/README.md) | the chart + dashboard READMEs below |
+| Working on the legacy research stack | continue reading this README | [`Docu/HOW_TO_RUN.md`](Docu/HOW_TO_RUN.md) |
+
+### Cross-references — subordinate READMEs you'll need
+
+The active FOCUS/Charite integration is structured as one top README plus per-component READMEs. Read top-down:
+
+| README | Covers |
+|--------|--------|
+| [`_6G_Integration_v2_mqtt/README.md`](_6G_Integration_v2_mqtt/README.md) | Top-level overview of the active 6G/Charite integration (folder structure, run modes) |
+| [`_6G_Integration_v2_mqtt/helm/fall-detection/README.md`](_6G_Integration_v2_mqtt/helm/fall-detection/README.md) | **Production Helm chart** — 10 services, install / upgrade / verify / uninstall |
+| [`_6G_Integration_v2_mqtt/helm/fall-detection/REGISTRY_SETUP.md`](_6G_Integration_v2_mqtt/helm/fall-detection/REGISTRY_SETUP.md) | How to push images to a private registry and share read-only pull credentials with FOCUS DevOps |
+| [`_6G_Integration_v2_mqtt/helm/mock-focus/README.md`](_6G_Integration_v2_mqtt/helm/mock-focus/README.md) | Local two-namespace dry-run chart (Docker Desktop K8s) — proves cross-namespace plumbing before handoff |
+| [`_6G_Integration_v2_mqtt/fall_dashboard/README.md`](_6G_Integration_v2_mqtt/fall_dashboard/README.md) | Fall Dashboard service — REST + SSE API contract |
+| [`_6G_Integration_v2_mqtt/ml_dashboard/README.md`](_6G_Integration_v2_mqtt/ml_dashboard/README.md) | Admin retrain + model hot-swap UI |
+| [`_6G_Integration_v2_mqtt/server_health/README.md`](_6G_Integration_v2_mqtt/server_health/README.md) | Admin service status UI |
+
+> The rest of *this* README documents the **legacy full-research stack** at the repo root (Redis-based, Docker Compose, `system_operator/ml_server/`). For the FOCUS/Charite production work, use [`_6G_Integration_v2_mqtt/README.md`](_6G_Integration_v2_mqtt/README.md) instead.
+
+For full setup instructions for the **legacy research stack**, see [Docu/HOW_TO_RUN.md](Docu/HOW_TO_RUN.md).
+
+---
+
+## Which version are you looking at?
 
 This repository contains **three separate use cases** living in different folders / branches.
 **This README describes the full research stack only** (what's at the repo root). Pick the
