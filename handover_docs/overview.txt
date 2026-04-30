@@ -45,3 +45,6 @@ Below shows a list of component in each layer.
   - ml dashbord             (M)         frontend for admin user to retrain models and hot-swap 
   - server health dashbaord (M)         monitoring server performance
   - grafana dashboard       (M)         monitoring ml model performance
+
+
+  kompose.image-pull-secret: mcs-labs

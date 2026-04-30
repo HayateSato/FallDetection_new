@@ -1,9 +1,15 @@
 # GitLab Container Registry — Setup & Secure Handover to FOCUS DevOps
 
-**Audience:** image owner (Hayate / MCS) AND FOCUS DevOps team.
+**Audience:** image owner (Hayate, using a personal GitLab account) AND FOCUS DevOps team.
 **Goal:** publish the five custom container images to a private GitLab Container Registry, then give FOCUS DevOps **read-only** pull access to that registry from their Kubernetes cluster — without ever sharing a long-lived personal credential.
 
 Read this end-to-end once. Then act on the section that applies to you (Hayate vs. FOCUS DevOps).
+
+> ⚠️ **Personal-account caveat (read first).**
+> The registry will live under Hayate's **personal GitLab.com account**, not an MCS group, because MCS GitLab access is not available. This works technically — pull access is gated by a project-scoped Deploy Token, not by Hayate's user identity, so FOCUS pulls keep working independent of Hayate's day-to-day login. **But:**
+> - If the personal account is ever deleted, locked, or its email is lost, the registry and all images disappear with it. Use a stable email and 2FA.
+> - When MCS later provisions an org GitLab presence, **transfer the project** (Settings → General → Advanced → Transfer project) into the MCS group. Existing image addresses change (`registry.gitlab.com/<old>/...` → `registry.gitlab.com/mcs/...`); you'll need to re-tag/push or update `values.yaml` and the deploy token.
+> - Do not use the personal account for unrelated work that could risk the account (random OAuth tests, etc.).
 
 ---
 
@@ -40,30 +46,34 @@ Everything else (`postgres`, `mqtt-broker`, `minio`, `prometheus`, `grafana`) is
 
 ## 2. (MCS) Set up the GitLab project & registry
 
-### 2.1 Create or pick a project
+### 2.1 Create the project under your personal GitLab.com account
 
-GitLab Container Registry is enabled per-project. You can use:
+GitLab Container Registry is enabled per-project on **GitLab.com SaaS** (free tier). The registry URL is `registry.gitlab.com`.
 
-- **GitLab.com SaaS** — free, registry URL is `registry.gitlab.com`
-- **A self-hosted GitLab instance** (if MCS or FOCUS already runs one) — registry URL is whatever the admin configured (e.g., `registry.gitlab.mcs.com`)
-
-For this doc the working assumption is GitLab.com SaaS under a group named `mcs` and a project named `fall-detection`. Replace `mcs/fall-detection` with whatever you actually use.
+Replace `<your-gitlab-username>` everywhere below with your actual GitLab.com handle (e.g., the username that appears in `https://gitlab.com/<your-gitlab-username>` after you sign in).
 
 Steps in the GitLab UI:
 
-1. New project → blank project → name **`fall-detection`** → group **`mcs`**.
-2. Visibility: **Private** (this is the whole point — non-public registry).
-3. After creation: **Settings → Packages and registries → Container Registry → Enabled**. (Default-on for new projects on GitLab.com; verify it's not disabled.)
+1. **Sign up / log in** at https://gitlab.com with a stable personal email. Enable **2FA** before doing anything else (Settings → Account → Two-factor authentication). This account is now production-critical.
+2. **New project → Create blank project**.
+   - Project name: **`fall-detection`**
+   - Project URL: leave the namespace dropdown on your **personal username** (not "New group"). The URL preview should read `https://gitlab.com/<your-gitlab-username>/fall-detection`.
+   - Visibility: **Private** (mandatory — non-public registry).
+   - Untick "Initialize with a README" — you don't need source code in this project, just the registry.
+3. After creation: **Settings → General → Visibility, project features, permissions → Container Registry → Enabled**. (Default-on for new projects; verify it's not disabled.)
+4. **Settings → General → Advanced → Project description**: paste something like "Container images for fall-detection system. Production-critical: do not delete." So that future-you doesn't garbage-collect this project.
 
 Your image addresses will then be:
 
 ```
-registry.gitlab.com/mcs/fall-detection/inference-server:latest
-registry.gitlab.com/mcs/fall-detection/fall-dashboard:latest
-registry.gitlab.com/mcs/fall-detection/ml-dashboard:latest
-registry.gitlab.com/mcs/fall-detection/server-health:latest
-registry.gitlab.com/mcs/fall-detection/mlflow:latest
+registry.gitlab.com/<your-gitlab-username>/fall-detection/inference-server:latest
+registry.gitlab.com/<your-gitlab-username>/fall-detection/fall-dashboard:latest
+registry.gitlab.com/<your-gitlab-username>/fall-detection/ml-dashboard:latest
+registry.gitlab.com/<your-gitlab-username>/fall-detection/server-health:latest
+registry.gitlab.com/<your-gitlab-username>/fall-detection/mlflow:latest
 ```
+
+> **Free-tier limits to be aware of:** GitLab.com personal projects on the free tier have a **5 GB storage limit per project** (counts source repo + container registry + artifacts). The five images here are small (Python slim base + ML libs ≈ 1–1.5 GB total per tag), so you can keep ~3 tags before hitting the limit. **Set a tag-cleanup policy** in **Settings → Packages and registries → Container Registry → Cleanup policy**: keep the latest 5 tags, remove tags older than 30 days. Otherwise old `latest` and per-commit tags accumulate and you'll hit the quota mid-deploy.
 
 ### 2.2 Verify the registry endpoint
 
@@ -97,7 +107,7 @@ Successful output: `Login Succeeded`. The credential is stored in `%USERPROFILE%
 A reusable PowerShell snippet — run from `_6G_Integration_v2_mqtt/`:
 
 ```powershell
-$REGISTRY = "registry.gitlab.com/mcs/fall-detection"
+$REGISTRY = "registry.gitlab.com/<your-gitlab-username>/fall-detection"
 $TAG      = "latest"   # or a semver / git-sha for production releases (recommended)
 
 # Build (only if you haven't already)
@@ -200,16 +210,16 @@ Username        : focus-imagepull
 Password        : <use one-time-secret link below>
                   https://onetimesecret.com/secret/<id>
 
-Project URL     : https://gitlab.com/mcs/fall-detection
+Project URL     : https://gitlab.com/<your-gitlab-username>/fall-detection
 Scope           : read_registry only (cannot push, cannot read source)
 Expires         : 2026-10-29 (12 months) — we will rotate before this date
 
 Images to pull  :
-  registry.gitlab.com/mcs/fall-detection/inference-server:<tag>
-  registry.gitlab.com/mcs/fall-detection/fall-dashboard:<tag>
-  registry.gitlab.com/mcs/fall-detection/ml-dashboard:<tag>
-  registry.gitlab.com/mcs/fall-detection/server-health:<tag>
-  registry.gitlab.com/mcs/fall-detection/mlflow:<tag>
+  registry.gitlab.com/<your-gitlab-username>/fall-detection/inference-server:<tag>
+  registry.gitlab.com/<your-gitlab-username>/fall-detection/fall-dashboard:<tag>
+  registry.gitlab.com/<your-gitlab-username>/fall-detection/ml-dashboard:<tag>
+  registry.gitlab.com/<your-gitlab-username>/fall-detection/server-health:<tag>
+  registry.gitlab.com/<your-gitlab-username>/fall-detection/mlflow:<tag>
 
 To use these in your cluster, see REGISTRY_SETUP.md section 6.
 ```
@@ -241,7 +251,7 @@ kubectl get secret gitlab-registry-creds -n mcs-fall-detection -o jsonpath='{.ty
 ### 6.2 Update `values.yaml`
 
 ```yaml
-registry: registry.gitlab.com/mcs/fall-detection
+registry: registry.gitlab.com/<your-gitlab-username>/fall-detection
 
 images:
   pullPolicy: Always           # was Never (local-build mode); flip for real registry
@@ -374,6 +384,9 @@ The deploy token is a service credential, not a user credential — it does **no
 
 Use this before declaring the registry "ready":
 
+- [ ] **2FA enabled** on the personal GitLab.com account holding the project
+- [ ] Recovery email + recovery codes for the GitLab account stored somewhere safe (1Password etc.)
+- [ ] Cleanup policy configured (latest 5 tags, 30-day expiry) so the 5 GB free-tier quota doesn't fill up
 - [ ] GitLab project visibility = **Private**
 - [ ] Container Registry enabled
 - [ ] Pushed images visible only to logged-in members + deploy tokens (test in incognito → `docker pull` should 401)
@@ -392,13 +405,13 @@ Use this before declaring the registry "ready":
 ## Appendix — quick reference
 
 ### Server URL
-- SaaS: `registry.gitlab.com`
-- Self-hosted: same hostname as GitLab UI, optionally with a port
+- `registry.gitlab.com` (GitLab.com SaaS, free tier)
 
 ### Image address pattern
 ```
-<server>/<group>/<project>/<image>:<tag>
+registry.gitlab.com/<your-gitlab-username>/fall-detection/<image>:<tag>
 ```
+Same shape if the project is later transferred to an MCS group — replace `<your-gitlab-username>` with `<group-name>`.
 
 ### Deploy token creation path (UI)
 `Project → Settings → Repository → Deploy tokens → Add token`

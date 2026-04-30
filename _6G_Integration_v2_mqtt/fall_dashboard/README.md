@@ -59,14 +59,9 @@ fall_dashboard/
 ├── mqtt_listener.py    ← FallEventBroker — paho thread → asyncio bridge
 ├── db.py               ← record_fall, list_patients, list_falls helpers
 ├── dashboard/          ← local-test HTML/JS (index.html, app.js, style.css)
-├── inference_client.py ← LEGACY (Redis-era) — unused in MQTT flow
-├── influx_poller.py    ← LEGACY (Redis-era) — unused in MQTT flow
 ├── Dockerfile
 └── requirements.txt
 ```
-
-The two `LEGACY` files are kept for git history; safe to delete in a future
-cleanup pass once nothing references them externally.
 
 ---
 
