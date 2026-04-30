@@ -15,7 +15,6 @@ _6G_Integration_v2_mqtt/
 ├── .env                            ← single shared config for all components
 ├── README.md                       ← you are here
 ├── alembic.ini                     ← Alembic config (script_location = shared_db/db/migrations)
-├── fhir_converter.py               ← builds FHIR R4 Observation from inference result
 ├── ml_pipeline/                    ← shared ML pipeline (do not edit)
 ├── config/                         ← settings.py reads .env
 ├── model/                          ← XGBoost .pkl files (v0, v3, v5_lsb, ...)

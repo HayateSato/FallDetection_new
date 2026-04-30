@@ -113,42 +113,46 @@ directory. Nothing here pushes to a registry; Docker Desktop K8s shares
 the local Docker daemon's image cache, which is why
 `imagePullPolicy: IfNotPresent` works without a real registry.
 
-### Step 5.1 — Build the four required images
+### Step 5.1 — Build images for both charts
+
+Each chart owns its own `build.ps1`. Run both:
 
 ```powershell
-# Two mock-focus images (FHIR mock + patient dashboard)
+# Two mock-focus images (fd-mock-fhir, fd-mock-patient-dashboard) — no registry prefix
 .\helm\mock-focus\build.ps1
 
-# Two real-chart images (inference server + fall_dashboard)
-docker build -f inference_server/Dockerfile -t inference-server:latest .
-docker build -f fall_dashboard/Dockerfile  -t fall-dashboard:latest .
+# Four fall-detection images (inference-server, fall-dashboard, ml-dashboard, server-health)
+# tagged with registry.example.com/ prefix because the chart's values.yaml
+# references that prefix and Docker Desktop K8s with pullPolicy: Never needs
+# the exact name.
+.\helm\fall-detection\build.ps1
 ```
 
-The real chart's `values.yaml` references `inference-server:latest` and
-`fall-dashboard:latest` with `pullPolicy: Never`, so the tag names must
-match exactly. Verify:
+Verify all six are present:
 
 ```powershell
-docker images | findstr -E "fd-mock|inference-server|fall-dashboard"
+docker images | findstr -E "fd-mock|registry.example.com"
 ```
-
-You should see four images.
 
 ### Step 5.2 — Install both charts
 
+The two charts have separate install scripts. Install the real chart first
+so cross-namespace targets (`fall-dashboard.mcs-fall-detection.svc.cluster.local`)
+exist when mock-focus comes up:
+
 ```powershell
+.\helm\fall-detection\install.ps1
 .\helm\mock-focus\install.ps1
 ```
 
-This script does two `helm upgrade --install` calls in sequence
-(`mock-focus` → `mcs-fall-detection`) with `--wait --timeout 5m` so it
-returns only once every pod is Running and Ready. If a pod fails the
-readiness probe within 5 minutes, the script bails — see
+Each runs `helm upgrade --install` with `--wait --timeout 5m`, so each
+returns only once every pod in its namespace is Running and Ready. If a
+pod fails the readiness probe within 5 minutes, the script bails — see
 [Troubleshooting](#9-troubleshooting).
 
-When it completes you should see the pod tables for both namespaces. All
-pods should be `Running` (StatefulSets) or `Completed` (the Alembic +
-MinIO bucket-creation Jobs).
+When both complete you should see all 10 pods in `mcs-fall-detection`
+plus 3 pods in `mock-focus`, all Running (or `Completed` for the Alembic
++ MinIO bucket-creation Jobs).
 
 ### Step 5.3 — Run the cross-namespace integration tests
 
@@ -249,12 +253,15 @@ The browser should recover within a few seconds.
 
 ### Step 5.6 — Tear down
 
+Each chart owns its own teardown. Run both:
+
 ```powershell
 .\helm\mock-focus\teardown.ps1
+.\helm\fall-detection\teardown.ps1
 ```
 
-Runs `helm uninstall` on both releases and deletes both namespaces. PVCs
-are cleaned up by the namespace deletion. Verify:
+Each runs `helm uninstall` and deletes its own namespace. PVCs are cleaned
+up by namespace deletion. Verify:
 
 ```powershell
 kubectl get namespaces | findstr -E "mcs-fall-detection|mock-focus"

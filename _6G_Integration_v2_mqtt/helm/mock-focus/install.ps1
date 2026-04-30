@@ -1,9 +1,16 @@
-# Install both charts into Docker Desktop K8s for the cross-namespace dry-run.
+# Install the mock-focus chart into Docker Desktop K8s for the cross-namespace dry-run.
+# This script ONLY installs mock-focus (mock-fhir, mock-influxdb, mock-patient-dashboard).
+# fall-dashboard / inference-server / etc. live in mcs-fall-detection — install that
+# chart separately via .\helm\fall-detection\install.ps1.
+#
 # Prereqs:
 #   1. Docker Desktop > Settings > Kubernetes > Enable Kubernetes
 #   2. kubectl context is "docker-desktop" (`kubectl config current-context`)
-#   3. Run helm/mock-focus/build.ps1 first to build local images
-#   4. Run helm/fall-detection/build.ps1 (or equivalent) to build the real chart's images
+#   3. Run .\helm\mock-focus\build.ps1 first to build the mock images
+#   4. (Recommended) Run .\helm\fall-detection\install.ps1 first so cross-NS
+#      targets (fall-dashboard.mcs-fall-detection...) actually resolve. mock-focus
+#      pods will start either way, but the dashboard at :30090 will show errors
+#      until fall-dashboard is reachable.
 #
 # Run from _6G_Integration_v2_mqtt/ as cwd.
 
@@ -23,23 +30,13 @@ helm upgrade --install mock-focus ./helm/mock-focus `
     --create-namespace `
     --wait --timeout 5m
 
-Write-Host "==> Installing fall-detection chart..."
-helm upgrade --install mcs-fall-detection ./helm/fall-detection `
-    --namespace mcs-fall-detection `
-    --create-namespace `
-    --wait --timeout 5m
-
 Write-Host ""
 Write-Host "==> Pod status (mock-focus):"
 kubectl get pods -n mock-focus
 
 Write-Host ""
-Write-Host "==> Pod status (mcs-fall-detection):"
-kubectl get pods -n mcs-fall-detection
-
-Write-Host ""
 Write-Host "==> Open the mock Patient Dashboard:"
 Write-Host "    http://localhost:30090/"
 Write-Host ""
-Write-Host "==> Run cross-namespace tests:"
+Write-Host "==> Run cross-namespace tests (requires fall-detection chart installed too):"
 Write-Host "    .\helm\mock-focus\test.ps1"
