@@ -214,6 +214,8 @@ _before_refactoring/
 _EcoSystem_Integration/
 emergency/
 _OLD/
+handover_docs/                   # legacy handover docs; active set is handover_docs_2/
+_6G_Integration_v2_redis/        # frozen Redis version; active is _6G_Integration_v2_mqtt/
 _concept_6G_integration\~$MCS_Fall_Detection.xlsx
 
 # MLflow local experiment store (reproducible — regenerate with retrain.py)
