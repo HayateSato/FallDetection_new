@@ -1,0 +1,24 @@
+
+We are building a fall detection system. 
+Initially it was agreed that we built them and the tech client (FOCUS) will host everything in their premise because of data concern.
+For this, we preapred this project folder (C:\Users\hayat\Documents\6G\FallDetection_new\_6G_Integration_v2_mqtt) and the related memotrs is saved in "C:\Users\hayat\.claude\projects\c--Users-hayat-Documents-6G-FallDetection-new\memory"
+although it is not necessary, they requested kubernetes. furthermore, they had some components running (influxDB, caregiver/patient dashbaord, FHIR server etc.) in their own namespace and they requested us to package everthing else in a separate namespace so we prepared it that way.
+However, now they are requesting the change. 
+They want to host the database (influxDB) and caregiver/patient dashbaord only, maining their own namespace and anything additional (the inference server + ml observation tools) has to be hosted on our premise or cloud. 
+
+To acoomodate this change as best as possible, I made my plan and listed all the required compoents by its location in  C:\Users\hayat\Documents\6G\FallDetection_new\__Refactoring_docs\overview_ver2.txt. 
+
+
+few more details:
+- to compensate the data concern, they are suggesting to use VPN such as wireguard and we received the conf file 
+- we received the credentials to influxDB that is hosted on their end. 
+- the client for the inference server will be mobile app (i doubt that they can use VPN as it is done HTTPs) 
+- the result of HTTPs request is injected into influxDB (only the fall timestamps) by the mobile app using the same network where mobile devices ared connected to and influx is hosted
+- the current caregiver dashbaord needs to be updated as it does not fetch fall history from influx instead it is fetching postgres that was going to be hosted via our new namespace (caregiver dashbaord is hosted in FOCUS)
+- the features and inference result is saved in postgres that is hosted in our end, which will be used for retraining the model 
+- the usage of VPN is questionable even though they provided (in my understanding it is not neceesary but suggest me if it still required)
+
+- my collegue Isa who is in charge of mobile app has alöredy made the update but not yet tested the communincation between server and mobile app. (marker injection is also not yet)
+
+
+Based on this information, can you create my to do list and save it in C:\Users\hayat\Documents\6G\FallDetection_new\__Refactoring_docs? 

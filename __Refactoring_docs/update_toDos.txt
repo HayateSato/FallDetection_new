@@ -1,0 +1,21 @@
+Update the todo document based on below 
+
+1. Confirm VPN (WireGuard) is NOT required --> i can confirm. maybe for testing we might need it but we will not use it in real deploement
+
+2. Infrastructure -- MCS Side (Inference & Post-training Layer)
+hosting env --> we use hetzner in our company so most likely this 
+a public domain  --> we have own company domain so we can re-use this too
+Deployment of inference server, postgres, mlflow, prometeheus, ml-dashbaord and sever health-dashbaord will be done through my colleague Mohamme, but i want to prepare docker or something after testing locally again so that he can just deploy it easiyl
+we will not use kubernetes on our end if technologically that is still compaitble 
+
+3. Code Changes -- Inference Server (MCS)
+remove fall_history table from MCS Postgres --> implement this for me 
+
+
+
+
+Open Questions
+
+3. What InfluxDB fields/measurement names will FOCUS use for fall timestamps? Needed to align caregiver dashboard query --> we can decide this. 
+4.	Does the caregiver dashboard need help_requested and fall_confirmed fields in InfluxDB, or is the timestamp enough? --> yes, we need those fields in influxDB
+5.	Who updates the caregiver webapp server (fetch from InfluxDB) -- MCS or FOCUS DevOps? --> We will push this to FOCUS , so we need to prepare some instruction documents later

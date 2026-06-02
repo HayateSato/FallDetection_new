@@ -20,7 +20,7 @@ Subcompoenents in each layer is hosted either in
 -----------------------------------------------------------------------------------------------
 BACKEND
   - influxDB                  (F)         stores physiological infomration of patients + fall timestamp per user ID
-  - postgres table A          (F)         stored user (caregiver)/session infomration 
+  - data table A              (F)         stored user (caregiver)/session infomration (it can be a simple SQLite or postgres table if required)
   - MQTT broker               (F)         infrastructure for MQTT protocol 
   - MQTT client B             (F)         event subscriber and expose the event to web app server 
   - caregiver webapp server   (F)         backend component for caregiver web app 
