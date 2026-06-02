@@ -61,8 +61,11 @@ except ImportError:
 
 try:
     from inference_server.services.db_writer import write_inference_log as _write_inference_log
+    from inference_server.services.db_writer import write_confirmation as _write_confirmation
 except ImportError:
     def _write_inference_log(*args, **kwargs):
+        pass
+    def _write_confirmation(*args, **kwargs):
         pass
 
 # ---------------------------------------------------------------------------
@@ -267,10 +270,11 @@ class PredictResponse(BaseModel):
     The `fhir_observation` field is a complete, valid FHIR R4 Observation
     resource that can be POSTed directly to a FHIR server.
 
-    `observation_id` is the UUID cross-reference key: it is stored in
-    inference_log (written as a BackgroundTask) and should be included in
-    the MQTT alert payload by mock_app so fall_dashboard can store it in
-    fall_history — enabling the retraining JOIN without a synchronous DB call.
+    `observation_id` is the UUID cross-reference key: stored in inference_log
+    (written as a BackgroundTask). The mobile app should include it in the MQTT
+    alert payload AND call POST /inference/{observation_id}/confirm once the
+    patient responds — that writes patient_confirmed + needs_help to inference_log
+    for the retraining pipeline.
     """
     observation_id:   str
     patient_id:       str
@@ -279,6 +283,27 @@ class PredictResponse(BaseModel):
     inference:        InferenceResult
     fhir_observation: dict    # FHIR R4 Observation resource
     fhir_pushed:      bool    # True if server successfully POSTed to FHIR_SERVER_URL
+
+
+class ConfirmRequest(BaseModel):
+    """
+    Sent by the mobile app after the patient responds to the confirmation popup.
+
+    patient_confirmed : 'yes'       — patient confirmed fall
+                        'no'        — patient denied fall
+                        'not_answered' — 10-second popup timeout (treat as fall for caregiver)
+    needs_help        : True if patient (or timeout) triggered a rescue alert; False otherwise
+    """
+    patient_confirmed: str = Field(
+        ...,
+        description="Patient response: 'yes', 'no', or 'not_answered'",
+        example="yes",
+    )
+    needs_help: Optional[bool] = Field(
+        None,
+        description="Whether a rescue alert was sent to the caregiver",
+        example=True,
+    )
 
 
 class ModelSwitchRequest(BaseModel):
@@ -532,6 +557,45 @@ async def predict(req: PredictRequest, background_tasks: BackgroundTasks):
     except Exception as e:
         logger.error(f"Prediction error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Prediction failed: {e}")
+
+
+# ---------------------------------------------------------------------------
+# Patient confirmation endpoint
+# ---------------------------------------------------------------------------
+
+@app.post("/inference/{observation_id}/confirm",
+          dependencies=[Depends(verify_api_key)])
+async def confirm_inference(
+    observation_id: str,
+    req: ConfirmRequest,
+    background_tasks: BackgroundTasks,
+):
+    """
+    Record the patient's response to the fall confirmation popup.
+
+    Called by the mobile app after the patient responds (or after the 10-second
+    timeout). Stores patient_confirmed and needs_help on the inference_log row
+    identified by observation_id so the retraining pipeline can use them as
+    ground-truth labels.
+
+    The observation_id is the UUID returned in the /predict response.
+    """
+    if req.patient_confirmed not in ("yes", "no", "not_answered"):
+        raise HTTPException(
+            status_code=422,
+            detail="patient_confirmed must be 'yes', 'no', or 'not_answered'.",
+        )
+    background_tasks.add_task(
+        _write_confirmation,
+        observation_id    = observation_id,
+        patient_confirmed = req.patient_confirmed,
+        needs_help        = req.needs_help,
+    )
+    logger.info(
+        f"Confirmation received  observation_id={observation_id}  "
+        f"confirmed={req.patient_confirmed}  needs_help={req.needs_help}"
+    )
+    return {"status": "accepted", "observation_id": observation_id}
 
 
 # ---------------------------------------------------------------------------

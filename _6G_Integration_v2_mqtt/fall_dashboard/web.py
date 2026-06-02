@@ -3,7 +3,7 @@ Fall Dashboard web layer (FastAPI).
 
   GET  /                          → dashboard index.html (caregiver view)
   GET  /api/patients              → list of patients with fall counts
-  GET  /api/falls                 → fall_history rows  (?patient_id=&only_falls=&limit=)
+  GET  /api/falls                 → fall history (?patient_id=&only_falls=&limit=)  [stub — needs InfluxDB]
   GET  /api/stream                → Server-Sent Events feed of live fall events
 
 The fall stream is fed by FallEventBroker (subscribes to MQTT broker).

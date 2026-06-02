@@ -176,9 +176,9 @@ class MockAppPoller(threading.Thread):
         )
 
         # Build the event payload that will eventually reach the caregiver.
-        # observation_id is the UUID returned by /predict — it links the
-        # fall_history row (written by fall_dashboard) to the inference_log
-        # row (written by the inference_server BackgroundTask) for retraining.
+        # observation_id is the UUID returned by /predict — after the confirmation
+        # popup the real mobile app should POST to /inference/{observation_id}/confirm
+        # so the retraining pipeline has the ground-truth label.
         event = {
             "patient_id":       patient_id,
             "device_id":        mac_address,

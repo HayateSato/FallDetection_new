@@ -1,17 +1,13 @@
 """
-Postgres writer for inference results — called as a FastAPI BackgroundTask.
+Postgres writer for inference results — called as FastAPI BackgroundTasks.
 
-The write happens AFTER the HTTP response is sent so it never adds latency
-to the /predict call. All errors are caught and logged — inference results
-are returned to the caller regardless of DB availability.
+Writes happen AFTER the HTTP response is sent so they never add latency.
+All errors are caught and logged — inference results are returned regardless
+of DB availability.
 
-Two rows are written per call:
-  1. inference_log  — one row with patient_id, fall_detected, confidence, etc.
-  2. feature_snapshot — one row per feature (typically 16–22 rows)
-
-The observation_id (UUID) is already in the HTTP response, so mock_app can
-include it in the MQTT alert payload. fall_dashboard stores it in
-fall_history.observation_id, linking the two tables for the retraining query.
+write_inference_log  — called by /predict; writes inference_log + feature_snapshot rows
+write_confirmation   — called by /inference/{observation_id}/confirm; updates
+                       patient_confirmed and needs_help on the inference_log row
 """
 
 import logging
@@ -88,3 +84,54 @@ def write_inference_log(
 
     except Exception as exc:
         logger.warning(f"Inference log DB write failed (non-fatal): {exc}")
+
+
+def write_confirmation(
+    observation_id:    str,
+    patient_confirmed: str,
+    needs_help:        Optional[bool],
+) -> None:
+    """
+    Update patient_confirmed and needs_help on an existing inference_log row.
+
+    Called via FastAPI BackgroundTasks from POST /inference/{observation_id}/confirm.
+    The mobile app calls this endpoint after the patient responds to the confirmation
+    popup (or after the 10-second timeout).
+
+    Never raises — if the row is not found or the DB is unreachable, logs a warning.
+    """
+    try:
+        from shared_db.db.session import SessionLocal
+        from shared_db.db.models import InferenceLog
+        from sqlalchemy import select
+
+        if SessionLocal is None:
+            logger.debug("DATABASE_URL not configured — skipping confirmation write")
+            return
+
+        db = SessionLocal()
+        try:
+            row = db.scalar(
+                select(InferenceLog).where(InferenceLog.observation_id == observation_id)
+            )
+            if row is None:
+                logger.warning(
+                    f"Confirmation received for unknown observation_id={observation_id} — "
+                    "inference_log row not yet written or ID is wrong"
+                )
+                return
+            row.patient_confirmed = patient_confirmed
+            row.needs_help        = needs_help
+            db.commit()
+            logger.debug(
+                f"Confirmation written  observation_id={observation_id}  "
+                f"confirmed={patient_confirmed}  needs_help={needs_help}"
+            )
+        except Exception:
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
+    except Exception as exc:
+        logger.warning(f"Confirmation DB write failed (non-fatal): {exc}")

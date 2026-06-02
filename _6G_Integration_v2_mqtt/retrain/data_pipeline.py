@@ -2,19 +2,18 @@
 Retraining data pipeline — reads labelled inference data from Postgres.
 
 Why Postgres, not InfluxDB?
-  The inference server already stores pre-computed features in `feature_snapshot`
-  (one row per feature per /predict call).  `fall_history` carries the ground-truth
-  label: patient_confirmed = 'yes' | 'no' | 'not_answered'.
+  The inference server stores pre-computed features in `feature_snapshot`
+  (one row per feature per /predict call).  patient_confirmed and needs_help
+  are stored directly on `inference_log` (updated via POST
+  /inference/{observation_id}/confirm from the mobile app).
 
-  This means retraining is a single SQL JOIN — no re-running of the feature
-  extraction pipeline, no InfluxDB access, no raw sensor data needed.
+  Retraining is a single JOIN — no re-running of feature extraction, no
+  InfluxDB access, no raw sensor data needed.
 
 Retraining JOIN:
-  inference_log  (il)  ← one row per /predict
+  inference_log  (il)  ← one row per /predict  (includes patient_confirmed)
        ↓ il.id = fs.inference_id
   feature_snapshot (fs) ← N rows per inference (one per feature)
-       ↓ il.observation_id = fh.observation_id
-  fall_history    (fh)  ← one row per confirmed MQTT alert
 
 Label assignment:
   label = 1  if  fall_detected=True  AND  patient_confirmed='yes'
@@ -92,11 +91,10 @@ def _build_dataset(
             il.detection_time,
             fs.feature_name,
             fs.feature_value,
-            fh.patient_confirmed,
-            fh.needs_help
+            il.patient_confirmed,
+            il.needs_help
         FROM inference_log il
         JOIN feature_snapshot fs ON fs.inference_id = il.id
-        LEFT JOIN fall_history fh ON fh.observation_id = il.observation_id
         WHERE 1=1 {version_filter}
         ORDER BY il.id
     """)

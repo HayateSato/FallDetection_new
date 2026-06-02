@@ -31,10 +31,12 @@ Two modes
 
 Data inserted per window
 ------------------------
-  inference_log      — one row (observation_id, patient_id, fall_detected, features, etc.)
+  inference_log      — one row (observation_id, patient_id, fall_detected, features,
+                       patient_confirmed, needs_help, etc.)
   feature_snapshot   — N rows (one per feature)
-  fall_history       — one row IF fall_detected=True (patient_confirmed='yes')
-                       This creates the ground-truth label for the retraining JOIN.
+
+  patient_confirmed='yes' and needs_help are set directly on the inference_log row
+  for fall windows — this is the ground-truth label for the retraining pipeline.
 
 After running this script, run:
   python -m retrain.retrain --dry-run   (check dataset stats)
@@ -141,7 +143,7 @@ def seed_synthetic(
     Each fall window also gets a fall_history row (patient_confirmed='yes').
     """
     from shared_db.db.session import SessionLocal, init_db
-    from shared_db.db.models import InferenceLog, FeatureSnapshot, FallHistory
+    from shared_db.db.models import InferenceLog, FeatureSnapshot
 
     init_db()
     db = SessionLocal()
@@ -160,17 +162,19 @@ def seed_synthetic(
 
             features = _synthetic_features_fall() if is_fall else _synthetic_features_nonfal()
 
-            # inference_log row
+            # inference_log row — patient_confirmed/needs_help set here for falls
             log = InferenceLog(
-                observation_id = obs_id,
-                patient_id     = patient_id,
-                device_id      = None,
-                model_version  = model_version,
-                fall_detected  = is_fall,
-                confidence     = round(confidence, 4),
-                window_size    = WINDOW_SAMPLES,
-                latency_ms     = int(np.random.uniform(50, 200)),
-                detection_time = det_time,
+                observation_id    = obs_id,
+                patient_id        = patient_id,
+                device_id         = None,
+                model_version     = model_version,
+                fall_detected     = is_fall,
+                confidence        = round(confidence, 4),
+                window_size       = WINDOW_SAMPLES,
+                latency_ms        = int(np.random.uniform(50, 200)),
+                detection_time    = det_time,
+                patient_confirmed = "yes" if is_fall else None,
+                needs_help        = bool(np.random.random() < 0.7) if is_fall else None,
             )
             db.add(log)
             db.flush()   # get log.id for FK in feature_snapshot
@@ -183,16 +187,7 @@ def seed_synthetic(
                     feature_value = float(value),
                 ))
 
-            # fall_history row — patient confirmed YES (creates the retraining label)
             if is_fall:
-                db.add(FallHistory(
-                    observation_id    = obs_id,
-                    patient_id        = patient_id,
-                    fall_detected     = True,
-                    patient_confirmed = "yes",
-                    needs_help        = bool(np.random.random() < 0.7),
-                    detection_time    = det_time,
-                ))
                 n_falls += 1
             else:
                 n_nonfalls += 1
@@ -208,7 +203,7 @@ def seed_synthetic(
     if verbose:
         print(f"\nSynthetic seed complete:")
         print(f"  Total windows  : {n_windows}")
-        print(f"  Falls (label=1): {n_falls}  (patient_confirmed='yes' in fall_history)")
+        print(f"  Falls (label=1): {n_falls}  (patient_confirmed='yes' on inference_log)")
         print(f"  Non-falls (l=0): {n_nonfalls}")
         print(f"  Model version  : {model_version}")
         print(f"  Patients       : {patient_ids}")
@@ -239,7 +234,7 @@ def seed_from_influxdb(
     control how many positive examples are seeded.
     """
     from shared_db.db.session import SessionLocal, init_db
-    from shared_db.db.models import InferenceLog, FeatureSnapshot, FallHistory
+    from shared_db.db.models import InferenceLog, FeatureSnapshot
     from config.settings import (
         ACC_SAMPLE_RATE, HARDWARE_ACC_SAMPLE_RATE, RESAMPLING_METHOD,
         ACC_SENSOR_TYPE,
@@ -373,16 +368,20 @@ def seed_from_influxdb(
                     seconds=(n_windows_found - w_idx) * WINDOW_SECONDS
                 )
 
+                confirmed = is_fall and confidence >= fall_confirm_threshold
+
                 log = InferenceLog(
-                    observation_id = obs_id,
-                    patient_id     = patient_id,
-                    device_id      = mac,
-                    model_version  = model_version,
-                    fall_detected  = is_fall,
-                    confidence     = round(float(confidence), 4),
-                    window_size    = len(window_df),
-                    latency_ms     = None,
-                    detection_time = det_time,
+                    observation_id    = obs_id,
+                    patient_id        = patient_id,
+                    device_id         = mac,
+                    model_version     = model_version,
+                    fall_detected     = is_fall,
+                    confidence        = round(float(confidence), 4),
+                    window_size       = len(window_df),
+                    latency_ms        = None,
+                    detection_time    = det_time,
+                    patient_confirmed = "yes" if confirmed else None,
+                    needs_help        = True if confirmed else None,
                 )
                 db.add(log)
                 db.flush()
@@ -398,16 +397,7 @@ def seed_from_influxdb(
                         feature_value = fval_float,
                     ))
 
-                # Create confirmed fall label if confidence exceeds threshold
-                if is_fall and confidence >= fall_confirm_threshold:
-                    db.add(FallHistory(
-                        observation_id    = obs_id,
-                        patient_id        = patient_id,
-                        fall_detected     = True,
-                        patient_confirmed = "yes",
-                        needs_help        = True,
-                        detection_time    = det_time,
-                    ))
+                if confirmed:
                     n_falls += 1
 
                 n_inserted += 1
