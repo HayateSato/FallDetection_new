@@ -103,3 +103,44 @@ class InferenceServerClient:
             return None
 
         return resp.json()
+
+    # ------------------------------------------------------------------
+    def confirm(
+        self,
+        observation_id:    str,
+        patient_confirmed: str,
+        needs_help:        Optional[bool],
+    ) -> bool:
+        """
+        POST /inference/{observation_id}/confirm to update patient_confirmed
+        and needs_help on the inference_log row in MCS Postgres.
+
+        The real mobile app calls this after the patient responds to the
+        confirmation popup (or after the 10-second timeout).
+
+        Returns True on success, False on any error (non-fatal).
+        """
+        try:
+            resp = requests.post(
+                f"{self.server_url}/inference/{observation_id}/confirm",
+                json={
+                    "patient_confirmed": patient_confirmed,
+                    "needs_help":        needs_help,
+                },
+                headers=self._headers(),
+                timeout=self.timeout,
+            )
+            if resp.ok:
+                logger.debug(
+                    f"Confirm OK  observation_id={observation_id}  "
+                    f"confirmed={patient_confirmed}  needs_help={needs_help}"
+                )
+                return True
+            else:
+                logger.warning(
+                    f"Confirm returned {resp.status_code}: {resp.text[:200]}"
+                )
+                return False
+        except requests.RequestException as exc:
+            logger.warning(f"Confirm request failed (non-fatal): {exc}")
+            return False

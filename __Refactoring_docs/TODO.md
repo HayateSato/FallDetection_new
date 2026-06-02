@@ -45,29 +45,66 @@ in their namespace. The inference server and all ML/post-training components mov
 
 ---
 
-## 4. Code Changes -- Caregiver Dashboard (FOCUS side)
+## 4. Caregiver Dashboard -- Instruction Document for FOCUS DevOps
 
-> Coordinate with FOCUS DevOps team -- this is their component.
+FOCUS's caregiver dashboard is built in **Flutter** (not Python). We cannot hand them code.
+We need to provide a specification / instruction document so their Flutter dev can implement
+the same features that our Python `fall_dashboard` component provides.
 
-- [ ] Update caregiver webapp server to fetch fall history **from InfluxDB** instead of Postgres
-  - Old: queries Postgres fall_history table (was going to be in MCS namespace, now removed)
-  - New: queries FOCUS InfluxDB using fall timestamps written by the mobile app
-- [ ] Update fall-history dashboard query / API endpoint accordingly
-- [ ] Confirm FOCUS has the right InfluxDB schema/fields to support the fall dashboard queries
-  (patient_id, fall timestamp, confirmed, help_requested)
+**Agreed InfluxDB schema (decided by MCS, communicated to FOCUS):**
+- Measurement: `fall_events`
+- Tags:  `patient_id`, `device_id`
+- Fields: `fall_detected` (bool), `patient_confirmed` (str: yes/no/not_answered),
+          `needs_help` (bool), `observation_id` (str UUID), `confidence` (float),
+          `model_version` (str)
+- Timestamp: detection time of the fall event
+
+**What the mobile app writes to InfluxDB (trigger: after patient confirmation popup):**
+  One `fall_events` point per detected fall, with all fields above.
+
+**MQTT broker — action required for FOCUS:**
+> Currently the MQTT broker runs only on our (MCS) side for local development.
+> In the final architecture the broker must be hosted in the FOCUS network so that
+> MQTT Client A (mobile app) and MQTT Client B (caregiver dashboard) can reach it
+> on the internal FOCUS network without going through the internet.
+> **FOCUS DevOps does not know how to set this up — we need to include setup
+> instructions in the document.**
+
+**Instruction document needs to cover:**
+- [ ] **MQTT broker setup**: how to deploy and configure a broker (e.g. Mosquitto) in the
+      FOCUS network; recommended port (1883 / 8883 TLS); auth credentials format
+- [ ] **MQTT Client B** (Flutter side): how to subscribe to `fall/alert/#`; payload format
+      (JSON fields: patient_id, observation_id, fall_detected, confidence, patient_confirmed,
+      needs_help, timestamp); how to display the live alert to the caregiver
+- [ ] Live fall alert (SSE / MQTT): mobile app publishes to MQTT broker (FOCUS network);
+      Flutter dashboard subscribes to `fall/alert/#` and shows the live alert
+- [ ] Fall history view: query InfluxDB `fall_events` measurement; filter by patient_id, date range,
+      patient_confirmed, needs_help; display count + table
+- [ ] Patient list: query `fall_events` GROUP BY patient_id to get per-patient fall counts
+- [ ] The `observation_id` field links a fall event back to MCS inference logs (future cross-reference)
+- [ ] Exact Flux query examples for all three views above
+
+- [ ] **Prepare the instruction document** (see `handover_docs_2/` for format)
+- [ ] Send instruction document to FOCUS DevOps for Flutter implementation
 
 ---
 
 ## 5. Integration Testing with Isa (Mobile App)
 
 - [ ] Test **mobile app -> inference server HTTPS** communication (end-to-end, new MCS endpoint)
-- [ ] Test **InfluxDB marker injection** from mobile app (fall timestamp + observation_id written to FOCUS InfluxDB)
+- [ ] Test **InfluxDB marker injection** from mobile app (fall_events point written to FOCUS InfluxDB)
 - [ ] Test **MQTT flow**: mobile app -> MQTT broker (FOCUS) -> caregiver dashboard SSE/alert
 - [ ] Validate patient confirmation popup and the three response paths:
   - Patient confirms fall + requests help -> rescue MQTT message sent
   - Patient confirms fall, no help needed -> no rescue message
   - No response within 10s -> rescue message sent automatically
 - [ ] Confirm MQTT payload includes observation_id so it can be cross-referenced with inference_log
+- [ ] Test **POST /inference/{observation_id}/confirm** call from mobile app after popup
+      (Isa needs to add this call after the confirmation popup)
+
+> **Local pipeline test (MCS side):** `local_dev/mock_app` has been updated to simulate
+> the full mobile app flow including InfluxDB marker injection and the confirm endpoint call.
+> Run `python -m local_dev.mock_app.main` to verify the complete pipeline end-to-end.
 
 ---
 
@@ -95,6 +132,6 @@ in their namespace. The inference server and all ML/post-training components mov
 |---|----------|-------|
 | 1 | ~~VPN needed?~~ **Resolved: NOT needed in production** (WireGuard conf kept for testing only) | DONE |
 | 2 | ~~Where exactly is MCS hosting?~~ **Resolved: Hetzner** | DONE |
-| 3 | What InfluxDB fields/measurement names will FOCUS use for fall timestamps? Needed to align caregiver dashboard query | FOCUS DevOps |
-| 4 | Does the caregiver dashboard need help_requested and fall_confirmed fields in InfluxDB, or is the timestamp enough? | FOCUS DevOps + Hayate |
-| 5 | Who updates the caregiver webapp server (fetch from InfluxDB) -- MCS or FOCUS DevOps? | Clarify ownership |
+| 3 | ~~What InfluxDB schema?~~ **Resolved: MCS decides.** measurement=`fall_events`, fields: `fall_detected`, `patient_confirmed`, `needs_help`, `observation_id`, `confidence`, `model_version`; tags: `patient_id`, `device_id` | DONE |
+| 4 | ~~Timestamp only or full fields?~~ **Resolved: full fields needed** (`patient_confirmed` + `needs_help` required in InfluxDB) | DONE |
+| 5 | ~~Who updates caregiver dashboard?~~ **Resolved: FOCUS DevOps implements in Flutter** based on instruction document MCS prepares | DONE |

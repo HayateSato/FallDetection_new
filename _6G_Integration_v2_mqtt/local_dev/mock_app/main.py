@@ -116,6 +116,7 @@ def _banner() -> None:
     print(f"  Patient popup:        http://localhost:{MOCK_PATIENT_SERVER_PORT}/")
     print()
     print("  FLOW: InfluxDB → /predict → patient popup → MQTT alert → caregiver")
+    print("        → InfluxDB fall_events write → /inference/{obs_id}/confirm")
     print("=" * 64)
 
 

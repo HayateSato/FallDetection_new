@@ -27,6 +27,7 @@ from datetime import datetime, timezone
 from typing import List, Optional
 
 from local_dev.mock_app.influx_fetcher import fetch_raw_window
+from local_dev.mock_app.influx_writer import inject_fall_marker
 from local_dev.mock_app.api_caller import InferenceServerClient
 
 logger = logging.getLogger(__name__)
@@ -133,6 +134,38 @@ class MockAppPoller(threading.Thread):
             )
         except Exception as exc:
             logger.warning(f"Alert publish failed for {patient_id}: {exc}")
+
+        # -- Simulate mobile app: inject fall marker into InfluxDB -----------
+        obs_id     = event.get("observation_id")
+        confidence = event.get("confidence", 0.0)
+        model_ver  = event.get("model_version", "")
+        det_time   = None
+        try:
+            from datetime import datetime
+            ts_str = event.get("timestamp")
+            if ts_str:
+                det_time = datetime.fromisoformat(ts_str)
+        except Exception:
+            pass
+
+        inject_fall_marker(
+            patient_id        = patient_id,
+            observation_id    = obs_id or "",
+            patient_confirmed = patient_confirmed,
+            needs_help        = bool(needs_help),
+            confidence        = float(confidence),
+            model_version     = model_ver,
+            detection_time    = det_time,
+            device_id         = event.get("device_id"),
+        )
+
+        # -- Simulate mobile app: call /inference/{obs_id}/confirm on MCS ----
+        if obs_id:
+            self.client.confirm(
+                observation_id    = obs_id,
+                patient_confirmed = patient_confirmed,
+                needs_help        = bool(needs_help) if needs_help is not None else None,
+            )
 
     # ------------------------------------------------------------------
     def _poll_one(self, patient_id: str) -> None:

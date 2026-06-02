@@ -5,23 +5,26 @@ Fall Dashboard database layer.
 Tables written by this module:
   participant_session  — one row per active patient session
 
-Tables written by inference_server (read-only here):
-  inference_log        — one row per /predict call
-  feature_snapshot     — one row per feature per inference
+Fall history is now stored in InfluxDB (written by the mobile app after patient
+confirmation). list_falls() queries the `fall_events` measurement.
 
-NOTE: fall_history table has been removed (migration 0003).
-Fall timestamps are now written to FOCUS InfluxDB by the mobile app.
-list_falls() currently returns an empty list — it needs to be replaced
-with an InfluxDB query once the FOCUS InfluxDB schema is confirmed.
+InfluxDB schema (measurement: fall_events):
+  Tags  : patient_id, device_id
+  Fields: fall_detected (bool), patient_confirmed (str), needs_help (bool),
+          observation_id (str), confidence (float), model_version (str)
+  Time  : fall detection time
 """
 
 import logging
+import os
 from contextlib import contextmanager
 from typing import Generator, List, Optional
 
 from sqlalchemy import select
 
 logger = logging.getLogger(__name__)
+
+_FALL_EVENTS_BUCKET = os.getenv("INFLUXDB_FALL_EVENTS_BUCKET") or os.getenv("INFLUXDB_BUCKET", "")
 
 # ---------------------------------------------------------------------------
 # Session factory + models
@@ -106,14 +109,68 @@ def list_falls(
     limit: int = 200,
 ) -> List[dict]:
     """
-    Return fall history rows.
+    Return fall history by querying the `fall_events` measurement in InfluxDB.
 
-    TODO: replace with InfluxDB query once FOCUS InfluxDB schema is confirmed.
-    Fall timestamps are written to FOCUS InfluxDB by the mobile app.
-    The caregiver dashboard fall-history view should read from there.
+    This replicates what FOCUS's Flutter caregiver dashboard needs to implement.
+    The data is written by the mobile app (or mock_app in local testing) after
+    each patient confirmation popup.
+
+    Flux query (reference for FOCUS DevOps Flutter implementation):
+      from(bucket: "<bucket>")
+        |> range(start: -30d)
+        |> filter(fn: (r) => r["_measurement"] == "fall_events")
+        |> filter(fn: (r) => r["patient_id"] == "<patient_id>")   // optional
+        |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+        |> sort(columns: ["_time"], desc: true)
+        |> limit(n: <limit>)
     """
-    logger.warning(
-        "list_falls() is not yet implemented — "
-        "needs InfluxDB integration (FOCUS side). Returning empty list."
+    bucket = _FALL_EVENTS_BUCKET
+    if not bucket:
+        logger.warning("INFLUXDB_BUCKET not configured — list_falls() returning empty")
+        return []
+
+    try:
+        from ml_pipeline.data_input.data_loader.influx_client_manager import _get_influxdb_client
+    except ImportError:
+        logger.warning("InfluxDB client not available — list_falls() returning empty")
+        return []
+
+    patient_filter = (
+        f'  |> filter(fn: (r) => r["patient_id"] == "{patient_id}")\n'
+        if patient_id else ""
     )
-    return []
+    only_falls_filter = (
+        '  |> filter(fn: (r) => r["fall_detected"] == true)\n'
+        if only_falls else ""
+    )
+
+    query = f'''from(bucket: "{bucket}")
+  |> range(start: -30d)
+  |> filter(fn: (r) => r["_measurement"] == "fall_events")
+{patient_filter}{only_falls_filter}  |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+  |> sort(columns: ["_time"], desc: true)
+  |> limit(n: {limit})
+'''
+
+    try:
+        client = _get_influxdb_client()
+        tables = client.query_api().query(query)
+    except Exception as exc:
+        logger.error(f"InfluxDB list_falls query failed: {exc}")
+        return []
+
+    results = []
+    for i, table in enumerate(tables):
+        for j, record in enumerate(table.records):
+            v = record.values
+            results.append({
+                "id":                i * 10000 + j,
+                "observation_id":    v.get("observation_id"),
+                "patient_id":        v.get("patient_id") or v.get("_measurement", ""),
+                "fall_detected":     bool(v.get("fall_detected", True)),
+                "patient_confirmed": v.get("patient_confirmed"),
+                "needs_help":        v.get("needs_help"),
+                "detection_time":    record.get_time().isoformat() if record.get_time() else None,
+            })
+
+    return results
