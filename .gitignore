@@ -203,7 +203,7 @@ temp/
 
 
 # Project specific
-.claude
+# .claude
 results/
 test.py
 api_key.txt

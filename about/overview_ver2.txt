@@ -1,7 +1,7 @@
 The system is composed of three layers in a big picture
- 1. Patinet layer (end-user interface)        = mobile app working in FOCUS network
- 2. Caregiver layer (backend + frontend)      = server in FOCUS network
- 3. Post-training layer (backend + frontend)  = server in MCS network
+ 1. Patinet layer (end-user interface)                    = mobile app working in FOCUS network
+ 2. Caregiver layer (backend + frontend)                  = server in FOCUS network
+ 3. Inference & Post-training layer (backend + frontend)  = server in MCS network
 
 Subcompoenents in each layer is hosted either in 
  (F): FOCUS network
@@ -29,7 +29,7 @@ FRONTEND
   - fall dashboard            (F)         displays all the falls, can be filited by period, patient, whether help requetsed or not 
                                           for real time use, all detected fall will be indicated followed by patient confirmation  
 
-3. Post-training layer
+3. Inference & Post-training layer
 -----------------------------------------------------------------------------------------------
 BACKEND
   - infrence server           (M)         API server for fall detection, talks to mobile app via HTTPs
@@ -80,7 +80,7 @@ Retraining Sequence
   2. Postgres writer saves inference data 
     2-1. inference_log table saves inference ID, inference result, confidence level, fall_confirmed, help_requested, etc.
     2-2. fall_history table saves patient_ID, inference ID, inference result, confidence level etc.  --> this should be eliminated 
-    2-3. feature_snapshot table saves the recerived dataset (450 datapoints of ACC only)
+    2-3. feature_snapshot table saves the recerived dataset (450 datapoints of ACC X, Y, and Z only )
     2-4. participant_session
   3. python script to retrain the model is triggered by technical user (MCS) from ml dashbaord 
   4. model can be re/back-loaded based on the training results
