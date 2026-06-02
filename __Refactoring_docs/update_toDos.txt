@@ -10,6 +10,12 @@ we will not use kubernetes on our end if technologically that is still compaitbl
 
 3. Code Changes -- Inference Server (MCS)
 remove fall_history table from MCS Postgres --> implement this for me 
+to test the whole pipleine, update the mock mobile app script that is running in our namespace so that it injects the timestamps (if the new field name is required, create whatever you think matching ) and the fall dashabord can fetch the results.
+
+
+
+4. Code Changes -- Caregiver Dashboard (FOCUS side)
+their dashbaord is built in flutter. based on the features implemented in fall_dashboard (which is python), we need to provide them instrcution documents, what compoent and features are required, how and from where they should get the fall_history
 
 
 
@@ -19,3 +25,7 @@ Open Questions
 3. What InfluxDB fields/measurement names will FOCUS use for fall timestamps? Needed to align caregiver dashboard query --> we can decide this. 
 4.	Does the caregiver dashboard need help_requested and fall_confirmed fields in InfluxDB, or is the timestamp enough? --> yes, we need those fields in influxDB
 5.	Who updates the caregiver webapp server (fetch from InfluxDB) -- MCS or FOCUS DevOps? --> We will push this to FOCUS , so we need to prepare some instruction documents later
+
+------ above is implemented already ---- below is not yet ---------
+
+ Prepare Docker Compose deployment package (NOT Kubernetes -- MCS will not use K8s on their side)

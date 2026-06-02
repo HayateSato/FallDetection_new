@@ -21,9 +21,10 @@ in their namespace. The inference server and all ML/post-training components mov
 - [x] Decide hosting environment: **Hetzner** (company standard)
 - [x] Public domain: **reuse existing MCS company domain** (no new domain purchase needed)
 - [ ] Obtain TLS certificate for the inference server subdomain (e.g. fall-api.mcs-domain.de)
-- [ ] Prepare **Docker Compose** deployment package (NOT Kubernetes -- MCS will not use K8s on their side)
-  - Services to package: inference server, Postgres, MLflow, MinIO, Prometheus, Grafana,
-    ml-dashboard, server-health dashboard
+- [x] **Remove `mock_focus_fhir`** from local dev compose + codebase (FHIR opted out; `local_dev/mock_focus/` deleted)
+- [ ] Prepare **Docker Compose** deployment package at `_6G_Integration_v2_mqtt/deploy/` (NOT Kubernetes -- MCS will not use K8s)
+  - 10 services: inference-server, fall-dashboard, ml-dashboard, server-health, postgres, mqtt, mlflow, minio, prometheus, grafana
+  - Plus db-migrate init job (alembic upgrade head)
   - Goal: Mohammed can clone the repo and run `docker compose up` on Hetzner with minimal setup
 - [ ] Test the Docker Compose stack locally before handing over to Mohammed
 - [ ] Document required .env variables for Mohammed's deployment

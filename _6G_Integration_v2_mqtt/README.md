@@ -65,8 +65,6 @@ _6G_Integration_v2_mqtt/
 │   │   ├── influx_fetcher.py       ← queries our cloud InfluxDB for raw ACC windows
 │   │   ├── api_caller.py           ← HTTP client to inference_server /predict
 │   │   └── requirements.txt
-│   ├── mock_focus/                 ← simulates the FOCUS-hosted FHIR server
-│   │   └── fhir_server.py          ← FastAPI stub (:8003): accepts FHIR Observation POSTs
 │   └── dev_scripts/
 │       └── switch_model.ps1        ← hot-swap inference server model via /model/switch API
 │
