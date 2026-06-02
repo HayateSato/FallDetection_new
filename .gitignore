@@ -214,10 +214,14 @@ _before_refactoring/
 _EcoSystem_Integration/
 emergency/
 _OLD/
-handover_docs/                   # legacy handover docs; active set is handover_docs_2/
-_6G_Integration_v2_redis/        # frozen Redis version; active is _6G_Integration_v2_mqtt/
-REFACTOR_DOCUS/                  # internal planning + scratch; not for colleagues
-_concept_6G_integration/         # meeting notes + concept docs; not for colleagues
+# legacy handover docs; active set is handover_docs_2/
+handover_docs/
+# frozen Redis version; active is _6G_Integration_v2_mqtt/
+_6G_Integration_v2_redis/
+# internal planning + scratch; not for colleagues
+REFACTOR_DOCUS/
+# meeting notes + concept docs; not for colleagues
+_concept_6G_integration/
 
 # MLflow local experiment store (reproducible — regenerate with retrain.py)
 mlruns/
