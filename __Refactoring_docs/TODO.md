@@ -20,7 +20,15 @@ in their namespace. The inference server and all ML/post-training components mov
 
 - [x] Decide hosting environment: **Hetzner** (company standard)
 - [x] Public domain: **reuse existing MCS company domain** (no new domain purchase needed)
-- [ ] Obtain TLS certificate for the inference server subdomain (e.g. fall-api.mcs-domain.de)
+- [ ] **[Mohammed]** TLS certificate for the inference server subdomain
+  - Ask MCS domain admin to create a DNS A-record pointing the subdomain (e.g. `fall-api.mcs-labs.de`) to the Hetzner server IP
+  - On Hetzner: install Nginx as reverse proxy + Certbot for free Let's Encrypt certificate
+    ```
+    apt install certbot python3-certbot-nginx
+    certbot --nginx -d fall-api.mcs-labs.de
+    ```
+  - Certbot auto-renews every 90 days; certificate is free via Let's Encrypt
+  - Nginx forwards HTTPS :443 → inference-server :8001 and fall-dashboard :8002 internally
 - [x] **Remove `mock_focus_fhir`** from local dev compose + codebase (FHIR opted out; `local_dev/mock_focus/` deleted)
 - [ ] Prepare **Docker Compose** deployment package at `_6G_Integration_v2_mqtt/deploy/` (NOT Kubernetes -- MCS will not use K8s)
   - 10 services: inference-server, fall-dashboard, ml-dashboard, server-health, postgres, mqtt, mlflow, minio, prometheus, grafana
