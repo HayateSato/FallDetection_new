@@ -14,3 +14,10 @@ Traceback (most recent call last):
     .time(ts, WritePrecision.NANOSECONDS)
               ^^^^^^^^^^^^^^^^^^^^^^^^^^
 AttributeError: type object 'WritePrecision' has no attribute 'NANOSECONDS'
+
+
+
+injection into influx should be 1 for fall or confirmed, 0 for no, -1 for not answered. 
+what is injected in influx? - we dont need to write model version, observation_id in influx
+the fall_history fetch is not working. 
+front end of the fall_dashbaord should be updated - when the caregiver user clicks one of the listed patients in the landing page, it should open up/go to next layer and it should show the count of falls in the last 24h, and when the table of falls and its timestamp, whether the confirmed or help is requested.

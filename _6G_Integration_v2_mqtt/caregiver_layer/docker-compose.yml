@@ -77,20 +77,6 @@ services:
         condition: service_started
     networks: [caregiver-net]
 
-  # ── One-off: Alembic migration ─────────────────────────────────────────────
-  db-migrate:
-    build:
-      context: ..
-      dockerfile: fall_dashboard/Dockerfile
-    command: ["alembic", "upgrade", "head"]
-    environment:
-      DATABASE_URL: postgresql+psycopg2://fall_user:${POSTGRES_PASSWORD:-fall_pass}@postgres:5432/fall_detection
-    depends_on:
-      postgres:
-        condition: service_healthy
-    restart: "no"
-    networks: [caregiver-net]
-
   # ── MQTT broker ────────────────────────────────────────────────────────────
   # Mobile app (Isa) publishes fall/alert/<patient_id> here after confirmation.
   # fall-dashboard subscribes to fall/alert/# and fans out via SSE.
@@ -161,8 +147,8 @@ services:
       INFLUXDB_ORG:                ${INFLUXDB_ORG}
       INFLUXDB_FALL_EVENTS_BUCKET: ${INFLUXDB_FALL_EVENTS_BUCKET}
     depends_on:
-      db-migrate:
-        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
       mqtt:
         condition: service_started
     networks: [caregiver-net]

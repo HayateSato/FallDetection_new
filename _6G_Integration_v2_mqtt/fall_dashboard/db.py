@@ -29,8 +29,8 @@ _FALL_EVENTS_BUCKET = os.getenv("INFLUXDB_FALL_EVENTS_BUCKET") or os.getenv("INF
 # ---------------------------------------------------------------------------
 # Session factory + models
 # ---------------------------------------------------------------------------
-from shared_db.db.session import SessionLocal, init_db as _shared_init_db
-from shared_db.db.models import ParticipantSession
+from shared_db.db.session import SessionLocal, engine
+from shared_db.db.models import Base, ParticipantSession
 
 
 # ---------------------------------------------------------------------------
@@ -38,9 +38,13 @@ from shared_db.db.models import ParticipantSession
 # ---------------------------------------------------------------------------
 
 def init_db() -> None:
-    """Create tables on first run. Safe to call repeatedly."""
-    _shared_init_db()
-    logger.info("Database ready (shared schema)")
+    """Create only participant_session — the only table owned by fall_dashboard.
+
+    inference_log and feature_snapshot live in the inference layer's Postgres
+    and must not be created here.
+    """
+    Base.metadata.create_all(engine, tables=[ParticipantSession.__table__])
+    logger.info("Database ready (participant_session only)")
 
 
 # ---------------------------------------------------------------------------
@@ -135,22 +139,15 @@ def list_falls(
     patient_id: Optional[str] = None,
     only_falls: bool = True,
     limit: int = 200,
+    hours: int = 720,
 ) -> List[dict]:
     """
     Return fall history by querying the `fall_events` measurement in InfluxDB.
 
-    This replicates what FOCUS's Flutter caregiver dashboard needs to implement.
-    The data is written by the mobile app (or mock_app in local testing) after
-    each patient confirmation popup.
+    patient_confirmed is an int: 1 = confirmed, 0 = denied, -1 = not answered.
 
-    Flux query (reference for FOCUS DevOps Flutter implementation):
-      from(bucket: "<bucket>")
-        |> range(start: -30d)
-        |> filter(fn: (r) => r["_measurement"] == "fall_events")
-        |> filter(fn: (r) => r["patient_id"] == "<patient_id>")   // optional
-        |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
-        |> sort(columns: ["_time"], desc: true)
-        |> limit(n: <limit>)
+    hours : how far back to look (default 720 = 30 days). Use hours=24 for
+            the patient detail view.
     """
     bucket = _FALL_EVENTS_BUCKET
     if not bucket:
@@ -163,20 +160,22 @@ def list_falls(
         logger.warning("InfluxDB client not available — list_falls() returning empty")
         return []
 
+    # patient_id is a TAG so it can be filtered before pivot
     patient_filter = (
         f'  |> filter(fn: (r) => r["patient_id"] == "{patient_id}")\n'
         if patient_id else ""
     )
-    only_falls_filter = (
+    # fall_detected is a FIELD — must filter AFTER pivot
+    only_falls_post = (
         '  |> filter(fn: (r) => r["fall_detected"] == true)\n'
         if only_falls else ""
     )
 
     query = f'''from(bucket: "{bucket}")
-  |> range(start: -30d)
+  |> range(start: -{hours}h)
   |> filter(fn: (r) => r["_measurement"] == "fall_events")
-{patient_filter}{only_falls_filter}  |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
-  |> sort(columns: ["_time"], desc: true)
+{patient_filter}  |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
+{only_falls_post}  |> sort(columns: ["_time"], desc: true)
   |> limit(n: {limit})
 '''
 
@@ -193,11 +192,11 @@ def list_falls(
             v = record.values
             results.append({
                 "id":                i * 10000 + j,
-                "observation_id":    v.get("observation_id"),
-                "patient_id":        v.get("patient_id") or v.get("_measurement", ""),
+                "patient_id":        v.get("patient_id") or "",
                 "fall_detected":     bool(v.get("fall_detected", True)),
-                "patient_confirmed": v.get("patient_confirmed"),
+                "patient_confirmed": v.get("patient_confirmed"),  # int: 1/0/-1
                 "needs_help":        v.get("needs_help"),
+                "confidence":        v.get("confidence"),
                 "detection_time":    record.get_time().isoformat() if record.get_time() else None,
             })
 

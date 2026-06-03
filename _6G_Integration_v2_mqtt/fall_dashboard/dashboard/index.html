@@ -43,12 +43,51 @@
     <button class="tab" onclick="switchTab('history')">Fall History</button>
   </nav>
 
+  <!-- ── Patients tab ─────────────────────────────────────────────────── -->
   <main id="tab-patients" class="tab-content">
     <div id="patient-list" class="patient-grid">
       <p class="loading">Loading patients...</p>
     </div>
   </main>
 
+  <!-- ── Patient detail view (drill-down from patient card) ─────────── -->
+  <main id="tab-patient-detail" class="tab-content hidden">
+    <div class="detail-header">
+      <button class="btn-secondary" onclick="backToPatients()">&#8592; Back</button>
+      <h2 id="detail-patient-name">—</h2>
+    </div>
+
+    <div class="detail-stats">
+      <div class="detail-stat-card">
+        <div class="detail-stat-label">Falls in last 24h</div>
+        <div id="detail-falls-24h" class="detail-stat-value">—</div>
+      </div>
+      <div class="detail-stat-card">
+        <div class="detail-stat-label">Confirmed falls</div>
+        <div id="detail-confirmed" class="detail-stat-value">—</div>
+      </div>
+      <div class="detail-stat-card">
+        <div class="detail-stat-label">Help requested</div>
+        <div id="detail-help" class="detail-stat-value">—</div>
+      </div>
+    </div>
+
+    <table class="data-table" id="detail-table">
+      <thead>
+        <tr>
+          <th>Detection time</th>
+          <th>Patient response</th>
+          <th>Needs help</th>
+          <th>Confidence</th>
+        </tr>
+      </thead>
+      <tbody id="detail-tbody">
+        <tr><td colspan="4" class="loading">Loading...</td></tr>
+      </tbody>
+    </table>
+  </main>
+
+  <!-- ── Fall history tab ────────────────────────────────────────────── -->
   <main id="tab-history" class="tab-content hidden">
     <div class="filter-bar">
       <div class="filter-group">
@@ -56,12 +95,12 @@
         <input id="filter-patient" type="text" placeholder="All devices" />
       </div>
       <div class="filter-group">
-        <label for="filter-confirmed">Patient confirmed</label>
+        <label for="filter-confirmed">Patient response</label>
         <select id="filter-confirmed">
           <option value="">Any</option>
-          <option value="yes">Yes — fell</option>
-          <option value="no">No — didn't fall</option>
-          <option value="not_answered">Not answered</option>
+          <option value="1">Confirmed (1)</option>
+          <option value="0">Denied (0)</option>
+          <option value="-1">No response (-1)</option>
         </select>
       </div>
       <button onclick="loadHistory()" class="btn-primary">Apply</button>
@@ -72,13 +111,14 @@
       <thead>
         <tr>
           <th>Detection time</th>
-          <th>Device (MAC)</th>
-          <th>Patient responded</th>
+          <th>Patient</th>
+          <th>Patient response</th>
           <th>Needs help</th>
+          <th>Confidence</th>
         </tr>
       </thead>
       <tbody id="history-tbody">
-        <tr><td colspan="4" class="loading">Loading...</td></tr>
+        <tr><td colspan="5" class="loading">Loading...</td></tr>
       </tbody>
     </table>
   </main>

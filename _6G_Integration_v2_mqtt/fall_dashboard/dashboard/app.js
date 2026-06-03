@@ -1,5 +1,4 @@
-// Caregiver dashboard — 6G/Charite minimal client
-// All API calls are same-origin, no auth.
+// Caregiver dashboard — 6G/Charite
 
 const API = {
   patients: '/api/patients',
@@ -18,6 +17,7 @@ function switchTab(tab) {
   document.querySelectorAll('.tab').forEach((b) => b.classList.remove('active'));
   document.querySelector(`.tab[onclick="switchTab('${tab}')"]`).classList.add('active');
   document.getElementById('tab-patients').classList.toggle('hidden', tab !== 'patients');
+  document.getElementById('tab-patient-detail').classList.add('hidden');
   document.getElementById('tab-history').classList.toggle('hidden', tab !== 'history');
   if (tab === 'history') loadHistory();
   if (tab === 'patients') loadPatients();
@@ -38,13 +38,14 @@ async function loadPatients() {
       return;
     }
     list.innerHTML = data.patients.map((p) => `
-      <div class="patient-card ${p.fall_count > 0 ? 'has-falls' : ''}">
+      <div class="patient-card ${p.fall_count > 0 ? 'has-falls' : ''}" onclick="openPatient('${escapeHtml(p.patient_id)}')">
         <div class="patient-name">${escapeHtml(p.patient_id)}</div>
         <div class="patient-meta">
           <span class="badge">${p.fall_count} falls</span>
           ${p.session_active ? '<span class="badge badge-active">Active</span>' : ''}
           ${p.mac_id ? `<span class="badge">${escapeHtml(p.mac_id)}</span>` : ''}
         </div>
+        <div class="patient-card-hint">Tap to view history</div>
       </div>
     `).join('');
     document.getElementById('stat-patients').textContent = data.patients.length;
@@ -60,6 +61,61 @@ function updateFallsToday(patients) {
 }
 
 // ---------------------------------------------------------------------------
+// Patient detail view
+// ---------------------------------------------------------------------------
+async function openPatient(patientId) {
+  document.getElementById('tab-patients').classList.add('hidden');
+  document.getElementById('tab-history').classList.add('hidden');
+  document.getElementById('tab-patient-detail').classList.remove('hidden');
+  document.getElementById('detail-patient-name').textContent = patientId;
+  document.getElementById('detail-tbody').innerHTML = '<tr><td colspan="4" class="loading">Loading...</td></tr>';
+  document.getElementById('detail-falls-24h').textContent = '—';
+  document.getElementById('detail-confirmed').textContent = '—';
+  document.getElementById('detail-help').textContent = '—';
+
+  try {
+    const params = new URLSearchParams({ patient_id: patientId, only_falls: 'false', hours: '24', limit: '500' });
+    const resp = await fetch(`${API.falls}?${params}`);
+    const data = await resp.json();
+    const rows = data.falls || [];
+
+    const total      = rows.length;
+    const confirmed  = rows.filter((r) => r.patient_confirmed === 1).length;
+    const helpNeeded = rows.filter((r) => r.needs_help === true).length;
+
+    document.getElementById('detail-falls-24h').textContent = total;
+    document.getElementById('detail-confirmed').textContent = confirmed;
+    document.getElementById('detail-help').textContent = helpNeeded;
+
+    if (rows.length === 0) {
+      document.getElementById('detail-tbody').innerHTML =
+        '<tr><td colspan="4" class="empty">No fall events in the last 24 hours.</td></tr>';
+      return;
+    }
+
+    document.getElementById('detail-tbody').innerHTML = rows.map((r) => `
+      <tr>
+        <td>${formatTime(r.detection_time)}</td>
+        <td>${formatConfirmed(r.patient_confirmed)}</td>
+        <td>${r.needs_help === true ? '<span class="tag tag-yes">Yes</span>' : '<span class="tag tag-no">No</span>'}</td>
+        <td>${r.confidence != null ? (r.confidence * 100).toFixed(0) + '%' : '—'}</td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    document.getElementById('detail-tbody').innerHTML =
+      `<tr><td colspan="4" class="error">Failed to load: ${e.message}</td></tr>`;
+  }
+}
+
+function backToPatients() {
+  document.getElementById('tab-patient-detail').classList.add('hidden');
+  document.getElementById('tab-patients').classList.remove('hidden');
+  currentTab = 'patients';
+  document.querySelectorAll('.tab').forEach((b) => b.classList.remove('active'));
+  document.querySelector(`.tab[onclick="switchTab('patients')"]`).classList.add('active');
+}
+
+// ---------------------------------------------------------------------------
 // Fall history tab
 // ---------------------------------------------------------------------------
 async function loadHistory() {
@@ -69,26 +125,27 @@ async function loadHistory() {
 
   tbody.innerHTML = '<tr><td colspan="5" class="loading">Loading...</td></tr>';
 
-  const params = new URLSearchParams({ only_falls: 'true', limit: '500' });
+  const params = new URLSearchParams({ only_falls: 'true', limit: '500', hours: '720' });
   if (filter) params.append('patient_id', filter);
 
   try {
     const resp = await fetch(`${API.falls}?${params}`);
     const data = await resp.json();
     let rows = data.falls || [];
-    if (conf) rows = rows.filter((r) => r.patient_confirmed === conf);
+    if (conf !== '') rows = rows.filter((r) => String(r.patient_confirmed) === conf);
 
     if (rows.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="4" class="empty">No fall events.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" class="empty">No fall events.</td></tr>';
       return;
     }
 
     tbody.innerHTML = rows.map((r) => `
-      <tr class="row-fall">
+      <tr>
         <td>${formatTime(r.detection_time)}</td>
         <td>${escapeHtml(r.mac_id || r.patient_id)}</td>
         <td>${formatConfirmed(r.patient_confirmed)}</td>
-        <td>${r.needs_help === true ? '<span class="tag tag-yes">Yes</span>' : r.needs_help === false ? '<span class="tag tag-no">No</span>' : '<span class="tag tag-pending">—</span>'}</td>
+        <td>${r.needs_help === true ? '<span class="tag tag-yes">Yes</span>' : '<span class="tag tag-no">No</span>'}</td>
+        <td>${r.confidence != null ? (r.confidence * 100).toFixed(0) + '%' : '—'}</td>
       </tr>
     `).join('');
   } catch (e) {
@@ -109,9 +166,7 @@ function connectStream() {
   if (eventSource) eventSource.close();
   eventSource = new EventSource(API.stream);
 
-  eventSource.addEventListener('connected', () => {
-    setStreamStatus(true);
-  });
+  eventSource.addEventListener('connected', () => setStreamStatus(true));
 
   eventSource.onmessage = (msg) => {
     setStreamStatus(true);
@@ -123,10 +178,7 @@ function connectStream() {
     }
   };
 
-  eventSource.onerror = () => {
-    setStreamStatus(false);
-    // EventSource auto-reconnects; no manual retry needed.
-  };
+  eventSource.onerror = () => setStreamStatus(false);
 }
 
 function setStreamStatus(connected) {
@@ -138,23 +190,19 @@ function setStreamStatus(connected) {
 function handleFallEvent(event) {
   console.log('Fall event:', event);
 
-  const confirmed  = event.patient_confirmed;
-  const needsHelp  = event.needs_help;
+  const confirmed = event.patient_confirmed;  // int: 1, 0, -1
+  const needsHelp = event.needs_help;
 
-  // Only show the alert banner when the caregiver actually needs to act.
-  // This mirrors the server-side filter in fall_dashboard/main.py.
-  const shouldAlert = (
-    confirmed === 'not_answered' ||
-    (confirmed === 'yes' && needsHelp === true)
-  );
+  // Show alert banner when caregiver needs to act:
+  //   -1 = no response → assume serious
+  //    1 + needs_help = confirmed + rescue needed
+  const shouldAlert = (confirmed === -1 || (confirmed === 1 && needsHelp === true));
   if (!shouldAlert) return;
 
   const banner = document.getElementById('alert-banner');
   const text   = document.getElementById('alert-text');
   const label  = event.mac_id || event.patient_id || 'unknown';
-  const reason = confirmed === 'not_answered'
-    ? 'no response from patient'
-    : 'patient confirmed — needs help';
+  const reason = confirmed === -1 ? 'no response from patient' : 'patient confirmed — needs help';
   text.textContent = `FALL ALERT — ${label} (${reason}, confidence ${event.confidence ?? '?'})`;
   banner.classList.remove('hidden');
 
@@ -175,9 +223,10 @@ function formatTime(iso) {
 }
 
 function formatConfirmed(c) {
-  if (c === 'yes')          return '<span class="tag tag-yes">Yes</span>';
-  if (c === 'no')           return '<span class="tag tag-no">No</span>';
-  return '<span class="tag tag-pending">Not answered</span>';
+  if (c === 1  || c === '1')  return '<span class="tag tag-yes">Confirmed</span>';
+  if (c === 0  || c === '0')  return '<span class="tag tag-no">Not a fall</span>';
+  if (c === -1 || c === '-1') return '<span class="tag tag-pending">No response</span>';
+  return '<span class="tag tag-pending">—</span>';
 }
 
 function escapeHtml(s) {

@@ -111,10 +111,48 @@ header {
   border-radius: 8px;
   padding: 1rem;
   box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+  cursor: pointer;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.patient-card:hover {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.10);
+  border-color: #d1d5db;
 }
 .patient-card.has-falls { border-left: 4px solid #dc2626; }
 .patient-name { font-weight: 600; color: #111827; margin-bottom: 0.5rem; }
 .patient-meta { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+.patient-card-hint { font-size: 0.72rem; color: #9ca3af; margin-top: 0.5rem; }
+
+/* ----- Patient detail view ----- */
+.detail-header {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.detail-header h2 { margin: 0; font-size: 1.25rem; color: #111827; }
+
+.detail-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+.detail-stat-card {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+}
+.detail-stat-label {
+  font-size: 0.75rem;
+  color: #6b7280;
+  text-transform: uppercase;
+  margin-bottom: 0.25rem;
+  letter-spacing: 0.03em;
+}
+.detail-stat-value { font-size: 2rem; font-weight: 700; color: #111827; }
 
 .badge {
   display: inline-block;

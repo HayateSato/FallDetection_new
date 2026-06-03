@@ -74,8 +74,9 @@ def api_falls(
     patient_id: Optional[str] = Query(None),
     only_falls: bool          = Query(True),
     limit:      int           = Query(200, ge=1, le=2000),
+    hours:      int           = Query(720, ge=1, le=8760),
 ):
-    falls = cdb.list_falls(patient_id=patient_id, only_falls=only_falls, limit=limit)
+    falls = cdb.list_falls(patient_id=patient_id, only_falls=only_falls, limit=limit, hours=hours)
     for f in falls:
         f["mac_id"] = mac_map.get(f["patient_id"], "")
     return {"falls": falls}

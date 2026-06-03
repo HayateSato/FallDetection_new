@@ -9,16 +9,10 @@ InfluxDB schema (agreed by MCS, communicated to FOCUS DevOps):
   Measurement : fall_events
   Tags        : patient_id, device_id
   Fields      : fall_detected      (bool)
-                patient_confirmed  (str)  'yes' | 'no' | 'not_answered'
+                patient_confirmed  (int)   1 = confirmed, 0 = denied, -1 = not answered
                 needs_help         (bool)
-                observation_id     (str)  UUID — links back to MCS inference_log
                 confidence         (float)
-                model_version      (str)
   Timestamp   : detection_time of the fall event
-
-The real mobile app would write the same point to FOCUS InfluxDB.
-This mock writes to the local/dev InfluxDB so the full pipeline can be
-tested without needing the production FOCUS environment.
 """
 
 import logging
@@ -29,6 +23,8 @@ from typing import Optional
 logger = logging.getLogger(__name__)
 
 INFLUXDB_FALL_EVENTS_BUCKET = os.getenv("INFLUXDB_FALL_EVENTS_BUCKET") or os.getenv("INFLUXDB_BUCKET", "")
+
+_CONFIRMED_TO_INT = {"yes": 1, "no": 0, "not_answered": -1}
 
 
 def inject_fall_marker(
@@ -44,14 +40,10 @@ def inject_fall_marker(
     """
     Write one fall_events point to InfluxDB.
 
-    Called after the patient confirmation popup (or 10-second timeout).
-    Never raises — a failed write is logged as a warning and the rest of the
-    pipeline continues.
-
-    Parameters
-    ----------
-    detection_time : UTC datetime of the fall detection (from /predict response).
-                     Defaults to now() if not provided.
+    patient_confirmed is stored as an integer:
+      1  = patient confirmed fall (yes)
+      0  = patient denied fall (no)
+     -1  = no response within timeout (not_answered)
     """
     try:
         from influxdb_client import Point
@@ -67,17 +59,16 @@ def inject_fall_marker(
         return
 
     ts = detection_time or datetime.now(timezone.utc)
+    confirmed_int = _CONFIRMED_TO_INT.get(patient_confirmed, -1)
 
     point = (
         Point("fall_events")
         .tag("patient_id", patient_id)
         .tag("device_id", device_id or "")
         .field("fall_detected",     True)
-        .field("patient_confirmed", patient_confirmed)
+        .field("patient_confirmed", confirmed_int)
         .field("needs_help",        bool(needs_help))
-        .field("observation_id",    observation_id)
         .field("confidence",        round(float(confidence), 4))
-        .field("model_version",     str(model_version))
         .time(ts, "ns")
     )
 
@@ -87,8 +78,8 @@ def inject_fall_marker(
         write_api.write(bucket=bucket, record=point)
         logger.info(
             f"InfluxDB fall_events write OK  "
-            f"patient={patient_id}  confirmed={patient_confirmed}  "
-            f"needs_help={needs_help}  observation_id={observation_id}"
+            f"patient={patient_id}  confirmed={patient_confirmed}({confirmed_int})  "
+            f"needs_help={needs_help}"
         )
     except Exception as exc:
         logger.warning(f"InfluxDB fall_events write failed (non-fatal): {exc}")
