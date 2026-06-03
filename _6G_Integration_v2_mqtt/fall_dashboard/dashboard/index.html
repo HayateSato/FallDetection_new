@@ -38,11 +38,6 @@
     </div>
   </header>
 
-  <nav class="tab-bar">
-    <button class="tab active" onclick="switchTab('patients')">Patients</button>
-    <button class="tab" onclick="switchTab('history')">Fall History</button>
-  </nav>
-
   <!-- ── Patients tab ─────────────────────────────────────────────────── -->
   <main id="tab-patients" class="tab-content">
     <div id="patient-list" class="patient-grid">
@@ -83,42 +78,6 @@
       </thead>
       <tbody id="detail-tbody">
         <tr><td colspan="4" class="loading">Loading...</td></tr>
-      </tbody>
-    </table>
-  </main>
-
-  <!-- ── Fall history tab ────────────────────────────────────────────── -->
-  <main id="tab-history" class="tab-content hidden">
-    <div class="filter-bar">
-      <div class="filter-group">
-        <label for="filter-patient">Device / Patient</label>
-        <input id="filter-patient" type="text" placeholder="All devices" />
-      </div>
-      <div class="filter-group">
-        <label for="filter-confirmed">Patient response</label>
-        <select id="filter-confirmed">
-          <option value="">Any</option>
-          <option value="1">Confirmed (1)</option>
-          <option value="0">Denied (0)</option>
-          <option value="-1">No response (-1)</option>
-        </select>
-      </div>
-      <button onclick="loadHistory()" class="btn-primary">Apply</button>
-      <button onclick="resetFilters()" class="btn-secondary">Reset</button>
-    </div>
-
-    <table class="data-table" id="history-table">
-      <thead>
-        <tr>
-          <th>Detection time</th>
-          <th>Patient</th>
-          <th>Patient response</th>
-          <th>Needs help</th>
-          <th>Confidence</th>
-        </tr>
-      </thead>
-      <tbody id="history-tbody">
-        <tr><td colspan="5" class="loading">Loading...</td></tr>
       </tbody>
     </table>
   </main>

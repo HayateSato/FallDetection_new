@@ -6,22 +6,8 @@ const API = {
   stream:   '/api/stream',
 };
 
-let currentTab = 'patients';
+let inDetailView = false;
 let eventSource = null;
-
-// ---------------------------------------------------------------------------
-// Tab switching
-// ---------------------------------------------------------------------------
-function switchTab(tab) {
-  currentTab = tab;
-  document.querySelectorAll('.tab').forEach((b) => b.classList.remove('active'));
-  document.querySelector(`.tab[onclick="switchTab('${tab}')"]`).classList.add('active');
-  document.getElementById('tab-patients').classList.toggle('hidden', tab !== 'patients');
-  document.getElementById('tab-patient-detail').classList.add('hidden');
-  document.getElementById('tab-history').classList.toggle('hidden', tab !== 'history');
-  if (tab === 'history') loadHistory();
-  if (tab === 'patients') loadPatients();
-}
 
 // ---------------------------------------------------------------------------
 // Patients tab
@@ -64,8 +50,8 @@ function updateFallsToday(patients) {
 // Patient detail view
 // ---------------------------------------------------------------------------
 async function openPatient(patientId) {
+  inDetailView = true;
   document.getElementById('tab-patients').classList.add('hidden');
-  document.getElementById('tab-history').classList.add('hidden');
   document.getElementById('tab-patient-detail').classList.remove('hidden');
   document.getElementById('detail-patient-name').textContent = patientId;
   document.getElementById('detail-tbody').innerHTML = '<tr><td colspan="4" class="loading">Loading...</td></tr>';
@@ -108,55 +94,10 @@ async function openPatient(patientId) {
 }
 
 function backToPatients() {
+  inDetailView = false;
   document.getElementById('tab-patient-detail').classList.add('hidden');
   document.getElementById('tab-patients').classList.remove('hidden');
-  currentTab = 'patients';
-  document.querySelectorAll('.tab').forEach((b) => b.classList.remove('active'));
-  document.querySelector(`.tab[onclick="switchTab('patients')"]`).classList.add('active');
-}
-
-// ---------------------------------------------------------------------------
-// Fall history tab
-// ---------------------------------------------------------------------------
-async function loadHistory() {
-  const tbody  = document.getElementById('history-tbody');
-  const filter = document.getElementById('filter-patient').value.trim();
-  const conf   = document.getElementById('filter-confirmed').value;
-
-  tbody.innerHTML = '<tr><td colspan="5" class="loading">Loading...</td></tr>';
-
-  const params = new URLSearchParams({ only_falls: 'true', limit: '500', hours: '720' });
-  if (filter) params.append('patient_id', filter);
-
-  try {
-    const resp = await fetch(`${API.falls}?${params}`);
-    const data = await resp.json();
-    let rows = data.falls || [];
-    if (conf !== '') rows = rows.filter((r) => String(r.patient_confirmed) === conf);
-
-    if (rows.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="5" class="empty">No fall events.</td></tr>';
-      return;
-    }
-
-    tbody.innerHTML = rows.map((r) => `
-      <tr>
-        <td>${formatTime(r.detection_time)}</td>
-        <td>${escapeHtml(r.mac_id || r.patient_id)}</td>
-        <td>${formatConfirmed(r.patient_confirmed)}</td>
-        <td>${r.needs_help === true ? '<span class="tag tag-yes">Yes</span>' : '<span class="tag tag-no">No</span>'}</td>
-        <td>${r.confidence != null ? (r.confidence * 100).toFixed(0) + '%' : '—'}</td>
-      </tr>
-    `).join('');
-  } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="5" class="error">Failed to load: ${e.message}</td></tr>`;
-  }
-}
-
-function resetFilters() {
-  document.getElementById('filter-patient').value = '';
-  document.getElementById('filter-confirmed').value = '';
-  loadHistory();
+  loadPatients();
 }
 
 // ---------------------------------------------------------------------------
@@ -206,8 +147,7 @@ function handleFallEvent(event) {
   text.textContent = `FALL ALERT — ${label} (${reason}, confidence ${event.confidence ?? '?'})`;
   banner.classList.remove('hidden');
 
-  if (currentTab === 'patients') loadPatients();
-  if (currentTab === 'history')  loadHistory();
+  if (!inDetailView) loadPatients();
 }
 
 function dismissAlert() {
@@ -241,6 +181,5 @@ function escapeHtml(s) {
 loadPatients();
 connectStream();
 setInterval(() => {
-  if (currentTab === 'patients') loadPatients();
-  if (currentTab === 'history')  loadHistory();
+  if (!inDetailView) loadPatients();
 }, 15000);
