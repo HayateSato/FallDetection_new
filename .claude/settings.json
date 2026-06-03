@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Rename-Item -Path \"C:\\\\Users\\\\hayat\\\\Documents\\\\6G\\\\FallDetection_new\\\\_6G_Integration_v2_mqtt\\\\deploy\" -NewName \"inference_posttraining_layer\")",
+      "PowerShell(\\(Get-Content \"C:\\\\Users\\\\hayat\\\\Documents\\\\6G\\\\FallDetection_new\\\\_6G_Integration_v2_mqtt\\\\inference_posttraining_layer\\\\README.md\"\\) -replace 'deploy/', 'inference_posttraining_layer/' | Set-Content \"C:\\\\Users\\\\hayat\\\\Documents\\\\6G\\\\FallDetection_new\\\\_6G_Integration_v2_mqtt\\\\inference_posttraining_layer\\\\README.md\" -Encoding utf8; Write-Host \"Done\")",
+      "PowerShell(\\(Get-Content \"C:\\\\Users\\\\hayat\\\\Documents\\\\6G\\\\FallDetection_new\\\\_6G_Integration_v2_mqtt\\\\inference_posttraining_layer\\\\.env\"\\) -replace 'deploy/', 'inference_posttraining_layer/' | Set-Content \"C:\\\\Users\\\\hayat\\\\Documents\\\\6G\\\\FallDetection_new\\\\_6G_Integration_v2_mqtt\\\\inference_posttraining_layer\\\\.env\" -Encoding utf8; Write-Host \"Done\")"
+    ]
+  }
+}

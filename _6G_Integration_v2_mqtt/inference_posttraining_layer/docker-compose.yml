@@ -10,19 +10,19 @@
 #
 # First-time setup: copy deploy/.env.example to deploy/.env and fill in secrets.
 #
-# Services (10 long-running + 2 one-off init jobs):
+# Services (8 long-running + 2 one-off init jobs):
 #   inference-server  :8001   Fall detection API (public — put behind reverse proxy)
-#   fall-dashboard    :8002   SSE + /api/falls (consumed by FOCUS Flutter dashboard)
 #   ml-dashboard      :8004   Admin UI — retrain + model hot-swap (internal only)
 #   server-health     :8006   Aggregate health probe dashboard (internal only)
 #   postgres          :5432   Shared database (inference_log, feature_snapshot, MLflow)
-#   mqtt              :1883   MQTT broker (mobile app publishes; fall-dashboard subscribes)
 #   mlflow            :5000   ML experiment tracking + model registry (internal only)
 #   minio             :9000   Model artifact store — S3-compatible (internal only)
 #   prometheus        :9090   Metrics scraping (internal only)
 #   grafana           :3000   ML dashboards (internal only)
 #   db-migrate        ---     One-off: runs alembic upgrade head, then exits
 #   minio-setup       ---     One-off: creates mlflow-artifacts bucket, then exits
+#
+# NOTE: mqtt and fall-dashboard are in caregiver_layer/ (FOCUS side).
 # =============================================================================
 
 services:
@@ -93,46 +93,12 @@ services:
         condition: service_healthy
       db-migrate:
         condition: service_completed_successfully
-      mqtt:
-        condition: service_started
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 30s
-    networks: [fall-net]
-
-  fall-dashboard:
-    build:
-      context: ..
-      dockerfile: fall_dashboard/Dockerfile
-    image: fall-detection/fall-dashboard:latest
-    container_name: fall_dashboard
-    restart: unless-stopped
-    ports:
-      - "8002:8002"
-    environment:
-      DATABASE_URL:                 postgresql+psycopg2://fall_user:${POSTGRES_PASSWORD:-fall_pass}@postgres:5432/fall_detection
-      MQTT_BROKER_HOST:             mqtt
-      MQTT_BROKER_PORT:             "1883"
-      MQTT_ALERT_TOPIC:             ${MQTT_ALERT_TOPIC:-fall/alert}
-      MQTT_USERNAME:                ${MQTT_USERNAME:-}
-      MQTT_PASSWORD:                ${MQTT_PASSWORD:-}
-      CAREGIVER_HOST:               "0.0.0.0"
-      CAREGIVER_PORT:               "8002"
-      PATIENT_IDS:                  ${PATIENT_IDS:-}
-      MAC_IDS:                      ${MAC_IDS:-}
-      # FOCUS InfluxDB — for list_falls() (fall history tab in caregiver dashboard)
-      INFLUXDB_URL:                 ${INFLUXDB_URL:-}
-      INFLUXDB_TOKEN:               ${INFLUXDB_TOKEN:-}
-      INFLUXDB_ORG:                 ${INFLUXDB_ORG:-}
-      INFLUXDB_FALL_EVENTS_BUCKET:  ${INFLUXDB_FALL_EVENTS_BUCKET:-}
-    depends_on:
-      db-migrate:
-        condition: service_completed_successfully
-      mqtt:
-        condition: service_started
     networks: [fall-net]
 
   ml-dashboard:
@@ -177,14 +143,15 @@ services:
       - "8006:8006"
     environment:
       INFERENCE_SERVER_URL:  http://inference-server:8001
-      FALL_DASHBOARD_URL:    http://fall-dashboard:8002
+      # FALL_DASHBOARD_URL points to caregiver_layer (different machine or localhost)
+      # For two-laptop test: set to http://<FOCUS_LAPTOP_IP>:8002
+      # For single-machine test: set to http://localhost:8002
+      FALL_DASHBOARD_URL:    ${FALL_DASHBOARD_URL:-http://localhost:8002}
       SERVER_HEALTH_HOST:    "0.0.0.0"
       SERVER_HEALTH_PORT:    "8006"
     depends_on:
       inference-server:
         condition: service_healthy
-      fall-dashboard:
-        condition: service_started
     networks: [fall-net]
 
   # ── Infrastructure ─────────────────────────────────────────────────────────
@@ -207,19 +174,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-    networks: [fall-net]
-
-  mqtt:
-    image: eclipse-mosquitto:2
-    container_name: fall_mqtt
-    restart: unless-stopped
-    ports:
-      - "1883:1883"
-      - "8883:8883"
-    volumes:
-      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-      - mqtt_data:/mosquitto/data
-      - mqtt_logs:/mosquitto/log
     networks: [fall-net]
 
   mlflow:
@@ -319,5 +273,3 @@ volumes:
   minio_data:
   prometheus_data:
   grafana_data:
-  mqtt_data:
-  mqtt_logs:

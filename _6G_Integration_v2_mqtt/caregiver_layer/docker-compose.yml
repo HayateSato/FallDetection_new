@@ -1,0 +1,152 @@
+# =============================================================================
+# Fall Detection — Caregiver Layer (FOCUS mock environment)
+# =============================================================================
+#
+# Represents the FOCUS-hosted services: MQTT broker, InfluxDB, and
+# fall-dashboard (MQTT subscriber + caregiver SSE/API).
+#
+# For LOCAL TWO-LAPTOP TESTING run this on the second Windows laptop.
+# For PRODUCTION this is what FOCUS DevOps hosts in their own environment
+# (they will rebuild the Flutter dashboard on top of these APIs).
+#
+# Run from _6G_Integration_v2_mqtt/ as working directory:
+#   docker compose -f caregiver_layer/docker-compose.yml --env-file caregiver_layer/.env up -d
+#
+# Or from inside caregiver_layer/:
+#   docker compose up -d
+#
+# Services:
+#   mqtt            :1883   MQTT broker — mobile app publishes fall alerts here
+#   influxdb        :8086   Mock FOCUS InfluxDB — mobile app writes fall_events here
+#   postgres        :5432   Database for participant_session (fall-dashboard)
+#   db-migrate      ---     One-off: alembic upgrade head, then exits
+#   fall-dashboard  :8002   MQTT subscriber + SSE feed + /api/falls + /api/patients
+# =============================================================================
+
+services:
+
+  # ── One-off: Alembic migration ─────────────────────────────────────────────
+  db-migrate:
+    build:
+      context: ..
+      dockerfile: fall_dashboard/Dockerfile
+    command: ["alembic", "upgrade", "head"]
+    environment:
+      DATABASE_URL: postgresql+psycopg2://fall_user:${POSTGRES_PASSWORD:-fall_pass}@postgres:5432/fall_detection
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+    networks: [caregiver-net]
+
+  # ── MQTT broker ────────────────────────────────────────────────────────────
+  # Mobile app (Isa) publishes fall/alert/<patient_id> here after confirmation.
+  # fall-dashboard subscribes to fall/alert/# and fans out via SSE.
+  # Reachable from outside Docker at <this-machine-ip>:1883
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: focus_mqtt
+    restart: unless-stopped
+    ports:
+      - "1883:1883"
+      - "8883:8883"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - mqtt_data:/mosquitto/data
+      - mqtt_logs:/mosquitto/log
+    networks: [caregiver-net]
+
+  # ── Mock FOCUS InfluxDB ────────────────────────────────────────────────────
+  # Simulates the InfluxDB that FOCUS hosts in their real environment.
+  # Mobile app writes fall_events measurement here after patient confirmation.
+  # fall-dashboard queries fall_events here for /api/falls (fall history tab).
+  # Reachable from outside Docker at <this-machine-ip>:8086
+  influxdb:
+    image: influxdb:2.7
+    container_name: focus_influxdb
+    restart: unless-stopped
+    ports:
+      - "8086:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE:         setup
+      DOCKER_INFLUXDB_INIT_USERNAME:     admin
+      DOCKER_INFLUXDB_INIT_PASSWORD:     ${INFLUXDB_ADMIN_PASSWORD:-adminpassword}
+      DOCKER_INFLUXDB_INIT_ORG:          ${INFLUXDB_ORG:-focus-mock}
+      DOCKER_INFLUXDB_INIT_BUCKET:       ${INFLUXDB_FALL_EVENTS_BUCKET:-fall-events}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN:  ${INFLUXDB_TOKEN:-mock-focus-token}
+    volumes:
+      - influxdb_data:/var/lib/influxdb2
+    networks: [caregiver-net]
+
+  # ── Postgres (participant_session) ─────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    container_name: focus_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER:     fall_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fall_pass}
+      POSTGRES_DB:       fall_detection
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fall_user -d fall_detection"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [caregiver-net]
+
+  # ── Fall dashboard ─────────────────────────────────────────────────────────
+  # Subscribes to MQTT broker, serves SSE feed and REST API for caregiver UI.
+  # FOCUS Flutter dashboard connects to:
+  #   GET  /api/stream          SSE live fall alerts
+  #   GET  /api/falls           Fall history (from InfluxDB fall_events)
+  #   GET  /api/patients        Patient list (from postgres participant_session)
+  fall-dashboard:
+    build:
+      context: ..
+      dockerfile: fall_dashboard/Dockerfile
+    image: fall-detection/fall-dashboard:latest
+    container_name: focus_fall_dashboard
+    restart: unless-stopped
+    ports:
+      - "8002:8002"
+    environment:
+      DATABASE_URL:                postgresql+psycopg2://fall_user:${POSTGRES_PASSWORD:-fall_pass}@postgres:5432/fall_detection
+      MQTT_BROKER_HOST:            mqtt
+      MQTT_BROKER_PORT:            "1883"
+      MQTT_ALERT_TOPIC:            ${MQTT_ALERT_TOPIC:-fall/alert}
+      MQTT_USERNAME:               ${MQTT_USERNAME:-}
+      MQTT_PASSWORD:               ${MQTT_PASSWORD:-}
+      CAREGIVER_HOST:              "0.0.0.0"
+      CAREGIVER_PORT:              "8002"
+      PATIENT_IDS:                 ${PATIENT_IDS:-}
+      MAC_IDS:                     ${MAC_IDS:-}
+      # InfluxDB — points to the local influxdb container
+      INFLUXDB_URL:                http://influxdb:8086
+      INFLUXDB_TOKEN:              ${INFLUXDB_TOKEN:-mock-focus-token}
+      INFLUXDB_ORG:                ${INFLUXDB_ORG:-focus-mock}
+      INFLUXDB_FALL_EVENTS_BUCKET: ${INFLUXDB_FALL_EVENTS_BUCKET:-fall-events}
+    depends_on:
+      db-migrate:
+        condition: service_completed_successfully
+      mqtt:
+        condition: service_started
+      influxdb:
+        condition: service_started
+    networks: [caregiver-net]
+
+# ── Networks + Volumes ────────────────────────────────────────────────────────
+
+networks:
+  caregiver-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  influxdb_data:
+  mqtt_data:
+  mqtt_logs:
