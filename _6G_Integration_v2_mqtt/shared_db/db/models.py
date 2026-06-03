@@ -73,4 +73,3 @@ class ParticipantSession(Base):
     gender           = Column(String(10))
     start_time       = Column(DateTime(timezone=True), server_default=func.now())
     end_time         = Column(DateTime(timezone=True), nullable=True)
-    fall_count       = Column(Integer, default=0)

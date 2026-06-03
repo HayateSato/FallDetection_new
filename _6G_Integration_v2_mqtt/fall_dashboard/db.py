@@ -74,15 +74,43 @@ def ensure_session(patient_id: str) -> None:
             .where(ParticipantSession.end_time.is_(None))
         )
         if existing is None:
-            db.add(ParticipantSession(participant_name=patient_id, fall_count=0))
+            db.add(ParticipantSession(participant_name=patient_id))
 
 
 # ---------------------------------------------------------------------------
 # Read helpers
 # ---------------------------------------------------------------------------
 
+def _get_fall_counts() -> dict:
+    """Return {patient_id: fall_count} from InfluxDB. Returns {} on any error."""
+    bucket = _FALL_EVENTS_BUCKET
+    if not bucket:
+        return {}
+    try:
+        from ml_pipeline.data_input.data_loader.influx_client_manager import _get_influxdb_client
+        query = f'''from(bucket: "{bucket}")
+  |> range(start: -30d)
+  |> filter(fn: (r) => r["_measurement"] == "fall_events")
+  |> filter(fn: (r) => r["_field"] == "fall_detected")
+  |> filter(fn: (r) => r["_value"] == true)
+  |> group(columns: ["patient_id"])
+  |> count()
+'''
+        tables = _get_influxdb_client().query_api().query(query)
+        return {
+            record.values.get("patient_id", ""): int(record.get_value())
+            for table in tables
+            for record in table.records
+            if record.values.get("patient_id")
+        }
+    except Exception as exc:
+        logger.warning(f"InfluxDB fall count query failed (non-fatal): {exc}")
+        return {}
+
+
 def list_patients() -> List[dict]:
-    """Return one row per patient from participant_session."""
+    """Return one row per patient. Fall counts come from InfluxDB fall_events."""
+    fall_counts = _get_fall_counts()
     with session_scope() as db:
         sessions = db.execute(
             select(ParticipantSession).order_by(ParticipantSession.participant_name)
@@ -96,7 +124,7 @@ def list_patients() -> List[dict]:
             seen.add(s.participant_name)
             out.append({
                 "patient_id":      s.participant_name,
-                "fall_count":      s.fall_count or 0,
+                "fall_count":      fall_counts.get(s.participant_name, 0),
                 "session_started": s.start_time.isoformat() if s.start_time else None,
                 "session_active":  s.end_time is None,
             })
