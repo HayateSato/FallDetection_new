@@ -1,27 +1,12 @@
-2026-06-03 13:16:33,523 [INFO] local_dev.mock_app.poller — FALL DETECTED — patient=patient_test_1  confidence=0.996  opening patient confirmation window (1s)...
-2026-06-03 13:16:33,524 [INFO] local_dev.mock_app.patient_server — PatientServer: awaiting confirmation  patient=patient_test_1  open http://localhost:8005/ to respond
-2026-06-03 13:16:34,525 [INFO] local_dev.mock_app.poller — [Patient confirmation received]  patient=patient_test_1  confirmed=not_answered  needs_help=None
-Exception in thread PatientConfirm-patient_test_1:
-Traceback (most recent call last):
-  File "/usr/local/lib/python3.11/threading.py", line 1045, in _bootstrap_inner
-2026-06-03 13:16:34,525 [INFO] local_dev.mock_app.poller — *** ALERT published  topic=fall/alert/patient_test_1  patient=patient_test_1  confirmed=not_answered
-    self.run()
-  File "/usr/local/lib/python3.11/threading.py", line 982, in run
-    self._target(*self._args, **self._kwargs)
-  File "/app/local_dev/mock_app/poller.py", line 150, in _simulate_patient_confirmation
-    inject_fall_marker(
-  File "/app/local_dev/mock_app/influx_writer.py", line 81, in inject_fall_marker
-    .time(ts, WritePrecision.NANOSECONDS)
-              ^^^^^^^^^^^^^^^^^^^^^^^^^^
-AttributeError: type object 'WritePrecision' has no attribute 'NANOSECONDS'
-
-
-
-injection into influx should be 1 for fall or confirmed, 0 for no, -1 for not answered. 
-what is injected in influx? - we dont need to write model version, observation_id in influx
-the fall_history fetch is not working. 
-front end of the fall_dashbaord should be updated - when the caregiver user clicks one of the listed patients in the landing page, it should open up/go to next layer and it should show the count of falls in the last 24h, and when the table of falls and its timestamp, whether the confirmed or help is requested.
-
-
-elembic clean up : 
-docker exec -it focus_postgres psql -U fall_user -d fall_detection -c "DROP TABLE IF EXISTS feature_snapshot; DROP TABLE IF EXISTS inference_log CASCADE; DROP TABLE IF EXISTS alembic_version;"
+2026-06-03 14:27:42,793 [INFO] local_dev.mock_app.poller — no fall — patient=patient_test_3  confidence=0.002
+2026-06-03 14:27:48,249 [INFO] local_dev.mock_app.poller — no fall — patient=patient_test_3  confidence=0.002
+2026-06-03 14:27:53,885 [INFO] local_dev.mock_app.poller — no fall — patient=patient_test_3  confidence=0.002
+2026-06-03 14:27:59,632 [INFO] local_dev.mock_app.poller — FALL DETECTED — patient=patient_test_3  confidence=0.998  opening patient confirmation window (1s)...
+2026-06-03 14:27:59,633 [INFO] local_dev.mock_app.patient_server — PatientServer: awaiting confirmation  patient=patient_test_3  open http://localhost:8005/ to respond
+2026-06-03 14:28:00,633 [INFO] local_dev.mock_app.poller — [Patient confirmation received]  patient=patient_test_3  confirmed=not_answered  needs_help=None
+2026-06-03 14:28:00,634 [INFO] local_dev.mock_app.poller — *** ALERT published  topic=fall/alert/patient_test_3  patient=patient_test_3  confirmed=not_answered
+2026-06-03 14:28:00,668 [INFO] local_dev.mock_app.influx_writer — InfluxDB fall_events write OK  patient=patient_test_3  confirmed=not_answered  needs_help=False  observation_id=99b37c13-864a-4444-b447-17a87c419187
+2026-06-03 14:28:02,883 [INFO] local_dev.mock_app.patient_server — PatientServer: response received — confirmed=yes  needs_help=True
+2026-06-03 14:28:05,074 [INFO] local_dev.mock_app.poller — no fall — patient=patient_test_3  confidence=0.002
+2026-06-03 14:28:10,428 [INFO] local_dev.mock_app.poller — no fall — patient=patient_test_3  confidence=0.002
+2026-06-03 14:28:15,903 [INFO] local_dev.mock_app.poller — no fall — patient=patient_test_3  confidence=0.002
