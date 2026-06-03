@@ -141,7 +141,6 @@ class MockAppPoller(threading.Thread):
         model_ver  = event.get("model_version", "")
         det_time   = None
         try:
-            from datetime import datetime
             ts_str = event.get("timestamp")
             if ts_str:
                 det_time = datetime.fromisoformat(ts_str)
