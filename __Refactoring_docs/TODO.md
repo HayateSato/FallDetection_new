@@ -30,14 +30,15 @@ in their namespace. The inference server and all ML/post-training components mov
   - Certbot auto-renews every 90 days; certificate is free via Let's Encrypt
   - Nginx forwards HTTPS :443 → inference-server :8001 and fall-dashboard :8002 internally
 - [x] **Remove `mock_focus_fhir`** from local dev compose + codebase (FHIR opted out; `local_dev/mock_focus/` deleted)
-- [x] Prepare **Docker Compose** deployment package at `_6G_Integration_v2_mqtt/deploy/`
-  - 10 services: inference-server, fall-dashboard, ml-dashboard, server-health, postgres, mqtt, mlflow, minio, prometheus, grafana
-  - Plus db-migrate + minio-setup one-off init jobs
-  - Files: `docker-compose.yml`, `.env.example`, `prometheus.yml`, `mosquitto.conf`, `README.md`
-- [x] **Test Docker Compose stack locally — ALL 10 SERVICES HEALTHY** (2026-06-03)
-  - All images built successfully, db-migrate + minio-setup exited cleanly
-  - All health checks passed: inference-server, fall-dashboard, ml-dashboard, server-health, mlflow, prometheus, grafana, minio, postgres, mqtt
-- [x] Document required .env variables for Mohammed's deployment (in `deploy/.env.example`)
+- [x] Prepare **Docker Compose** deployment — split into two layers:
+  - `inference_posttraining_layer/` (MCS/Hetzner): 8 services — inference-server, ml-dashboard, server-health, postgres, mlflow, minio, prometheus, grafana
+  - `caregiver_layer/` (FOCUS mock / second laptop): 4 services — mock-app, mqtt, postgres, fall-dashboard
+  - InfluxDB not containerised — uses external instance (MCS cloud for testing, FOCUS k3s in production)
+- [x] **Two-laptop cross-machine test PASSED** (2026-06-03)
+  - Laptop 2 (caregiver_layer) → Laptop 1 inference-server :8001: OK
+  - Laptop 1 (inference_posttraining_layer) → Laptop 2 fall-dashboard :8002: OK
+  - All services healthy on both machines; mock-app polling and patient popup at :8005
+- [x] Document required .env variables for Mohammed's deployment (in `inference_posttraining_layer/.env.example`)
 - [ ] **[Mohammed]** Deploy to Hetzner and verify all services are reachable
 
 ---
@@ -52,7 +53,8 @@ in their namespace. The inference server and all ML/post-training components mov
 - [x] Verify inference server does NOT connect to FOCUS InfluxDB (confirmed -- mobile app handles injection)
 - [x] Confirm observation_id is returned in HTTP response (unchanged -- already in PredictResponse)
 - [ ] Update .env / config for MCS deployment (DB host, MLflow URI, MinIO, Hetzner specifics)
-- [ ] Run Alembic migration `0003` on the Hetzner Postgres after deployment
+- [x] Run Alembic migrations `0003` + `0004` on the Hetzner Postgres after deployment
+  - Handled automatically by the `db-migrate` service in `docker-compose.yml` — runs `alembic upgrade head` on every `docker compose up` before inference-server starts
 
 ---
 
@@ -113,9 +115,9 @@ the same features that our Python `fall_dashboard` component provides.
 - [ ] Test **POST /inference/{observation_id}/confirm** call from mobile app after popup
       (Isa needs to add this call after the confirmation popup)
 
-> **Local pipeline test (MCS side):** `local_dev/mock_app` has been updated to simulate
-> the full mobile app flow including InfluxDB marker injection and the confirm endpoint call.
-> Run `python -m local_dev.mock_app.main` to verify the complete pipeline end-to-end.
+> **Two-laptop local test PASSED (2026-06-03):** `caregiver_layer/` runs mock-app, mqtt, fall-dashboard
+> on the second laptop. Cross-machine communication verified. The mock-app is now containerised
+> in Docker inside the caregiver layer, correctly simulating the mobile app on the FOCUS network.
 
 ---
 
