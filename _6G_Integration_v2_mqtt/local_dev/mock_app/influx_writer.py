@@ -44,6 +44,7 @@ def inject_fall_marker(
       1  = patient confirmed fall (yes)
       0  = patient denied fall (no)
      -1  = no response within timeout (not_answered)
+    needs_help is stored as a bool.
     """
     try:
         from influxdb_client import Point

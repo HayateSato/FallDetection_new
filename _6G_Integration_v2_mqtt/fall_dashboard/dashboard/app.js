@@ -163,9 +163,9 @@ function formatTime(iso) {
 }
 
 function formatConfirmed(c) {
-  if (c === 1  || c === '1')  return '<span class="tag tag-yes">Confirmed</span>';
-  if (c === 0  || c === '0')  return '<span class="tag tag-no">Not a fall</span>';
-  if (c === -1 || c === '-1') return '<span class="tag tag-pending">No response</span>';
+  if (c === 1)  return '<span class="tag tag-yes">Confirmed</span>';
+  if (c === 0)  return '<span class="tag tag-no">Not a fall</span>';
+  if (c === -1) return '<span class="tag tag-pending">No response</span>';
   return '<span class="tag tag-pending">—</span>';
 }
 

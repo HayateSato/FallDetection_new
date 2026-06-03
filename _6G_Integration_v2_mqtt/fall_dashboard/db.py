@@ -10,7 +10,7 @@ confirmation). list_falls() queries the `fall_events` measurement.
 
 InfluxDB schema (measurement: fall_events):
   Tags  : patient_id, device_id
-  Fields: fall_detected (bool), patient_confirmed (str), needs_help (bool),
+  Fields: fall_detected (bool), patient_confirmed (int: 1/0/-1), needs_help (bool),
           observation_id (str), confidence (float), model_version (str)
   Time  : fall detection time
 """
