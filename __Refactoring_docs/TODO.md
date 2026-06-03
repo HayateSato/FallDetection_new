@@ -30,13 +30,15 @@ in their namespace. The inference server and all ML/post-training components mov
   - Certbot auto-renews every 90 days; certificate is free via Let's Encrypt
   - Nginx forwards HTTPS :443 → inference-server :8001 and fall-dashboard :8002 internally
 - [x] **Remove `mock_focus_fhir`** from local dev compose + codebase (FHIR opted out; `local_dev/mock_focus/` deleted)
-- [ ] Prepare **Docker Compose** deployment package at `_6G_Integration_v2_mqtt/deploy/` (NOT Kubernetes -- MCS will not use K8s)
+- [x] Prepare **Docker Compose** deployment package at `_6G_Integration_v2_mqtt/deploy/`
   - 10 services: inference-server, fall-dashboard, ml-dashboard, server-health, postgres, mqtt, mlflow, minio, prometheus, grafana
-  - Plus db-migrate init job (alembic upgrade head)
-  - Goal: Mohammed can clone the repo and run `docker compose up` on Hetzner with minimal setup
-- [ ] Test the Docker Compose stack locally before handing over to Mohammed
-- [ ] Document required .env variables for Mohammed's deployment
-- [ ] Mohammed deploys to Hetzner and verifies all services are reachable
+  - Plus db-migrate + minio-setup one-off init jobs
+  - Files: `docker-compose.yml`, `.env.example`, `prometheus.yml`, `mosquitto.conf`, `README.md`
+- [x] **Test Docker Compose stack locally — ALL 10 SERVICES HEALTHY** (2026-06-03)
+  - All images built successfully, db-migrate + minio-setup exited cleanly
+  - All health checks passed: inference-server, fall-dashboard, ml-dashboard, server-health, mlflow, prometheus, grafana, minio, postgres, mqtt
+- [x] Document required .env variables for Mohammed's deployment (in `deploy/.env.example`)
+- [ ] **[Mohammed]** Deploy to Hetzner and verify all services are reachable
 
 ---
 
