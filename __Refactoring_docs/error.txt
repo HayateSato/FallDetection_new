@@ -1,26 +1,16 @@
-2026-06-03 13:07:58,000 [INFO] local_dev.mock_app.poller — FALL DETECTED — patient=patient_test_1  confidence=0.968  opening patient confirmation window (1s)...
-2026-06-03 13:07:58,001 [INFO] local_dev.mock_app.patient_server — PatientServer: awaiting confirmation  patient=patient_test_1  open http://localhost:8005/ to respond
-2026-06-03 13:07:59,001 [INFO] local_dev.mock_app.poller — [Patient confirmation received]  patient=patient_test_1  confirmed=not_answered  needs_help=None
+2026-06-03 13:16:33,523 [INFO] local_dev.mock_app.poller — FALL DETECTED — patient=patient_test_1  confidence=0.996  opening patient confirmation window (1s)...
+2026-06-03 13:16:33,524 [INFO] local_dev.mock_app.patient_server — PatientServer: awaiting confirmation  patient=patient_test_1  open http://localhost:8005/ to respond
+2026-06-03 13:16:34,525 [INFO] local_dev.mock_app.poller — [Patient confirmation received]  patient=patient_test_1  confirmed=not_answered  needs_help=None
 Exception in thread PatientConfirm-patient_test_1:
 Traceback (most recent call last):
   File "/usr/local/lib/python3.11/threading.py", line 1045, in _bootstrap_inner
+2026-06-03 13:16:34,525 [INFO] local_dev.mock_app.poller — *** ALERT published  topic=fall/alert/patient_test_1  patient=patient_test_1  confirmed=not_answered
     self.run()
   File "/usr/local/lib/python3.11/threading.py", line 982, in run
     self._target(*self._args, **self._kwargs)
-  File "/app/local_dev/mock_app/poller.py", line 123, in _simulate_patient_confirmation
-    "alert_time":        datetime.now(timezone.utc).isoformat(),
-                         ^^^^^^^^
-UnboundLocalError: cannot access local variable 'datetime' where it is not associated with a value
-2026-06-03 13:08:03,230 [INFO] local_dev.mock_app.poller — FALL DETECTED — patient=patient_test_1  confidence=0.948  opening patient confirmation window (1s)...
-2026-06-03 13:08:03,231 [INFO] local_dev.mock_app.patient_server — PatientServer: awaiting confirmation  patient=patient_test_1  open http://localhost:8005/ to respond
-2026-06-03 13:08:04,231 [INFO] local_dev.mock_app.poller — [Patient confirmation received]  patient=patient_test_1  confirmed=not_answered  needs_help=None
-Exception in thread PatientConfirm-patient_test_1:
-Traceback (most recent call last):
-  File "/usr/local/lib/python3.11/threading.py", line 1045, in _bootstrap_inner
-    self.run()
-  File "/usr/local/lib/python3.11/threading.py", line 982, in run
-    self._target(*self._args, **self._kwargs)
-  File "/app/local_dev/mock_app/poller.py", line 123, in _simulate_patient_confirmation
-    "alert_time":        datetime.now(timezone.utc).isoformat(),
-                         ^^^^^^^^
-UnboundLocalError: cannot access local variable 'datetime' where it is not associated with a value
+  File "/app/local_dev/mock_app/poller.py", line 150, in _simulate_patient_confirmation
+    inject_fall_marker(
+  File "/app/local_dev/mock_app/influx_writer.py", line 81, in inject_fall_marker
+    .time(ts, WritePrecision.NANOSECONDS)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: type object 'WritePrecision' has no attribute 'NANOSECONDS'
