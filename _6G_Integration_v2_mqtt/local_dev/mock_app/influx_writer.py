@@ -54,7 +54,7 @@ def inject_fall_marker(
                      Defaults to now() if not provided.
     """
     try:
-        from influxdb_client import Point, WritePrecision
+        from influxdb_client import Point
         from influxdb_client.client.write_api import SYNCHRONOUS
         from ml_pipeline.data_input.data_loader.influx_client_manager import _get_influxdb_client
     except ImportError as exc:
@@ -78,7 +78,7 @@ def inject_fall_marker(
         .field("observation_id",    observation_id)
         .field("confidence",        round(float(confidence), 4))
         .field("model_version",     str(model_version))
-        .time(ts, WritePrecision.NANOSECONDS)
+        .time(ts, "ns")
     )
 
     try:
