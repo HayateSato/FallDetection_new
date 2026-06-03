@@ -20,6 +20,7 @@
 #   docker compose up -d
 #
 # Services:
+#   mock-app        :8005   Simulates the SmarKo mobile app (patient confirmation popup)
 #   mqtt            :1883   MQTT broker — mobile app publishes fall alerts here
 #   postgres        :5432   Database for participant_session (fall-dashboard)
 #   db-migrate      ---     One-off: alembic upgrade head, then exits
@@ -27,6 +28,54 @@
 # =============================================================================
 
 services:
+
+  # ── Mock mobile app ────────────────────────────────────────────────────────
+  # Simulates the SmarKo mobile app running on the FOCUS network.
+  # Fetches raw ACC data from MCS cloud InfluxDB, POSTs to inference-server
+  # (Laptop 1), then on fall: MQTT publish + InfluxDB fall_events write + /confirm.
+  # Patient confirmation popup available at http://localhost:8005/ in a browser.
+  mock-app:
+    build:
+      context: ..
+      dockerfile: local_dev/mock_app/Dockerfile
+    image: fall-detection/mock-app:latest
+    container_name: focus_mock_app
+    restart: unless-stopped
+    ports:
+      - "8005:8005"
+    environment:
+      # ── Sensor data + fall events (MCS cloud InfluxDB for local testing)
+      INFLUXDB_URL:                  ${INFLUXDB_URL}
+      INFLUXDB_TOKEN:                ${INFLUXDB_TOKEN}
+      INFLUXDB_ORG:                  ${INFLUXDB_ORG}
+      INFLUXDB_BUCKET:               ${INFLUXDB_BUCKET}
+      INFLUXDB_FALL_EVENTS_BUCKET:   ${INFLUXDB_FALL_EVENTS_BUCKET}
+      BAROMETER_FIELD:               ${BAROMETER_FIELD:-bmp_pressure}
+      # ── Inference server on MCS Laptop 1 — set to Laptop 1 IP
+      INFERENCE_SERVER_URL:          ${INFERENCE_SERVER_URL}
+      INFERENCE_API_KEY:             ${INFERENCE_API_KEY}
+      # ── MQTT broker on same machine (Docker service name)
+      MQTT_BROKER_HOST:              mqtt
+      MQTT_BROKER_PORT:              "1883"
+      MQTT_ALERT_TOPIC:              ${MQTT_ALERT_TOPIC:-fall/alert}
+      MQTT_USERNAME:                 ${MQTT_USERNAME:-}
+      MQTT_PASSWORD:                 ${MQTT_PASSWORD:-}
+      # ── Patients + hardware
+      PATIENT_IDS:                   ${PATIENT_IDS:-}
+      MAC_IDS:                       ${MAC_IDS:-}
+      ACC_SENSOR_TYPE:               ${ACC_SENSOR_TYPE:-bosch}
+      HARDWARE_ACC_SAMPLE_RATE:      ${HARDWARE_ACC_SAMPLE_RATE:-50}
+      RESAMPLING_METHOD:             ${RESAMPLING_METHOD:-linear}
+      # ── Polling behaviour
+      POLL_INTERVAL_SECONDS:         ${POLL_INTERVAL_SECONDS:-10}
+      POLL_LOOKBACK_SECONDS:         ${POLL_LOOKBACK_SECONDS:-15}
+      MOCK_PATIENT_RESPONSE_TIMEOUT: ${MOCK_PATIENT_RESPONSE_TIMEOUT:-1}
+      MOCK_PATIENT_SERVER_PORT:      "8005"
+      LOG_LEVEL:                     ${LOG_LEVEL:-INFO}
+    depends_on:
+      mqtt:
+        condition: service_started
+    networks: [caregiver-net]
 
   # ── One-off: Alembic migration ─────────────────────────────────────────────
   db-migrate:
