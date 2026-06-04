@@ -4,6 +4,7 @@
 #
 # Represents the FOCUS-hosted services: MQTT broker and fall-dashboard.
 #
+# No local database. Patient list comes from PATIENT_IDS env var.
 # InfluxDB is NOT hosted here — fall-dashboard connects to an external instance:
 #   Local testing : MCS cloud InfluxDB (ecosystem-influxdb.smarko-health.de)
 #   Production    : FOCUS's own InfluxDB already running in their k3s cluster
@@ -22,8 +23,6 @@
 # Services:
 #   mock-app        :8005   Simulates the SmarKo mobile app (patient confirmation popup)
 #   mqtt            :1883   MQTT broker — mobile app publishes fall alerts here
-#   postgres        :5432   Database for participant_session (fall-dashboard)
-#   db-migrate      ---     One-off: alembic upgrade head, then exits
 #   fall-dashboard  :8002   MQTT subscriber + SSE feed + /api/falls + /api/patients
 # =============================================================================
 
@@ -95,33 +94,12 @@ services:
       - mqtt_logs:/mosquitto/log
     networks: [caregiver-net]
 
-  # ── Postgres (participant_session) ─────────────────────────────────────────
-  postgres:
-    image: postgres:16-alpine
-    container_name: focus_postgres
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER:     fall_user
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fall_pass}
-      POSTGRES_DB:       fall_detection
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres_data:/var/lib/postgresql/data
-      - ../infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U fall_user -d fall_detection"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks: [caregiver-net]
-
   # ── Fall dashboard ─────────────────────────────────────────────────────────
   # Subscribes to MQTT broker, serves SSE feed and REST API for caregiver UI.
   # FOCUS Flutter dashboard connects to:
   #   GET  /api/stream          SSE live fall alerts
   #   GET  /api/falls           Fall history (queried from external InfluxDB)
-  #   GET  /api/patients        Patient list (from postgres participant_session)
+  #   GET  /api/patients        Patient list (from PATIENT_IDS env var + InfluxDB fall counts)
   fall-dashboard:
     build:
       context: ..
@@ -132,7 +110,6 @@ services:
     ports:
       - "8002:8002"
     environment:
-      DATABASE_URL:                postgresql+psycopg2://fall_user:${POSTGRES_PASSWORD:-fall_pass}@postgres:5432/fall_detection
       MQTT_BROKER_HOST:            mqtt
       MQTT_BROKER_PORT:            "1883"
       MQTT_ALERT_TOPIC:            ${MQTT_ALERT_TOPIC:-fall/alert}
@@ -149,8 +126,6 @@ services:
       INFLUXDB_ORG:                ${INFLUXDB_ORG}
       INFLUXDB_FALL_EVENTS_BUCKET: ${INFLUXDB_FALL_EVENTS_BUCKET}
     depends_on:
-      postgres:
-        condition: service_healthy
       mqtt:
         condition: service_started
     networks: [caregiver-net]
@@ -162,6 +137,5 @@ networks:
     driver: bridge
 
 volumes:
-  postgres_data:
   mqtt_data:
   mqtt_logs:

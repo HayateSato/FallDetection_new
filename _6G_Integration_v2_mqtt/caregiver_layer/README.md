@@ -5,13 +5,15 @@ MQTT broker, fall-dashboard (MQTT subscriber + caregiver API), and the mock mobi
 
 Run this on the **second Windows laptop** when testing cross-machine communication.
 
+**No local database.** The patient list comes from the `PATIENT_IDS` env var.
+Fall history and fall counts are read from InfluxDB (external, not hosted here).
+
 ## Services
 
 | Service | Port | Purpose |
 |---------|------|---------|
 | mock-app | 8005 | Simulates the SmarKo mobile app — patient popup at http://localhost:8005/ |
 | mqtt | 1883 | MQTT broker — receives fall alerts from mock-app |
-| postgres | 5432 | participant_session table for fall-dashboard |
 | fall-dashboard | 8002 | SSE feed + /api/falls + /api/patients |
 
 InfluxDB is **not hosted here** — both mock-app and fall-dashboard connect to an external instance:
@@ -27,7 +29,7 @@ inference_posttraining_layer/            caregiver_layer/
   inference-server  :8001                  mock-app       :8005
   ml-dashboard      :8004                  mqtt           :1883
   server-health     :8006                  fall-dashboard :8002
-  postgres          :5432                  postgres       :5432
+  postgres          :5432
   mlflow            :5000
   minio             :9000                      MCS cloud InfluxDB (internet)
   prometheus        :9090                        fd_test bucket
@@ -38,6 +40,7 @@ Communication flow:
 
 ```
 mock-app (L2)    ──── HTTP POST /predict ──────────► inference-server (Laptop 1 :8001)
+mock-app (L2)    ──── MQTT publish fall/possible ──► mqtt             (same machine :1883)
 mock-app (L2)    ──── MQTT publish fall/alert ─────► mqtt             (same machine :1883)
 mock-app (L2)    ──── write fall_events ───────────► MCS cloud InfluxDB
 mock-app (L2)    ──── POST /confirm ───────────────► inference-server (Laptop 1 :8001)
@@ -81,7 +84,7 @@ docker compose -f caregiver_layer/docker-compose.yml --env-file caregiver_layer/
 ### 4. Verify
 
 ```powershell
-curl.exe http://localhost:8002/api/patients    # fall-dashboard
+curl.exe http://localhost:8002/api/patients    # patient list (from PATIENT_IDS env var)
 curl.exe http://localhost:8002/api/falls       # fall history from InfluxDB
 # Patient popup (open in browser when a fall fires):
 # http://localhost:8005/
@@ -106,23 +109,31 @@ docker compose -f inference_posttraining_layer/docker-compose.yml restart server
 
 1. mock-app fetches ACC data from MCS cloud InfluxDB
 2. mock-app POSTs to inference-server on Laptop 1 → gets `observation_id`
-3. Fall detected → patient confirmation popup opens at http://localhost:8005/
-4. mock-app publishes `fall/alert/<patient_id>` to local MQTT broker
-5. fall-dashboard receives MQTT → fans out SSE to Flutter dashboard
-6. mock-app writes `fall_events` point to MCS cloud InfluxDB
-7. mock-app POSTs `/inference/{observation_id}/confirm` to Laptop 1
-8. fall-dashboard `/api/falls` returns the event from InfluxDB
+3. Fall detected → mock-app publishes `fall/possible/<patient_id>` to MQTT → caregiver dashboard shows amber "Possible fall" badge on patient card
+4. Patient confirmation popup opens at http://localhost:8005/
+5. After patient responds (or timeout) → mock-app publishes `fall/alert/<patient_id>` to MQTT
+6. fall-dashboard receives confirmed alert → fans out SSE → Flutter dashboard shows red alert banner (if needs_help or no response)
+7. mock-app writes `fall_events` point to MCS cloud InfluxDB
+8. mock-app POSTs `/inference/{observation_id}/confirm` to Laptop 1
+9. fall-dashboard `/api/falls` returns the event from InfluxDB
+
+## MQTT topics
+
+| Topic | Publisher | Subscriber | When |
+|-------|-----------|------------|------|
+| `fall/possible/<patient_id>` | mock-app | fall-dashboard | Immediately on fall detection (before patient confirms) |
+| `fall/alert/<patient_id>` | mock-app | fall-dashboard | After patient confirmation or 10s timeout |
 
 ## Useful commands
 
 ```powershell
 # Logs
-docker compose -f caregiver_layer/docker-compose.yml logs -f mock-app
-docker compose -f caregiver_layer/docker-compose.yml logs -f fall-dashboard
+docker compose -f caregiver_layer/docker-compose.yml --env-file caregiver_layer/.env logs -f mock-app
+docker compose -f caregiver_layer/docker-compose.yml --env-file caregiver_layer/.env logs -f fall-dashboard
 
-# Stop (data preserved)
-docker compose -f caregiver_layer/docker-compose.yml down
+# Stop
+docker compose -f caregiver_layer/docker-compose.yml --env-file caregiver_layer/.env down
 
-# Full reset
-docker compose -f caregiver_layer/docker-compose.yml down -v
+# Full reset (no volumes to worry about — no local DB)
+docker compose -f caregiver_layer/docker-compose.yml --env-file caregiver_layer/.env down -v
 ```

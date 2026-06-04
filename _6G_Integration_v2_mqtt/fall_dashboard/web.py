@@ -24,6 +24,7 @@ from fastapi.staticfiles import StaticFiles
 from fall_dashboard import db as cdb
 from fall_dashboard.mqtt_listener import FallEventBroker
 
+
 logger = logging.getLogger(__name__)
 
 DASHBOARD_DIR = Path(__file__).parent / "dashboard"
@@ -41,12 +42,6 @@ app.add_middleware(
 # ---------------------------------------------------------------------------
 # Lifecycle
 # ---------------------------------------------------------------------------
-
-@app.on_event("startup")
-async def _startup() -> None:
-    cdb.init_db()
-    # broker.start() is called from client.py after wiring the on_fall callback
-
 
 @app.on_event("shutdown")
 async def _shutdown() -> None:

@@ -12,8 +12,8 @@ The mock_app (or eventually the real mobile app) is responsible for:
 
 This service only:
   - Listens to MQTT fall/alert/# (confirmed alerts from the mobile app)
-  - Writes each confirmed fall to the DB
   - Fans the event out to connected dashboard browsers via SSE
+  - No local database — patient list from PATIENT_IDS env var, history from InfluxDB
 
 Run from _6G_Integration_v2_mqtt/ as working directory:
 
@@ -32,7 +32,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fall_dashboard import db as cdb
 from fall_dashboard import web as cweb
 from fall_dashboard.web import app, broker
 
@@ -76,15 +75,11 @@ cweb.mac_map = MAC_MAP
 async def _start_mqtt_with_callback() -> None:
     """
     Set the on_fall callback on the broker BEFORE starting it, so every fall
-    event received via MQTT triggers a DB write and SSE fan-out.
+    event received via MQTT triggers the SSE fan-out to the caregiver dashboard.
     """
-    # Pre-create participant_session rows so patients appear on the dashboard immediately
-    for pid in PATIENT_IDS:
-        cdb.ensure_session(pid)
-
     _loop = asyncio.get_running_loop()
 
-    def _on_fall_mqtt(event: dict) -> None:
+    def _on_fall_mqtt(event: dict) -> None:  # noqa: C901
         """
         Called from paho's background thread on every confirmed fall alert
         (published by mock_app after patient confirmation / timeout).
@@ -106,8 +101,6 @@ async def _start_mqtt_with_callback() -> None:
             event["patient_confirmed"] = pc_int
         else:
             pc_int = int(pc_raw) if pc_raw is not None else -1
-
-        cdb.ensure_session(patient_id)
 
         # Caregiver alert conditions (SSE fan-out -> dashboard):
         #   -1 (not_answered) -> patient could not respond at all -> treat as serious fall
@@ -149,7 +142,6 @@ def _banner() -> None:
     print("  Caregiver Dashboard — 6G / Charite Integration")
     print(f"  Web UI:           http://{WEB_HOST}:{WEB_PORT}/")
     print(f"  Patients:         {PATIENT_IDS or '(none configured)'}")
-    print(f"  DB URL:           {os.getenv('DATABASE_URL', 'sqlite:///./caregiver.db')}")
     print(f"  MQTT broker:      {_mqtt_info}")
     print()
     print("  NOTE: sensor data is fetched by mock_app (run separately)")

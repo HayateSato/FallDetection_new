@@ -2,83 +2,29 @@
 Fall Dashboard database layer.
 ==============================
 
-Tables written by this module:
-  participant_session  — one row per active patient session
-
-Fall history is now stored in InfluxDB (written by the mobile app after patient
-confirmation). list_falls() queries the `fall_events` measurement.
+No Postgres in the caregiver layer. The patient list comes from the PATIENT_IDS
+env var; fall history and fall counts come from InfluxDB.
 
 InfluxDB schema (measurement: fall_events):
   Tags  : patient_id, device_id
   Fields: fall_detected (bool), patient_confirmed (int: 1/0/-1), needs_help (bool),
           observation_id (str), confidence (float), model_version (str)
   Time  : fall detection time
+
+patient_confirmed int encoding:
+   1  = patient confirmed it was a fall  ('yes')
+   0  = patient denied (false positive)  ('no')
+  -1  = no response within timeout       ('not_answered')
 """
 
 import logging
 import os
-from contextlib import contextmanager
-from typing import Generator, List, Optional
-
-from sqlalchemy import select
+from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
 _FALL_EVENTS_BUCKET = os.getenv("INFLUXDB_FALL_EVENTS_BUCKET") or os.getenv("INFLUXDB_BUCKET", "")
-
-# ---------------------------------------------------------------------------
-# Session factory + models
-# ---------------------------------------------------------------------------
-from shared_db.db.session import SessionLocal, engine
-from shared_db.db.models import Base, ParticipantSession
-
-
-# ---------------------------------------------------------------------------
-# Public init
-# ---------------------------------------------------------------------------
-
-def init_db() -> None:
-    """Create only participant_session — the only table owned by fall_dashboard.
-
-    inference_log and feature_snapshot live in the inference layer's Postgres
-    and must not be created here.
-    """
-    Base.metadata.create_all(engine, tables=[ParticipantSession.__table__])
-    logger.info("Database ready (participant_session only)")
-
-
-# ---------------------------------------------------------------------------
-# Session helper
-# ---------------------------------------------------------------------------
-
-@contextmanager
-def session_scope() -> Generator:
-    """Context-managed session — commits on success, rolls back on error."""
-    db = SessionLocal()
-    try:
-        yield db
-        db.commit()
-    except Exception:
-        db.rollback()
-        raise
-    finally:
-        db.close()
-
-
-# ---------------------------------------------------------------------------
-# Write helpers
-# ---------------------------------------------------------------------------
-
-def ensure_session(patient_id: str) -> None:
-    """Open a participant_session row for this patient if no active one exists."""
-    with session_scope() as db:
-        existing = db.scalar(
-            select(ParticipantSession)
-            .where(ParticipantSession.participant_name == patient_id)
-            .where(ParticipantSession.end_time.is_(None))
-        )
-        if existing is None:
-            db.add(ParticipantSession(participant_name=patient_id))
+_PATIENT_IDS = [p.strip() for p in os.getenv("PATIENT_IDS", "").split(",") if p.strip()]
 
 
 # ---------------------------------------------------------------------------
@@ -113,26 +59,15 @@ def _get_fall_counts() -> dict:
 
 
 def list_patients() -> List[dict]:
-    """Return one row per patient. Fall counts come from InfluxDB fall_events."""
+    """Return one dict per patient from PATIENT_IDS env var. Fall counts from InfluxDB."""
     fall_counts = _get_fall_counts()
-    with session_scope() as db:
-        sessions = db.execute(
-            select(ParticipantSession).order_by(ParticipantSession.participant_name)
-        ).scalars().all()
-
-        seen = set()
-        out = []
-        for s in sessions:
-            if s.participant_name in seen:
-                continue
-            seen.add(s.participant_name)
-            out.append({
-                "patient_id":      s.participant_name,
-                "fall_count":      fall_counts.get(s.participant_name, 0),
-                "session_started": s.start_time.isoformat() if s.start_time else None,
-                "session_active":  s.end_time is None,
-            })
-        return out
+    return [
+        {
+            "patient_id": pid,
+            "fall_count": fall_counts.get(pid, 0),
+        }
+        for pid in _PATIENT_IDS
+    ]
 
 
 def list_falls(
