@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Caregiver Dashboard — 6G / Charite</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <header>
+    <div class="header-left">
+      <h1>Caregiver Dashboard</h1>
+      <span class="subtitle">6G / Charite Fall Detection</span>
+    </div>
+    <div id="header-stats">
+      <div class="stat-chip">
+        <span class="stat-label">Patients</span>
+        <span id="stat-patients" class="stat-value">—</span>
+      </div>
+      <div class="stat-chip">
+        <span class="stat-label">Falls today</span>
+        <span id="stat-falls-today" class="stat-value">—</span>
+      </div>
+      <div class="stat-chip">
+        <span class="stat-label">Live status</span>
+        <span id="stat-stream" class="stat-value status-disconnected">Disconnected</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ── Patients tab ─────────────────────────────────────────────────── -->
+  <main id="tab-patients" class="tab-content">
+    <div id="patient-list" class="patient-grid">
+      <p class="loading">Loading patients...</p>
+    </div>
+  </main>
+
+  <!-- ── Patient detail view (drill-down from patient card) ─────────── -->
+  <main id="tab-patient-detail" class="tab-content hidden">
+    <div class="detail-header">
+      <button class="btn-secondary" onclick="backToPatients()">&#8592; Back</button>
+      <h2 id="detail-patient-name">—</h2>
+    </div>
+
+    <div class="detail-stats">
+      <div class="detail-stat-card">
+        <div class="detail-stat-label">Falls in last 24h</div>
+        <div id="detail-falls-24h" class="detail-stat-value">—</div>
+      </div>
+      <div class="detail-stat-card">
+        <div class="detail-stat-label">Confirmed falls</div>
+        <div id="detail-confirmed" class="detail-stat-value">—</div>
+      </div>
+      <div class="detail-stat-card">
+        <div class="detail-stat-label">Help requested</div>
+        <div id="detail-help" class="detail-stat-value">—</div>
+      </div>
+    </div>
+
+    <table class="data-table" id="detail-table">
+      <thead>
+        <tr>
+          <th>Detection time</th>
+          <th>Patient response</th>
+          <th>Needs help</th>
+          <th>Confidence</th>
+        </tr>
+      </thead>
+      <tbody id="detail-tbody">
+        <tr><td colspan="4" class="loading">Loading...</td></tr>
+      </tbody>
+    </table>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

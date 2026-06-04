@@ -1,0 +1,24 @@
+# mock_app requirements — simulates the SmarKo mobile app for local testing
+# Intentionally lean: no ML training deps (mock_app calls inference server over HTTP,
+# it does not run the model itself).
+
+# Signal processing (used by ml_pipeline data converters + resampler)
+numpy
+pandas
+scipy
+
+# InfluxDB — read raw ACC windows + write fall_events after confirmation
+influxdb-client
+
+# MQTT — publish fall alerts to broker
+paho-mqtt
+
+# HTTP — call inference server /predict and /inference/{id}/confirm
+requests
+
+# Patient confirmation popup server (:8005 browser UI)
+fastapi
+uvicorn[standard]
+
+# Configuration
+python-dotenv
