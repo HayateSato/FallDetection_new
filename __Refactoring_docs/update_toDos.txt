@@ -48,8 +48,30 @@ before we used k8s, but this time it needs to be k3s. what is the difference?
 i have questions regarding how communciatoin from/to/between k3s cluster is working 
 
 there are these communcation types 
-1. from mobile app to a service/pod inside k3s clsuter  
-2. from a service/pod inside k3s clsuter A to a service/pod inside k3s clsuter B
-3. from a service/pod inside k3s clsuter to a mobile app
+1. from mobile app to a service/pod inside k3s clsuter via HTTPs
+2. from a service/pod inside k3s clsuter A to a service/pod inside k3s clsuter B via HTTPs
+3. from a service/pod inside k3s clsuter to a mobile app via HTTPs
 4. from a service on MCS hetzner to a service/pod inside k3s clsuter  
 5. from a service/pod inside k3s clsuter to a service on MCS hetzner
+6. from mobile app to a service/pod inside k3s clsuter via MQTTs
+7. from a service/pod inside k3s clsuter to a service/pod inside k3s clsuter via MQTT
+8. from a service/pod inside k3s clsuter to a mobile app via MQTTs
+9. from a mobile app to a service on MCS hetzner 
+10. from a service inside the same k3s cluster
+
+However, type 3, 4, 5, 7, and 8 do not have any use case in our system. 
+
+
+examples of types are: 
+1. Isa's mobile app writing fall timestamps into influxDB inside FOCUS's exsiting k3s cluster
+2. fall_dashboard inside the new k3s cluster fetching data from influxDB inside FOCUS's exsiting k3s cluster
+3. none
+4. none
+5. none
+6. Isa's mobile app publishing fall event to fall_dashboard inside the new k3s cluster
+7. none
+8. none
+9. Isa's mobile app sending post reuqest to inference server running MCS's Hetzner server
+10. MQTT clinet inside the new k3s cluster sending fall event to fall_dashboard inside the new k3s cluster
+
+is this correct?

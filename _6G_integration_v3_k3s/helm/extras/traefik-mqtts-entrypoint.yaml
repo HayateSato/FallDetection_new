@@ -1,0 +1,33 @@
+# =============================================================================
+# Traefik TCP entrypoint for MQTT over TLS (port 8883)
+# =============================================================================
+#
+# This file must be applied ONCE by FOCUS DevOps BEFORE installing the
+# caregiver Helm chart. It patches the existing k3s Traefik installation
+# to also listen on port 8883 for raw TCP (MQTT) traffic.
+#
+# Apply with:
+#   kubectl apply -f extras/traefik-mqtts-entrypoint.yaml
+#
+# After applying, verify Traefik picked it up:
+#   kubectl logs -n kube-system -l app.kubernetes.io/name=traefik | Select-String "8883"
+#
+# This is a cluster-level change (kube-system namespace).
+# It does NOT affect any existing HTTP/HTTPS routing on ports 80/443.
+# =============================================================================
+
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    additionalArguments:
+      - "--entrypoints.mqtts.address=:8883"
+    ports:
+      mqtts:
+        port: 8883
+        expose: true
+        exposedPort: 8883
+        protocol: TCP
