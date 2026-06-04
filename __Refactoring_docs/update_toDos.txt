@@ -75,3 +75,5 @@ examples of types are:
 10. MQTT clinet inside the new k3s cluster sending fall event to fall_dashboard inside the new k3s cluster
 
 is this correct?
+
+add the communication types table in __Refactoring_docs\k3s_flow_diagram.md

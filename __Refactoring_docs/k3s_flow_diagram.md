@@ -28,32 +28,27 @@ Mobile app               │
          ├───────────────┼───────►│  │TCP :8883 ├──► mosquitto pod          │
          │               │        │  └──────────┘         │  push           │
          │               │        │                        ▼  (internal DNS) │
-         │               │        │               fall-dashboard pod         │
-         │               │        │                        │                 │
-         │               │        │  ┌──────────┐         │  HTTPS GET      │
-         │               │        │  │HTTP :443 │◄────────┘  (read falls,   │
-         │               │        │  └──────────┘            fall counts)   │
-         │               │        └──────────────────────────────────────────┘
-         │               │                                  │
-         │               │                                  │ HTTPS GET /api/v2/query
-         │               │                                  │ (cross-cluster, outbound)
-         │               │                                  │
-         │  HTTPS POST   │                                  ▼
-         │  /api/v2/write│        FOCUS — existing k3s cluster (InfluxDB)
-         └───────────────┼───────►┌─────────────────────────────────────────┐
-                         │        │  Traefik :443 (already exists)          │
-     fall_events point   │        │  ┌─────────────────────────────────────┐│
-     (line protocol)     │        │  │ influxdb.xxx.e-healthservice.de     ││
-                         │        │  │                                     ││
-                         │        │  │  InfluxDB pod                       ││
-                         │        │  │  fd_test bucket                     ││
-                         │        │  └─────────────────────────────────────┘│
-                         │        └─────────────────────────────────────────┘
-                         │
-                  Flutter dashboard
-                  (HTTPS GET /api/stream SSE
-                   /api/falls  /api/patients
-                   -> fall-dashboard :443)
+         │               │        │               fall-dashboard pod ◄───────┼────┐
+         │               │        │                        │                 │    │
+         │               │        │  ┌──────────┐         │  HTTPS GET      │    │ cross-cluster
+         │               │        │  │HTTP :443 │◄────────┘  (read falls,   │    │ HTTPS :443
+         │               │        │  └──────────┘            fall counts)   │    │ /api/stream
+         │               │        └──────────────────────────────────────────┘    │ /api/falls
+         │               │                                  │                     │ /api/patients
+         │               │                                  │ HTTPS GET           │
+         │               │                                  │ /api/v2/query       │
+         │               │                                  │ (cross-cluster)     │
+         │  HTTPS POST   │                                  ▼                     │
+         │  /api/v2/write│        FOCUS — existing k3s cluster (InfluxDB + Flutter dashboard)
+         └───────────────┼───────►┌──────────────────────────────────────────────────────────┐
+                         │        │  Traefik :443 (already exists)                           │
+     fall_events point   │        │  ┌──────────────────────┐   ┌─────────────────────────┐ │
+     (line protocol)     │        │  │ influxdb.xxx....de   │   │  Flutter dashboard pod  │ │
+                         │        │  │                      │   │  (caregiver-facing UI)  ├─┘
+                         │        │  │  InfluxDB pod        │   │  FOCUS DevOps team      │  │
+                         │        │  │  fd_test bucket      │   └─────────────────────────┘  │
+                         │        │  └──────────────────────┘                                │
+                         │        └──────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -176,14 +171,34 @@ causes silent write failures in InfluxDB.
 
 ## Summary — what each component connects to
 
-| Component | Connects to | Protocol | Port |
+| Component | Location | Connects to | Protocol | Port | Comm type |
+|---|---|---|---|---|---|
+| Mobile app | phone (any network) | MCS inference-server | HTTPS | 443 | Type 9 |
+| Mobile app | phone (any network) | mosquitto (new cluster) | MQTTS | 8883 | Type 6 |
+| Mobile app | phone (any network) | InfluxDB (existing cluster) | HTTPS | 443 | Type 1 |
+| fall-dashboard | new k3s cluster | mosquitto (same cluster) | MQTT (internal DNS) | 1883 | Type 10 |
+| fall-dashboard | new k3s cluster | InfluxDB (existing cluster) | HTTPS | 443 | Type 2 |
+| Flutter dashboard | existing k3s cluster | fall-dashboard (new cluster) | HTTPS + SSE | 443 | Type 2 |
+
+---
+
+## All communication types — full classification
+
+| Type | Description | Use case in our system | Example |
 |---|---|---|---|
-| Mobile app | MCS inference-server | HTTPS | 443 |
-| Mobile app | mosquitto (new cluster) | MQTTS | 8883 |
-| Mobile app | InfluxDB (existing cluster) | HTTPS | 443 |
-| fall-dashboard | mosquitto | MQTT (internal DNS) | 1883 |
-| fall-dashboard | InfluxDB (existing cluster) | HTTPS | 443 |
-| Flutter dashboard | fall-dashboard | HTTPS + SSE | 443 |
+| 1 | External client -> pod inside k3s cluster (HTTPS) | Mobile app writes fall timestamps to InfluxDB | `POST https://influxdb.xxx.e-healthservice.de/api/v2/write` |
+| 2 | Pod inside cluster A -> pod inside cluster B (HTTPS, cross-cluster) | fall_dashboard reads fall history from InfluxDB | `POST https://influxdb.../api/v2/query` (Flux) |
+| 2 | Pod inside cluster A -> pod inside cluster B (HTTPS, cross-cluster) | Flutter dashboard reads SSE feed + fall data from fall_dashboard | `GET https://<fall-dashboard-host>/api/stream` |
+| 3 | Pod inside k3s cluster -> external client (HTTPS) | **None** | — |
+| 4 | External service (MCS Hetzner) -> pod inside k3s cluster (HTTPS) | **None** | — |
+| 5 | Pod inside k3s cluster -> external service (MCS Hetzner) (HTTPS) | **None** | — |
+| 6 | External client -> pod inside k3s cluster (MQTTS) | Mobile app publishes fall alert to mosquitto broker | `PUBLISH mqtts://xxx:8883 fall/alert/<patient_id>` |
+| 7 | Pod -> pod within k3s cluster (MQTT, between different services via broker) | **None** | — |
+| 8 | Pod inside k3s cluster -> external client (MQTTS) | **None** | — |
+| 9 | External client -> service on MCS Hetzner (HTTPS) | Mobile app sends sensor data for inference | `POST https://mcs-server/predict` and `POST .../confirm` |
+| 10 | Pod -> pod within the same k3s cluster (any protocol, internal DNS) | mosquitto delivers subscribed MQTT message to fall_dashboard | `mosquitto:1883` (internal cluster DNS, plain TCP) |
+
+**Types with no use case in this system: 3, 4, 5, 7, 8**
 
 ---
 
