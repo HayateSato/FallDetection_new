@@ -162,7 +162,16 @@ header {
   padding: 0.2rem 0.5rem;
   border-radius: 12px;
 }
-.badge-active { background: #d1fae5; color: #065f46; }
+.badge-active   { background: #d1fae5; color: #065f46; }
+.badge-pending  { background: #fef3c7; color: #92400e;
+                  animation: badge-pulse 1.5s ease-in-out infinite alternate; }
+
+.patient-card.is-pending { border-left: 4px solid #d97706; }
+
+@keyframes badge-pulse {
+  from { background: #fef3c7; }
+  to   { background: #fde68a; }
+}
 
 /* ----- History table ----- */
 .filter-bar {

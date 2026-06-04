@@ -59,7 +59,8 @@ MQTT_BROKER_HOST             = os.getenv("MQTT_BROKER_HOST", "").strip()
 MQTT_BROKER_PORT             = int(os.getenv("MQTT_BROKER_PORT", "1883"))
 MQTT_USERNAME                = os.getenv("MQTT_USERNAME", "").strip()
 MQTT_PASSWORD                = os.getenv("MQTT_PASSWORD", "").strip()
-MQTT_ALERT_TOPIC             = os.getenv("MQTT_ALERT_TOPIC", "fall/alert")
+MQTT_ALERT_TOPIC             = os.getenv("MQTT_ALERT_TOPIC",    "fall/alert")
+MQTT_POSSIBLE_TOPIC          = os.getenv("MQTT_POSSIBLE_TOPIC", "fall/possible")
 MOCK_PATIENT_RESPONSE_TIMEOUT = int(os.getenv("MOCK_PATIENT_RESPONSE_TIMEOUT", "10"))
 MOCK_PATIENT_SERVER_PORT      = int(os.getenv("MOCK_PATIENT_SERVER_PORT", "8005"))
 
@@ -157,6 +158,7 @@ def main() -> None:
         poll_interval        = POLL_INTERVAL_SECONDS,
         lookback_seconds     = POLL_LOOKBACK_SECONDS,
         alert_topic          = MQTT_ALERT_TOPIC,
+        possible_topic       = MQTT_POSSIBLE_TOPIC,
         confirmation_timeout = MOCK_PATIENT_RESPONSE_TIMEOUT,
         patient_server       = patient_server,
     )

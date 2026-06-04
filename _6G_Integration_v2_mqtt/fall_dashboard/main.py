@@ -92,47 +92,37 @@ async def _start_mqtt_with_callback() -> None:
         The patient confirmation step already happened in the mobile app before
         this alert was published — no auto-confirm timer needed here.
         """
-        patient_id        = event.get("patient_id", "unknown")
-        ts                = event.get("timestamp")
-        patient_confirmed = event.get("patient_confirmed", "not_answered")
-        observation_id    = event.get("observation_id")      # UUID from /predict response
-        needs_help        = event.get("needs_help")          # bool from patient popup
-        try:
-            det_time = datetime.fromisoformat(ts) if ts else datetime.now(timezone.utc)
-        except Exception:
-            det_time = datetime.now(timezone.utc)
+        patient_id = event.get("patient_id", "unknown")
+        needs_help = event.get("needs_help")
+
+        # Normalise patient_confirmed: MQTT payload carries strings ("yes"/"no"/"not_answered");
+        # the browser and InfluxDB both expect ints (1 / 0 / -1).
+        pc_raw = event.get("patient_confirmed", "not_answered")
+        if isinstance(pc_raw, str):
+            pc_int = 1 if pc_raw == "yes" else (0 if pc_raw == "no" else -1)
+            event["patient_confirmed"] = pc_int
+        else:
+            pc_int = int(pc_raw) if pc_raw is not None else -1
 
         cdb.ensure_session(patient_id)
-        fall_id = cdb.record_fall(
-            patient_id        = patient_id,
-            fall_detected     = True,
-            detection_time    = det_time,
-            patient_confirmed = patient_confirmed,
-            observation_id    = observation_id,
-            needs_help        = needs_help,
-        )
-        event["fall_id"] = fall_id
 
-        # Caregiver alert conditions (SSE fan-out → dashboard):
-        #   not_answered → patient could not respond at all → treat as serious fall
-        #   yes + needs_help=True → patient confirmed fall AND explicitly asked for help
-        # Not alerted (stored in DB for retraining only):
-        #   no → patient says they didn't fall (false positive)
-        #   yes + needs_help=False → patient confirmed fall but says they are okay
-        should_alert = (
-            patient_confirmed == "not_answered"
-            or (patient_confirmed == "yes" and needs_help is True)
-        )
+        # Caregiver alert conditions (SSE fan-out -> dashboard):
+        #   -1 (not_answered) -> patient could not respond at all -> treat as serious fall
+        #    1 (yes) + needs_help=True -> confirmed fall, patient asked for help
+        # Silent (stored in InfluxDB for history; no banner):
+        #    0 (no) -> patient says they didn't fall (false positive)
+        #    1 (yes) + needs_help=False -> confirmed fall but patient says they are okay
+        should_alert = (pc_int == -1 or (pc_int == 1 and needs_help is True))
         if should_alert:
             asyncio.run_coroutine_threadsafe(broker.publish_local(event), _loop)
             logger.info(
-                f"Fall ALERT → caregiver  patient={patient_id}  fall_id={fall_id}  "
-                f"confirmed={patient_confirmed}  needs_help={needs_help}"
+                f"Fall ALERT -> caregiver  patient={patient_id}  "
+                f"confirmed={pc_int}  needs_help={needs_help}"
             )
         else:
             logger.info(
-                f"Fall recorded (no caregiver alert)  patient={patient_id}  fall_id={fall_id}  "
-                f"confirmed={patient_confirmed}  needs_help={needs_help}"
+                f"Fall recorded (no caregiver alert)  patient={patient_id}  "
+                f"confirmed={pc_int}  needs_help={needs_help}"
             )
 
     broker.on_fall = _on_fall_mqtt

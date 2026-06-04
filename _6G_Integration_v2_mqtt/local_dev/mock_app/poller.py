@@ -54,6 +54,7 @@ class MockAppPoller(threading.Thread):
         poll_interval:         int = 10,
         lookback_seconds:      int = 15,
         alert_topic:           str = "fall/alert",
+        possible_topic:        str = "fall/possible",
         confirmation_timeout:  int = 10,
         patient_server=None,                      # PatientConfirmationServer | None
     ):
@@ -65,6 +66,7 @@ class MockAppPoller(threading.Thread):
         self.poll_interval        = poll_interval
         self.lookback_seconds     = lookback_seconds
         self._alert_topic         = alert_topic
+        self._possible_topic      = possible_topic
         self._confirmation_timeout = confirmation_timeout
         self._patient_server      = patient_server
         self._stop                = threading.Event()
@@ -221,6 +223,17 @@ class MockAppPoller(threading.Thread):
             "model_version":    inference.get("model_version"),
             "fhir_observation": result.get("fhir_observation"),
         }
+
+        # Notify caregiver immediately: possible fall, patient confirmation still pending
+        if self._mqtt is not None:
+            try:
+                self._mqtt.publish(
+                    f"{self._possible_topic}/{patient_id}",
+                    json.dumps({**event, "status": "pending"}, default=str),
+                )
+                logger.info(f"Possible fall published  patient={patient_id}")
+            except Exception as exc:
+                logger.warning(f"Possible fall publish failed for {patient_id}: {exc}")
 
         # Open patient confirmation in background — poller continues polling other patients
         t = threading.Thread(

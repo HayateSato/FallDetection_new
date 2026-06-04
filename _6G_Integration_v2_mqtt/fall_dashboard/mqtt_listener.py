@@ -26,11 +26,12 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
-MQTT_BROKER_HOST = os.getenv("MQTT_BROKER_HOST", "").strip()
-MQTT_BROKER_PORT = int(os.getenv("MQTT_BROKER_PORT", "1883"))
-MQTT_ALERT_TOPIC = os.getenv("MQTT_ALERT_TOPIC", "fall/alert")  # confirmed alerts from mobile app
-MQTT_USERNAME    = os.getenv("MQTT_USERNAME", "").strip()
-MQTT_PASSWORD    = os.getenv("MQTT_PASSWORD", "").strip()
+MQTT_BROKER_HOST    = os.getenv("MQTT_BROKER_HOST", "").strip()
+MQTT_BROKER_PORT    = int(os.getenv("MQTT_BROKER_PORT", "1883"))
+MQTT_ALERT_TOPIC    = os.getenv("MQTT_ALERT_TOPIC",    "fall/alert")    # confirmed alerts from mobile app
+MQTT_POSSIBLE_TOPIC = os.getenv("MQTT_POSSIBLE_TOPIC", "fall/possible") # pre-confirmation alerts
+MQTT_USERNAME       = os.getenv("MQTT_USERNAME", "").strip()
+MQTT_PASSWORD       = os.getenv("MQTT_PASSWORD", "").strip()
 
 
 class FallEventBroker:
@@ -120,9 +121,12 @@ class FallEventBroker:
 
     def _on_connect(self, client, userdata, flags, rc) -> None:
         if rc == 0:
-            topic = f"{MQTT_ALERT_TOPIC}/#"
-            client.subscribe(topic)
-            logger.info(f"MQTT connected — subscribed to '{topic}'")
+            client.subscribe(f"{MQTT_ALERT_TOPIC}/#")
+            client.subscribe(f"{MQTT_POSSIBLE_TOPIC}/#")
+            logger.info(
+                f"MQTT connected — subscribed to '{MQTT_ALERT_TOPIC}/#' "
+                f"and '{MQTT_POSSIBLE_TOPIC}/#'"
+            )
         else:
             logger.warning(f"MQTT connect failed  rc={rc}")
 
@@ -134,10 +138,10 @@ class FallEventBroker:
         """
         Paho calls this in its own background thread.
 
-        If on_fall is set (caregiver mode):
-          - on_fall() handles DB write, auto-confirm timer, AND publish_local()
-        Otherwise:
-          - publish_local() is scheduled directly (SSE fan-out only, no DB write)
+        fall/possible/<pid>  — published immediately on fall detection (pre-confirmation).
+                               Forwarded to SSE only (no DB write). status="pending".
+        fall/alert/<pid>     — published after patient confirmation/timeout.
+                               Routed through on_fall (DB write + SSE). status="confirmed".
         """
         try:
             payload = msg.payload.decode("utf-8")
@@ -153,8 +157,16 @@ class FallEventBroker:
             logger.warning("Event loop not available — cannot forward MQTT event to SSE")
             return
 
+        is_possible = msg.topic.startswith(f"{MQTT_POSSIBLE_TOPIC}/")
+        event["status"] = "pending" if is_possible else "confirmed"
+
+        if is_possible:
+            # Pre-confirmation: SSE fan-out only, no DB write
+            asyncio.run_coroutine_threadsafe(self.publish_local(event), self._loop)
+            return
+
+        # Confirmed alert: route through on_fall for DB write + SSE
         if self.on_fall is not None:
-            # on_fall is responsible for publish_local + DB + timer
             try:
                 self.on_fall(event)
             except Exception as exc:

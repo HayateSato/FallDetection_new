@@ -34,3 +34,5 @@ Open Questions
 checking fall_dashbaord 
 - when it shows the detected fall (when marking patient ID with affected patient in red), does it do via MQTT or the animation happens based on the rsult of data fetching from influx?
 - change I want: currently caregiver dose not get instant potential alert message, but only when the fall is confirmed. I was requested that they want to see a messages "possible fall, wait for confirmation" for the affected patient (without populating the dashboard display too much or clamemd)
+
+- 
