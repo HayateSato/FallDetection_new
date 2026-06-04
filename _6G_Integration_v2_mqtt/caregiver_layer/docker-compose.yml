@@ -120,11 +120,16 @@ services:
       CAREGIVER_PORT:              "8002"
       PATIENT_IDS:                 ${PATIENT_IDS:-}
       MAC_IDS:                     ${MAC_IDS:-}
+      # SQLite patient store (replaces Postgres participant_session).
+      # Lives on the patient_db named volume so it survives container recreate.
+      PATIENT_DB_PATH:             /app/data/patients.db
       # InfluxDB — external instance (MCS cloud for testing / FOCUS k3s for production)
       INFLUXDB_URL:                ${INFLUXDB_URL}
       INFLUXDB_TOKEN:              ${INFLUXDB_TOKEN}
       INFLUXDB_ORG:                ${INFLUXDB_ORG}
       INFLUXDB_FALL_EVENTS_BUCKET: ${INFLUXDB_FALL_EVENTS_BUCKET}
+    volumes:
+      - patient_db:/app/data
     depends_on:
       mqtt:
         condition: service_started
@@ -139,3 +144,4 @@ networks:
 volumes:
   mqtt_data:
   mqtt_logs:
+  patient_db:    # SQLite patient store for the fall-dashboard

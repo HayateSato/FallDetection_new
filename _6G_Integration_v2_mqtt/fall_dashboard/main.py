@@ -32,6 +32,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from fall_dashboard import patient_store
 from fall_dashboard import web as cweb
 from fall_dashboard.web import app, broker
 
@@ -57,9 +58,14 @@ logger = logging.getLogger("fall_dashboard")
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
-PATIENT_IDS = [p.strip() for p in os.getenv("PATIENT_IDS", "").split(",") if p.strip()]
-_mac_list   = [m.strip() for m in os.getenv("MAC_IDS", "").split(",")     if m.strip()]
-MAC_MAP     = {pid: _mac_list[i] for i, pid in enumerate(PATIENT_IDS) if i < len(_mac_list)}
+# Patient identity is stored in SQLite (see patient_store). Initialise the DB
+# and sync PATIENT_IDS / MAC_IDS from .env into it before anything reads it.
+# Editing .env + recreating the container is how patients are added/updated.
+patient_store.init_db()
+patient_store.sync_from_env()
+
+PATIENT_IDS = [p["patient_id"] for p in patient_store.list_patients()]
+MAC_MAP     = patient_store.get_mac_map()
 
 WEB_HOST = os.getenv("CAREGIVER_HOST", "0.0.0.0")
 WEB_PORT = int(os.getenv("CAREGIVER_PORT", "8002"))

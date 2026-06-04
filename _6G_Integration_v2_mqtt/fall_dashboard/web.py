@@ -58,9 +58,12 @@ mac_map: dict = {}
 
 @app.get("/api/patients")
 def api_patients():
+    # list_patients() already carries mac_id from the SQLite store; fall back to
+    # the mac_map only when the store has no MAC for that patient.
     patients = cdb.list_patients()
     for p in patients:
-        p["mac_id"] = mac_map.get(p["patient_id"], "")
+        if not p.get("mac_id"):
+            p["mac_id"] = mac_map.get(p["patient_id"], "")
     return {"patients": patients}
 
 

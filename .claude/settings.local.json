@@ -82,10 +82,14 @@
       "Bash(python -c \"from focus_mock.fhir_server import app; print\\('OK routes:', [r.path for r in app.routes]\\)\")",
       "Bash(python -c \"from mock_focus.fhir_server import app; print\\('OK'\\)\")",
       "Bash(venv/Scripts/python.exe -c ' *)",
-      "mcp__jcodemunch__index_folder"
+      "mcp__jcodemunch__index_folder",
+      "Bash(grep -iA 30 \"participant_session\\\\|class ParticipantSession\")",
+      "Bash(PATIENT_DB_PATH=/tmp/_pt_test.db PATIENT_IDS=patient_test_4,patient_test_6 MAC_IDS=6c:1d:eb:04:a9:d9,11:22:33:44:55:66 python -c ' *)",
+      "Bash(rm -f /tmp/_pt_test.db && echo \"cleaned\")"
     ],
     "additionalDirectories": [
-      "c:\\Users\\hayat\\.claude\\projects\\c--Users-hayat-Documents-6G-FallDetection-new\\memory"
+      "c:\\Users\\hayat\\.claude\\projects\\c--Users-hayat-Documents-6G-FallDetection-new\\memory",
+      "\\tmp"
     ]
   }
 }

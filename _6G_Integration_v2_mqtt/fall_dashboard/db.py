@@ -21,10 +21,11 @@ import logging
 import os
 from typing import List, Optional
 
+from fall_dashboard import patient_store
+
 logger = logging.getLogger(__name__)
 
 _FALL_EVENTS_BUCKET = os.getenv("INFLUXDB_FALL_EVENTS_BUCKET") or os.getenv("INFLUXDB_BUCKET", "")
-_PATIENT_IDS = [p.strip() for p in os.getenv("PATIENT_IDS", "").split(",") if p.strip()]
 
 
 # ---------------------------------------------------------------------------
@@ -59,15 +60,19 @@ def _get_fall_counts() -> dict:
 
 
 def list_patients() -> List[dict]:
-    """Return one dict per patient from PATIENT_IDS env var. Fall counts from InfluxDB."""
+    """
+    Return one dict per patient from the SQLite patient store, with fall counts
+    joined in from InfluxDB.
+
+    The patient list is read live from SQLite on every call (no module-level
+    caching), so patients added via sync_from_env() on container recreate show
+    up immediately.
+    """
     fall_counts = _get_fall_counts()
-    return [
-        {
-            "patient_id": pid,
-            "fall_count": fall_counts.get(pid, 0),
-        }
-        for pid in _PATIENT_IDS
-    ]
+    patients = patient_store.list_patients()
+    for p in patients:
+        p["fall_count"] = fall_counts.get(p["patient_id"], 0)
+    return patients
 
 
 def list_falls(
