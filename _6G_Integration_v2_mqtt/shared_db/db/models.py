@@ -44,7 +44,10 @@ class InferenceLog(Base):
     window_size       = Column(Integer)
     latency_ms        = Column(Integer)
     detection_time    = Column(DateTime(timezone=True), nullable=False)
-    patient_confirmed = Column(String(20), nullable=True)  # 'yes'/'no'/'not_answered'; set via /confirm
+    # String in Postgres: 'yes' | 'no' | 'not_answered' | NULL (not yet confirmed)
+    # Converted to int for InfluxDB and SSE browser events:  1 | 0 | -1
+    # The conversion lives in influx_writer._CONFIRMED_TO_INT and fall_dashboard/main._on_fall_mqtt.
+    patient_confirmed = Column(String(20), nullable=True)
     needs_help        = Column(Boolean, nullable=True)
 
     features = relationship("FeatureSnapshot", back_populates="inference",

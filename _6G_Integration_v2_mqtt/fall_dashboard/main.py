@@ -95,8 +95,11 @@ async def _start_mqtt_with_callback() -> None:
         patient_id = event.get("patient_id", "unknown")
         needs_help = event.get("needs_help")
 
-        # Normalise patient_confirmed: MQTT payload carries strings ("yes"/"no"/"not_answered");
-        # the browser and InfluxDB both expect ints (1 / 0 / -1).
+        # patient_confirmed encoding boundary:
+        #   Postgres / MQTT payload  →  string:  'yes' | 'no' | 'not_answered' | None
+        #   InfluxDB / SSE browser   →  int:       1   |   0  |      -1        | (excluded)
+        # This is the single conversion point for the caregiver layer.
+        # The same mapping lives in influx_writer._CONFIRMED_TO_INT for InfluxDB writes.
         pc_raw = event.get("patient_confirmed", "not_answered")
         if isinstance(pc_raw, str):
             pc_int = 1 if pc_raw == "yes" else (0 if pc_raw == "no" else -1)

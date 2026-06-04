@@ -153,7 +153,7 @@ function handleFallEvent(event) {
   // Show red alert banner when caregiver needs to act:
   //   -1 = no response from patient -> treat as serious
   //    1 + needs_help = confirmed fall, rescue needed
-  const confirmed = event.patient_confirmed;  // int: 1, 0, -1
+  const confirmed = event.patient_confirmed;  // int: 1=yes, 0=no, -1=not_answered
   const needsHelp = event.needs_help;
   const shouldAlert = (confirmed === -1 || (confirmed === 1 && needsHelp === true));
   if (!shouldAlert) return;
@@ -211,6 +211,10 @@ function formatTime(iso) {
   try { return new Date(iso).toLocaleString(); } catch { return iso; }
 }
 
+// patient_confirmed int encoding (matches InfluxDB and SSE events):
+//   1  = patient said yes, it was a fall  ("yes")
+//   0  = patient denied, false positive   ("no")
+//  -1  = no response within timeout       ("not_answered")
 function formatConfirmed(c) {
   if (c === 1)  return '<span class="tag tag-yes">Confirmed</span>';
   if (c === 0)  return '<span class="tag tag-no">Not a fall</span>';
@@ -229,6 +233,3 @@ function escapeHtml(s) {
 // ---------------------------------------------------------------------------
 loadPatients();
 connectStream();
-setInterval(() => {
-  if (!inDetailView) loadPatients();
-}, 15000);
