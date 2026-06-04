@@ -64,16 +64,26 @@ FOCUS's caregiver dashboard is built in **Flutter** (not Python). We cannot hand
 We need to provide a specification / instruction document so their Flutter dev can implement
 the same features that our Python `fall_dashboard` component provides.
 
+**Local two-laptop test PASSED (2026-06-03):**
+End-to-end flow verified between two Windows laptops:
+- mock-app detects fall → patient responds via popup at :8005 → `patient_confirmed` written
+  as integer (1/0/-1) to InfluxDB → fall_dashboard queries InfluxDB → UI correctly
+  displays confirmed falls, help requested, and per-patient fall history with timestamps.
+- MQTT alert flow: mock-app publishes to broker → fall-dashboard subscribes and fans out via SSE.
+- All services run in Docker (caregiver_layer compose) on laptop 2.
+
 **Agreed InfluxDB schema (decided by MCS, communicated to FOCUS):**
 - Measurement: `fall_events`
 - Tags:  `patient_id`, `device_id`
-- Fields: `fall_detected` (bool), `patient_confirmed` (str: yes/no/not_answered),
+- Fields: `fall_detected` (bool), `patient_confirmed` (int: 1=confirmed / 0=denied / -1=not_answered),
           `needs_help` (bool), `observation_id` (str UUID), `confidence` (float),
           `model_version` (str)
 - Timestamp: detection time of the fall event
 
 **What the mobile app writes to InfluxDB (trigger: after patient confirmation popup):**
   One `fall_events` point per detected fall, with all fields above.
+  `patient_confirmed` must be written as an **integer** (not string) — InfluxDB field type
+  locks on first write; mixing types causes silent write failures.
 
 **MQTT broker — action required for FOCUS:**
 > Currently the MQTT broker runs only on our (MCS) side for local development.
@@ -92,10 +102,10 @@ the same features that our Python `fall_dashboard` component provides.
 - [ ] Live fall alert (SSE / MQTT): mobile app publishes to MQTT broker (FOCUS network);
       Flutter dashboard subscribes to `fall/alert/#` and shows the live alert
 - [ ] Fall history view: query InfluxDB `fall_events` measurement; filter by patient_id, date range,
-      patient_confirmed, needs_help; display count + table
+      patient_confirmed (int), needs_help; display count + table
 - [ ] Patient list: query `fall_events` GROUP BY patient_id to get per-patient fall counts
 - [ ] The `observation_id` field links a fall event back to MCS inference logs (future cross-reference)
-- [ ] Exact Flux query examples for all three views above
+- [ ] Exact Flux query examples for all three views above (including integer filter: `r["patient_confirmed"] == 1`)
 
 - [ ] **Prepare the instruction document** (see `handover_docs_2/` for format)
 - [ ] Send instruction document to FOCUS DevOps for Flutter implementation

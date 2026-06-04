@@ -26,6 +26,11 @@ Open Questions
 4.	Does the caregiver dashboard need help_requested and fall_confirmed fields in InfluxDB, or is the timestamp enough? --> yes, we need those fields in influxDB
 5.	Who updates the caregiver webapp server (fetch from InfluxDB) -- MCS or FOCUS DevOps? --> We will push this to FOCUS , so we need to prepare some instruction documents later
 
------- above is implemented already ---- below is not yet ---------
-
  Prepare Docker Compose deployment package (NOT Kubernetes -- MCS will not use K8s on their side)
+
+
+ ------ above is implemented already ---- below is not yet ---------
+
+checking fall_dashbaord 
+- when it shows the detected fall (when marking patient ID with affected patient in red), does it do via MQTT or the animation happens based on the rsult of data fetching from influx?
+- change I want: currently caregiver dose not get instant potential alert message, but only when the fall is confirmed. I was requested that they want to see a messages "possible fall, wait for confirmation" for the affected patient (without populating the dashboard display too much or clamemd)
