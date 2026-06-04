@@ -1,0 +1,357 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #0f172a;
+  color: #f1f5f9;
+  min-height: 100vh;
+  padding-bottom: 40px;
+}
+
+header {
+  background: #1e293b;
+  padding: 18px 24px;
+  border-bottom: 1px solid #334155;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+header h1 { font-size: 22px; }
+header .subtitle { color: #94a3b8; font-size: 14px; }
+.warning-banner {
+  margin-left: auto;
+  background: #7c2d12;
+  color: #fed7aa;
+  padding: 6px 12px;
+  border-radius: 6px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+main {
+  max-width: 1100px;
+  margin: 24px auto;
+  padding: 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.card {
+  background: #1e293b;
+  border-radius: 12px;
+  padding: 20px;
+  border: 1px solid #334155;
+}
+.card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.card h2 {
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+.section-step {
+  display: inline-block;
+  background: #fff;
+  color: #1e3a8a;
+  padding: 2px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  margin-right: 8px;
+  vertical-align: 3px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.hint {
+  color: #94a3b8;
+  font-size: 13px;
+  margin-bottom: 16px;
+  line-height: 1.5;
+}
+code {
+  background: #0f172a;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #fbbf24;
+}
+
+/* Forms */
+.form-row {
+  display: flex;
+  gap: 12px;
+  align-items: flex-end;
+  flex-wrap: wrap;
+}
+.form-row label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+  color: #94a3b8;
+}
+.check-row {
+  flex-direction: row !important;
+  align-items: center !important;
+  gap: 8px !important;
+  color: #f1f5f9 !important;
+}
+.form-row input,
+.form-row select {
+  background: #0f172a;
+  border: 1px solid #334155;
+  color: #f1f5f9;
+  padding: 8px 10px;
+  border-radius: 6px;
+  font-size: 14px;
+  min-width: 120px;
+}
+/* checkbox is also an <input> — strip the text-input sizing */
+.form-row input[type="checkbox"] {
+  min-width: 0;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  margin: 0;
+}
+
+/* Buttons */
+button {
+  cursor: pointer;
+  border: none;
+  font-weight: 600;
+  transition: opacity 0.1s, transform 0.1s;
+}
+button:active { transform: scale(0.98); }
+button:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-primary {
+  background: #3b82f6;
+  color: #fff;
+  padding: 10px 18px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+.btn-primary:hover { background: #2563eb; }
+.btn-secondary {
+  background: #475569;
+  color: #f1f5f9;
+  padding: 10px 18px;
+  border-radius: 6px;
+  font-size: 14px;
+}
+.btn-mini {
+  background: #334155;
+  color: #f1f5f9;
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+}
+.btn-mini:hover { background: #475569; }
+
+/* Buttons that indicate the row currently holds the alias.
+   Disabled (no re-click) and coloured to match the alias-tag in the same row. */
+.btn-mini.btn-active-prod  {
+  background: #166534;
+  color: #bbf7d0;
+  opacity: 1;     /* override generic :disabled opacity */
+  cursor: default;
+}
+.btn-mini.btn-active-stage {
+  background: #78350f;
+  color: #fde68a;
+  opacity: 1;
+  cursor: default;
+}
+
+/* Status grid */
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.status-cell {
+  background: #0f172a;
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: 1px solid #334155;
+}
+.status-label { font-size: 12px; color: #64748b; margin-bottom: 4px; }
+.status-value {
+  font-size: 14px;
+  color: #f1f5f9;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  word-break: break-all;
+}
+/* OK/warn keep neutral white in the status grid — errors stay red so a genuine
+   failure (server down, registry unreachable) is still visible at a glance. */
+.status-value.ok    { color: #f1f5f9; }
+.status-value.warn  { color: #f1f5f9; }
+.status-value.error { color: #f87171; }
+
+/* Table */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.data-table th,
+.data-table td {
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid #334155;
+}
+.data-table th {
+  font-size: 12px;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: #0f172a;
+}
+.alias-tag {
+  display: inline-block;
+  background: #1e40af;
+  color: #dbeafe;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  margin-right: 4px;
+}
+.alias-tag.production { background: #166534; color: #bbf7d0; }
+.alias-tag.staging    { background: #78350f; color: #fde68a; }
+
+/* Subheader between hint and a table inside the same card */
+.table-subheader {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #94a3b8;
+  margin-top: 8px;
+  margin-bottom: 8px;
+  font-weight: 600;
+}
+
+/* Logs */
+.log {
+  background: #020617;
+  padding: 12px;
+  border-radius: 6px;
+  border: 1px solid #334155;
+  color: #cbd5e1;
+  font-family: ui-monospace, "Cascadia Code", monospace;
+  font-size: 12px;
+  max-height: 300px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  margin-top: 12px;
+}
+/* Hide the log box until subprocess output starts streaming into it. */
+.log:empty { display: none; }
+.status-line {
+  color: #94a3b8;
+  font-size: 13px;
+  margin-top: 8px;
+  font-family: ui-monospace, monospace;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+.status-line:empty { display: none; }
+.status-line.ok    { color: #4ade80; }
+.status-line.warn  { color: #fbbf24; }
+.status-line.error { color: #f87171; }
+
+.loading { color: #64748b; padding: 16px; text-align: center; }
+
+/* Drift guide */
+details {
+  cursor: pointer;
+}
+details summary {
+  list-style-position: outside;
+  color: #f1f5f9;
+}
+.guide {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #334155;
+  color: #cbd5e1;
+  line-height: 1.6;
+  font-size: 14px;
+}
+.guide h3 {
+  color: #f1f5f9;
+  font-size: 14px;
+  margin: 18px 0 8px 0;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.guide ul {
+  margin-left: 20px;
+  margin-bottom: 8px;
+}
+.guide li { margin-bottom: 4px; }
+.guide p { margin-bottom: 8px; }
+.guide strong { color: #fbbf24; }
+
+/* Operator playbook */
+.playbook {
+  list-style: none;
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.playbook li {
+  display: flex;
+  gap: 14px;
+  background: #0f172a;
+  padding: 12px 14px;
+  border-radius: 6px;
+  border: 1px solid #334155;
+}
+.playbook .step-num {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: #fff;
+  color: #1e3a8a;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 14px;
+}
+.playbook li > div { flex: 1; }
+.playbook strong {
+  font-size: 14px;
+  color: #f1f5f9;
+}
+.playbook .step-loc {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  vertical-align: 2px;
+}
+.playbook .step-loc.here,
+.playbook .step-loc.external { background: #3d4755; color: #f1f5f9; }
+.playbook p {
+  margin-top: 4px;
+  color: #94a3b8;
+  font-size: 13px;
+  line-height: 1.5;
+}
+.playbook a {
+  color: #60a5fa;
+  text-decoration: none;
+}
+.playbook a:hover { text-decoration: underline; }
