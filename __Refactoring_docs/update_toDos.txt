@@ -29,10 +29,15 @@ Open Questions
  Prepare Docker Compose deployment package (NOT Kubernetes -- MCS will not use K8s on their side)
 
 
- ------ above is implemented already ---- below is not yet ---------
+
 
 checking fall_dashbaord 
 - when it shows the detected fall (when marking patient ID with affected patient in red), does it do via MQTT or the animation happens based on the rsult of data fetching from influx?
 - change I want: currently caregiver dose not get instant potential alert message, but only when the fall is confirmed. I was requested that they want to see a messages "possible fall, wait for confirmation" for the affected patient (without populating the dashboard display too much or clamemd)
 
-- 
+- where does "active" on the card of patient in fall_dashbaord come from? how is the logic of lablling active or not? 
+
+ ------ above is implemented already ---- below is not yet ---------
+
+ in the next steps, I need to wrap the caregiver layer into k3s kubernetes as the exsiting systen of FOCUS is running K3s (we can consider dockerize and let the exisitng system expose to the newly added docker services = fall_dashabord too).
+ If we wrap them in k3s,  MQTT broker will be also warpped too (should I wrap it too or better not?) if it is wrapped, how can the mobile app publish the event? if it is not wrapped, how can the fall_dashboard reach the broker which is outside the k3s cluster?

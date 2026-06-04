@@ -9,7 +9,7 @@ const API = {
 let inDetailView = false;
 let eventSource = null;
 
-// observation_id -> patient_id for in-flight possible-fall badges
+// observation_id -> patient_id for in-flight possible-fall notices
 const pendingAlerts = new Map();
 
 // ---------------------------------------------------------------------------
@@ -27,11 +27,10 @@ async function loadPatients() {
       return;
     }
     list.innerHTML = data.patients.map((p) => `
-      <div class="patient-card ${p.fall_count > 0 ? 'has-falls' : ''}" data-patient-id="${escapeHtml(p.patient_id)}" onclick="openPatient('${escapeHtml(p.patient_id)}')">
+      <div class="patient-card" data-patient-id="${escapeHtml(p.patient_id)}" onclick="openPatient('${escapeHtml(p.patient_id)}')">
         <div class="patient-name">${escapeHtml(p.patient_id)}</div>
         <div class="patient-meta">
           <span class="badge">${p.fall_count} falls</span>
-          ${p.session_active ? '<span class="badge badge-active">Active</span>' : ''}
           ${p.mac_id ? `<span class="badge">${escapeHtml(p.mac_id)}</span>` : ''}
         </div>
         <div class="patient-card-hint">Tap to view history</div>
@@ -39,7 +38,7 @@ async function loadPatients() {
     `).join('');
     document.getElementById('stat-patients').textContent = data.patients.length;
     updateFallsToday(data.patients);
-    reapplyPendingBadges();
+    reapplyPendingNotices();
   } catch (e) {
     list.innerHTML = `<p class="error">Failed to load patients: ${e.message}</p>`;
   }
@@ -54,6 +53,12 @@ function updateFallsToday(patients) {
 // Patient detail view
 // ---------------------------------------------------------------------------
 async function openPatient(patientId) {
+  // Opening the card is the caregiver's acknowledgement — clear the pending notice
+  for (const [obsId, pid] of pendingAlerts) {
+    if (pid === patientId) pendingAlerts.delete(obsId);
+  }
+  clearPatientPending(patientId);
+
   inDetailView = true;
   document.getElementById('tab-patients').classList.add('hidden');
   document.getElementById('tab-patient-detail').classList.remove('hidden');
@@ -140,67 +145,48 @@ function handleFallEvent(event) {
 
   if (status === 'pending') {
     if (obsId) pendingAlerts.set(obsId, event.patient_id);
-    markPatientPending(event.patient_id, obsId);
+    markPatientPending(event.patient_id);
     return;
   }
 
-  // Confirmed: clear the pending badge for this observation
-  if (obsId && pendingAlerts.has(obsId)) {
-    clearPatientPending(pendingAlerts.get(obsId), obsId);
-    pendingAlerts.delete(obsId);
-  }
-
-  // Show red alert banner when caregiver needs to act:
-  //   -1 = no response from patient -> treat as serious
-  //    1 + needs_help = confirmed fall, rescue needed
-  const confirmed = event.patient_confirmed;  // int: 1=yes, 0=no, -1=not_answered
-  const needsHelp = event.needs_help;
-  const shouldAlert = (confirmed === -1 || (confirmed === 1 && needsHelp === true));
-  if (!shouldAlert) return;
-
-  const banner = document.getElementById('alert-banner');
-  const text   = document.getElementById('alert-text');
-  const label  = event.mac_id || event.patient_id || 'unknown';
-  const reason = confirmed === -1 ? 'no response from patient' : 'patient confirmed, needs help';
-  text.textContent = `FALL ALERT — ${label} (${reason}, confidence ${event.confidence ?? '?'})`;
-  banner.classList.remove('hidden');
-
+  // Confirmed event: card stays pale red until caregiver clicks it open.
+  // Reload patients so the fall count in the header stat updates.
   if (!inDetailView) loadPatients();
 }
 
-function markPatientPending(patientId, obsId) {
+// ---------------------------------------------------------------------------
+// Pending-notice helpers
+// ---------------------------------------------------------------------------
+
+function markPatientPending(patientId) {
   const card = document.querySelector(`.patient-card[data-patient-id="${CSS.escape(patientId)}"]`);
   if (!card) return;
+  // Only inject one notice even if multiple possible-fall events arrive
+  if (!card.querySelector('.pending-notice')) {
+    const notice = document.createElement('div');
+    notice.className = 'pending-notice';
+    notice.textContent = 'Possible fall, wait for confirmation';
+    card.insertBefore(notice, card.firstChild);
+  }
   card.classList.add('is-pending');
-  const meta = card.querySelector('.patient-meta');
-  if (!meta) return;
-  // Only add one badge per observation_id
-  const existing = obsId ? meta.querySelector(`.badge-pending[data-obs-id="${CSS.escape(obsId)}"]`) : null;
-  if (existing) return;
-  const badge = document.createElement('span');
-  badge.className = 'badge badge-pending';
-  badge.dataset.obsId = obsId || '';
-  badge.textContent = 'Possible fall';
-  meta.appendChild(badge);
 }
 
-function clearPatientPending(patientId, obsId) {
+function clearPatientPending(patientId) {
   const card = document.querySelector(`.patient-card[data-patient-id="${CSS.escape(patientId)}"]`);
   if (!card) return;
-  const selector = obsId
-    ? `.badge-pending[data-obs-id="${CSS.escape(obsId)}"]`
-    : '.badge-pending';
-  const badge = card.querySelector(selector);
-  if (badge) badge.remove();
-  if (!card.querySelector('.badge-pending')) card.classList.remove('is-pending');
+  const notice = card.querySelector('.pending-notice');
+  if (notice) notice.remove();
+  card.classList.remove('is-pending');
 }
 
-function reapplyPendingBadges() {
-  pendingAlerts.forEach((patientId, obsId) => markPatientPending(patientId, obsId));
-}
-
-function dismissAlert() {
-  document.getElementById('alert-banner').classList.add('hidden');
+function reapplyPendingNotices() {
+  const seen = new Set();
+  pendingAlerts.forEach((patientId) => {
+    if (!seen.has(patientId)) {
+      seen.add(patientId);
+      markPatientPending(patientId);
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------

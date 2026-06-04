@@ -59,43 +59,6 @@ header {
 }
 .tab.active { color: #2563eb; border-bottom-color: #2563eb; font-weight: 600; }
 
-/* ----- Alert banner ----- */
-.alert-banner {
-  background: #dc2626;
-  color: white;
-  padding: 1rem 2rem;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  font-weight: 600;
-  animation: pulse 1s ease-in-out infinite alternate;
-}
-.alert-content { display: flex; align-items: center; gap: 1rem; font-size: 1.1rem; }
-.alert-icon {
-  background: white;
-  color: #dc2626;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 900;
-}
-.alert-banner button {
-  background: white;
-  color: #dc2626;
-  border: none;
-  padding: 0.4rem 0.9rem;
-  border-radius: 4px;
-  cursor: pointer;
-  font-weight: 600;
-}
-@keyframes pulse {
-  from { background: #dc2626; }
-  to   { background: #ef4444; }
-}
-
 /* ----- Tab content ----- */
 .tab-content { padding: 1.5rem 2rem; }
 
@@ -112,13 +75,26 @@ header {
   padding: 1rem;
   box-shadow: 0 1px 2px rgba(0,0,0,0.04);
   cursor: pointer;
-  transition: box-shadow 0.15s, border-color 0.15s;
+  transition: box-shadow 0.15s, border-color 0.15s, background 0.2s;
+  overflow: hidden;
 }
 .patient-card:hover {
   box-shadow: 0 4px 12px rgba(0,0,0,0.10);
   border-color: #d1d5db;
 }
-.patient-card.has-falls { border-left: 4px solid #dc2626; }
+.patient-card.is-pending {
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+.pending-notice {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: #991b1b;
+  background: #fee2e2;
+  margin: -1rem -1rem 0.75rem -1rem;
+  padding: 0.35rem 1rem;
+  letter-spacing: 0.01em;
+}
 .patient-name { font-weight: 600; color: #111827; margin-bottom: 0.5rem; }
 .patient-meta { display: flex; gap: 0.4rem; flex-wrap: wrap; }
 .patient-card-hint { font-size: 0.72rem; color: #9ca3af; margin-top: 0.5rem; }
@@ -161,16 +137,6 @@ header {
   font-size: 0.75rem;
   padding: 0.2rem 0.5rem;
   border-radius: 12px;
-}
-.badge-active   { background: #d1fae5; color: #065f46; }
-.badge-pending  { background: #fef3c7; color: #92400e;
-                  animation: badge-pulse 1.5s ease-in-out infinite alternate; }
-
-.patient-card.is-pending { border-left: 4px solid #d97706; }
-
-@keyframes badge-pulse {
-  from { background: #fef3c7; }
-  to   { background: #fde68a; }
 }
 
 /* ----- History table ----- */
