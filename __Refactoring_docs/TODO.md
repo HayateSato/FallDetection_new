@@ -31,8 +31,8 @@ in their namespace. The inference server and all ML/post-training components mov
   - Nginx forwards HTTPS :443 → inference-server :8001 and fall-dashboard :8002 internally
 - [x] **Remove `mock_focus_fhir`** from local dev compose + codebase (FHIR opted out; `local_dev/mock_focus/` deleted)
 - [x] Prepare **Docker Compose** deployment — split into two layers:
-  - `inference_posttraining_layer/` (MCS/Hetzner): 8 services — inference-server, ml-dashboard, server-health, postgres, mlflow, minio, prometheus, grafana
-  - `caregiver_layer/` (FOCUS mock / second laptop): 4 services — mock-app, mqtt, postgres, fall-dashboard
+  - `inference_posttraining_layer/` (MCS/Hetzner): 8 services — inference-server, ml-dashboard, server-health, postgres (`mcs_fall_postgres`), mlflow, minio, prometheus, grafana
+  - `caregiver_layer/` (FOCUS mock / second laptop): **3 services** — mock-app, mqtt, fall-dashboard (**no Postgres** as of 2026-06-04)
   - InfluxDB not containerised — uses external instance (MCS cloud for testing, FOCUS k3s in production)
 - [x] **Two-laptop cross-machine test PASSED** (2026-06-03)
   - Laptop 2 (caregiver_layer) → Laptop 1 inference-server :8001: OK
@@ -53,8 +53,9 @@ in their namespace. The inference server and all ML/post-training components mov
 - [x] Verify inference server does NOT connect to FOCUS InfluxDB (confirmed -- mobile app handles injection)
 - [x] Confirm observation_id is returned in HTTP response (unchanged -- already in PredictResponse)
 - [ ] Update .env / config for MCS deployment (DB host, MLflow URI, MinIO, Hetzner specifics)
-- [x] Run Alembic migrations `0003` + `0004` on the Hetzner Postgres after deployment
-  - Handled automatically by the `db-migrate` service in `docker-compose.yml` — runs `alembic upgrade head` on every `docker compose up` before inference-server starts
+- [x] Run Alembic migrations `0003` → `0004` → `0005` on the inference layer Postgres
+  - Handled automatically by the `db-migrate` service in `inference_posttraining_layer/docker-compose.yml`
+  - Migration 0005 (2026-06-04): drops `participant_session` from inference layer (was legacy from when both layers shared a schema)
 
 ---
 
@@ -96,9 +97,12 @@ End-to-end flow verified between two Windows laptops:
 **Instruction document needs to cover:**
 - [ ] **MQTT broker setup**: how to deploy and configure a broker (e.g. Mosquitto) in the
       FOCUS network; recommended port (1883 / 8883 TLS); auth credentials format
-- [ ] **MQTT Client B** (Flutter side): how to subscribe to `fall/alert/#`; payload format
+- [ ] **MQTT topics** (updated 2026-06-04 — two topics now):
+      - `fall/possible/<patient_id>` — published immediately on fall detection (pre-confirmation); Flutter shows subtle "Possible fall" notice
+      - `fall/alert/<patient_id>` — published after patient confirms or 10s timeout; Flutter shows full alert
+- [ ] **MQTT Client B** (Flutter side): how to subscribe to both `fall/possible/#` and `fall/alert/#`; payload format
       (JSON fields: patient_id, observation_id, fall_detected, confidence, patient_confirmed,
-      needs_help, timestamp); how to display the live alert to the caregiver
+      needs_help, timestamp, status); how to display the live alert to the caregiver
 - [ ] Live fall alert (SSE / MQTT): mobile app publishes to MQTT broker (FOCUS network);
       Flutter dashboard subscribes to `fall/alert/#` and shows the live alert
 - [ ] Fall history view: query InfluxDB `fall_events` measurement; filter by patient_id, date range,
@@ -149,6 +153,50 @@ End-to-end flow verified between two Windows laptops:
 
 ---
 
+---
+
+## 8. Caregiver Layer — K3s Integration (FOCUS Production)
+
+FOCUS runs k3s in production. The caregiver layer (currently Docker Compose on a second laptop)
+needs to be adapted for their cluster. Two open architectural questions before implementation.
+
+### Open question: should the MQTT broker be inside or outside k3s?
+
+**Option A — MQTT broker inside k3s** (wrapped as a Deployment/StatefulSet):
+
+- Pros: lifecycle managed by k3s, single place to configure TLS + auth, easy scaling
+- Cons: the mobile app (Isa) publishes from outside the cluster → needs a NodePort or LoadBalancer + Traefik IngressRouteTCP to expose port 1883/8883 externally. This is solvable but requires Traefik TCP routing config (different from HTTP ingress).
+- `fall_dashboard` reaches the broker via its k8s internal DNS name — simple.
+
+**Option B — MQTT broker outside k3s** (standalone Mosquitto on the FOCUS server, or existing broker):
+
+- Pros: broker is reachable by any device on the network without cluster config; mobile app connects directly; no Traefik TCP setup needed.
+- Cons: `fall_dashboard` (inside k3s) must reach the broker via the host IP or a k8s ExternalName Service — requires `MQTT_BROKER_HOST` set to the host machine IP (not a cluster DNS name).
+
+**Recommended: Option A** — broker inside k3s, exposed via Traefik TCP IngressRoute on port 1883.
+This keeps everything managed by one platform. The mobile app connects to the FOCUS server's external IP on :1883, same as it would with a standalone broker.
+
+### Caregiver layer — what to wrap
+
+Current 3 services (`caregiver_layer/docker-compose.yml`):
+
+| Service | Wrap in k3s? | Notes |
+|---------|-------------|-------|
+| mqtt (Mosquitto) | Yes | Deployment + PVC for persistence + Traefik TCP route on :1883 |
+| fall-dashboard | Yes | Deployment, no PVC (stateless), HTTP Ingress on caregiver path |
+| mock-app | No — replace with real mobile app in production | Mock only; real Isa app runs on a phone, not in k3s |
+
+### Tasks
+
+- [ ] **Decide** with FOCUS DevOps: broker inside or outside k3s (see above)
+- [ ] **If inside k3s**: write Helm chart or k8s manifests for mqtt + fall-dashboard; add Traefik TCP IngressRoute for MQTT port
+- [ ] **If outside k3s**: configure `MQTT_BROKER_HOST` as ExternalName Service or plain IP in fall-dashboard Deployment env
+- [ ] **Verify** MQTT_POSSIBLE_TOPIC (`fall/possible/#`) is documented in the FOCUS instruction doc — both topics must be subscribed by the Flutter client
+- [ ] **Confirm** fall-dashboard `PATIENT_IDS` env var is populated from FOCUS's patient management system (or hardcoded in their k3s ConfigMap)
+- [ ] **Remove mock-app** from any production manifests — it is a dev-only simulation of the mobile app
+
+---
+
 ## Open Questions
 
 | # | Question | Owner |
@@ -158,3 +206,4 @@ End-to-end flow verified between two Windows laptops:
 | 3 | ~~What InfluxDB schema?~~ **Resolved: MCS decides.** measurement=`fall_events`, fields: `fall_detected`, `patient_confirmed`, `needs_help`, `observation_id`, `confidence`, `model_version`; tags: `patient_id`, `device_id` | DONE |
 | 4 | ~~Timestamp only or full fields?~~ **Resolved: full fields needed** (`patient_confirmed` + `needs_help` required in InfluxDB) | DONE |
 | 5 | ~~Who updates caregiver dashboard?~~ **Resolved: FOCUS DevOps implements in Flutter** based on instruction document MCS prepares | DONE |
+| 6 | MQTT broker — inside or outside k3s for FOCUS production? See Section 8 above. | Open |
