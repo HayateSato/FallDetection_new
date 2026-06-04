@@ -158,7 +158,7 @@ services:
 
   postgres:
     image: postgres:16-alpine
-    container_name: fall_postgres
+    container_name: mcs_fall_postgres
     restart: unless-stopped
     environment:
       POSTGRES_USER:     fall_user

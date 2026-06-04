@@ -1,10 +1,12 @@
-"""Initial schema — all four tables for fall detection 6G integration.
+"""Initial schema — inference layer tables for fall detection 6G integration.
 
 Tables created:
   inference_log      — one row per /predict call (written by inference_server)
-  feature_snapshot   — one row per feature per inference (FK → inference_log)
+  feature_snapshot   — one row per feature per inference (FK -> inference_log)
   fall_history       — one row per MQTT alert received (written by fall_dashboard)
-  participant_session — one row per patient recording session
+
+Note: participant_session belongs to the caregiver layer (fall_dashboard) and is
+created there via SQLAlchemy create_all. It is NOT created by this migration.
 
 Revision ID: 0001
 Revises: —
@@ -72,23 +74,7 @@ def upgrade() -> None:
     op.create_index("ix_fall_history_patient_id",     "fall_history", ["patient_id"])
     op.create_index("ix_fall_history_detection_time", "fall_history", ["detection_time"])
 
-    # ── participant_session ───────────────────────────────────────────────
-    op.create_table(
-        "participant_session",
-        sa.Column("id",               sa.Integer(),              nullable=False),
-        sa.Column("participant_name", sa.String(length=100),     nullable=False),
-        sa.Column("gender",           sa.String(length=10),      nullable=True),
-        sa.Column("start_time",       sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column("end_time",         sa.DateTime(timezone=True), nullable=True),
-        sa.Column("fall_count",       sa.Integer(),              nullable=True),
-        sa.PrimaryKeyConstraint("id"),
-    )
-    op.create_index("ix_participant_session_participant_name",
-                    "participant_session", ["participant_name"])
-
-
 def downgrade() -> None:
-    op.drop_table("participant_session")
     op.drop_table("fall_history")
     op.drop_table("feature_snapshot")
     op.drop_table("inference_log")

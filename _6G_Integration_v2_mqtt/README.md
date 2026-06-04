@@ -381,7 +381,7 @@ Key variables in `.env`:
 ## Postgres — interactive debugging
 
 ```powershell
-docker exec -it fall_postgres psql -U fall_user -d fall_detection
+docker exec -it mcs_fall_postgres psql -U fall_user -d fall_detection
 ```
 
 ```sql

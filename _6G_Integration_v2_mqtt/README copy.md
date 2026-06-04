@@ -207,7 +207,7 @@ alembic upgrade head
 Verify the tables were created:
 
 ```powershell
-docker exec -it fall_postgres psql -U fall_user -d fall_detection -c "\dt"
+docker exec -it mcs_fall_postgres psql -U fall_user -d fall_detection -c "\dt"
 ```
 
 Expected output:
@@ -433,7 +433,7 @@ MOCK APP = `local_dev/mock_app` — local testing only, never runs in production
 Enter the container and stay in a live psql session:
 
 ```powershell
-docker exec -it fall_postgres psql -U fall_user -d fall_detection
+docker exec -it mcs_fall_postgres psql -U fall_user -d fall_detection
 ```
 
 You'll get a `fall_detection=#` prompt. Useful queries:
@@ -471,7 +471,7 @@ SELECT 'participant_session',  COUNT(*) FROM participant_session;
 One-liner (run query without entering the container):
 
 ```powershell
-docker exec -it fall_postgres psql -U fall_user -d fall_detection -c "SELECT id, patient_id, fall_detected, confidence, detection_time FROM inference_log ORDER BY id DESC LIMIT 5;"
+docker exec -it mcs_fall_postgres psql -U fall_user -d fall_detection -c "SELECT id, patient_id, fall_detected, confidence, detection_time FROM inference_log ORDER BY id DESC LIMIT 5;"
 ```
 
 ---
