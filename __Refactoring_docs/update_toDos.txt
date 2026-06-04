@@ -41,7 +41,15 @@ checking fall_dashbaord
  in the next steps, I need to wrap the caregiver layer into k3s kubernetes as the exsiting systen of FOCUS is running K3s (we can consider dockerize and let the exisitng system expose to the newly added docker services = fall_dashabord too).
  If we wrap them in k3s,  MQTT broker will be also warpped too (should I wrap it too or better not?) if it is wrapped, how can the mobile app publish the event? if it is not wrapped, how can the fall_dashboard reach the broker which is outside the k3s cluster?
 
- ------ above is implemented already ---- below is not yet ---------
-
 what do need to wrap the caregiver layer in k3s? 
 before we used k8s, but this time it needs to be k3s. what is the difference?
+
+ ------ above is implemented already ---- below is not yet ---------
+i have questions regarding how communciatoin from/to/between k3s cluster is working 
+
+there are these communcation types 
+1. from mobile app to a service/pod inside k3s clsuter  
+2. from a service/pod inside k3s clsuter A to a service/pod inside k3s clsuter B
+3. from a service/pod inside k3s clsuter to a mobile app
+4. from a service on MCS hetzner to a service/pod inside k3s clsuter  
+5. from a service/pod inside k3s clsuter to a service on MCS hetzner
