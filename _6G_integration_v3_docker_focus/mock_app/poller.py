@@ -26,9 +26,9 @@ import time
 from datetime import datetime, timezone
 from typing import List, Optional
 
-from local_dev.mock_app.influx_fetcher import fetch_raw_window
-from local_dev.mock_app.influx_writer import inject_fall_marker
-from local_dev.mock_app.api_caller import InferenceServerClient
+from mock_app.influx_fetcher import fetch_raw_window
+from mock_app.influx_writer import inject_fall_marker
+from mock_app.api_caller import InferenceServerClient
 
 logger = logging.getLogger(__name__)
 

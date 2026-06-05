@@ -7,7 +7,7 @@ Fall Dashboard web layer (FastAPI).
   GET  /api/stream                → Server-Sent Events feed of live fall events
 
 The fall stream is fed by FallEventBroker (subscribes to MQTT broker).
-Patient confirmation is handled by the mobile app (real) or local_dev/mock_app/patient_server.py (dev).
+Patient confirmation is handled by the mobile app (real) or mock_app/patient_server.py (dev).
 """
 
 import asyncio

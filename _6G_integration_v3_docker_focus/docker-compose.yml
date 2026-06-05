@@ -33,7 +33,7 @@ services:
   mock-app:
     build:
       context: .
-      dockerfile: local_dev/mock_app/Dockerfile
+      dockerfile: mock_app/Dockerfile
     image: fall-detection/mock-app:latest
     container_name: focus_mock_app
     restart: unless-stopped
