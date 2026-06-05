@@ -57,6 +57,7 @@ POLL_INTERVAL_SECONDS        = int(os.getenv("POLL_INTERVAL_SECONDS", "10"))
 POLL_LOOKBACK_SECONDS        = int(os.getenv("POLL_LOOKBACK_SECONDS", "15"))
 MQTT_BROKER_HOST             = os.getenv("MQTT_BROKER_HOST", "").strip()
 MQTT_BROKER_PORT             = int(os.getenv("MQTT_BROKER_PORT", "1883"))
+MQTT_TRANSPORT               = os.getenv("MQTT_TRANSPORT", "tcp").strip()  # "tcp" or "websockets"
 MQTT_USERNAME                = os.getenv("MQTT_USERNAME", "").strip()
 MQTT_PASSWORD                = os.getenv("MQTT_PASSWORD", "").strip()
 MQTT_ALERT_TOPIC             = os.getenv("MQTT_ALERT_TOPIC",    "fall/alert")
@@ -84,13 +85,13 @@ def _create_mqtt_publisher():
         logger.warning("MQTT_BROKER_HOST not set — fall alerts will not be published.")
         return None
 
-    client = mqtt.Client(client_id="mock-app-publisher")
+    client = mqtt.Client(client_id="mock-app-publisher", transport=MQTT_TRANSPORT)
     if MQTT_USERNAME:
         client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD or None)
     try:
         client.connect(MQTT_BROKER_HOST, MQTT_BROKER_PORT, keepalive=60)
         client.loop_start()
-        logger.info(f"MQTT publisher connected  {MQTT_BROKER_HOST}:{MQTT_BROKER_PORT}"
+        logger.info(f"MQTT publisher connected  {MQTT_TRANSPORT}://{MQTT_BROKER_HOST}:{MQTT_BROKER_PORT}"
                     f"  alert_topic={MQTT_ALERT_TOPIC}/<patient_id>")
         return client
     except Exception as exc:

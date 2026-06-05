@@ -1,19 +1,16 @@
 # =============================================================================
-# Traefik TCP entrypoint for MQTT over TLS (port 8883)
+# DEPRECATED -- no longer needed
 # =============================================================================
 #
-# This file must be applied ONCE by FOCUS DevOps BEFORE installing the
-# caregiver Helm chart. It patches the existing k3s Traefik installation
-# to also listen on port 8883 for raw TCP (MQTT) traffic.
+# The caregiver layer now exposes MQTT via WebSocket over HTTPS (port 443)
+# using the standard Traefik 'websecure' entrypoint and an IngressRoute.
+# The TCP IngressRouteTCP on port 8883 has been replaced by
+# templates/mosquitto-ingressroute.yaml.
 #
-# Apply with:
-#   kubectl apply -f extras/traefik-mqtts-entrypoint.yaml
-#
-# After applying, verify Traefik picked it up:
-#   kubectl logs -n kube-system -l app.kubernetes.io/name=traefik | Select-String "8883"
-#
-# This is a cluster-level change (kube-system namespace).
-# It does NOT affect any existing HTTP/HTTPS routing on ports 80/443.
+# DO NOT apply this file. It is kept for historical reference only.
+# If you applied it to a cluster previously, you can remove the patch with:
+#   kubectl edit helmchartconfig traefik -n kube-system
+#   (remove the additionalArguments and ports.mqtts entries)
 # =============================================================================
 
 apiVersion: helm.cattle.io/v1

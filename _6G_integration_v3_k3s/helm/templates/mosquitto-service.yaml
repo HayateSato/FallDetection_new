@@ -13,7 +13,11 @@ spec:
     - name: mqtt
       port: {{ .Values.mosquitto.port }}
       targetPort: {{ .Values.mosquitto.port }}
+    - name: mqtt-ws
+      port: {{ .Values.mosquitto.wsPort }}
+      targetPort: {{ .Values.mosquitto.wsPort }}
   type: ClusterIP
-  # fall-dashboard reaches this broker via internal DNS:
+  # fall-dashboard reaches broker via internal DNS (plain TCP):
   #   mosquitto.fall-dashboard.svc.cluster.local:1883
-  # Mobile app reaches it externally via the IngressRouteTCP on port 8883.
+  # Traefik reaches broker for mobile app WebSocket traffic:
+  #   mosquitto.fall-dashboard.svc.cluster.local:9001

@@ -18,18 +18,28 @@ imagePullSecret: mcs-labs
 # =============================================================================
 mosquitto:
   image: eclipse-mosquitto:2
-  # Port mosquitto listens on inside the cluster (plain TCP -- TLS terminated by Traefik)
+  # Internal TCP port -- fall-dashboard connects here via cluster DNS (mosquitto:1883)
   port: 1883
-  # Port exposed externally via Traefik TCP IngressRouteTCP (mobile app connects here)
-  externalPort: 8883
+  # WebSocket port -- Traefik forwards external WSS traffic here
+  wsPort: 9001
   persistence:
     size: 500Mi
     storageClass: ""    # blank = use k3s cluster default (local-path provisioner)
-  # Full mosquitto.conf content injected as a ConfigMap.
-  # allow_anonymous must stay true unless you configure password_file auth below.
+  ingress:
+    # Domain the mobile app (Isa) connects to: wss://<host>
+    # Set to a subdomain of the FOCUS server, e.g. mqtt.focus-server.hospital.de
+    host: "CHANGE_ME"
+    # TLS cert resolver -- set if FOCUS cluster uses Let's Encrypt via Traefik.
+    # Leave blank to omit TLS config (FOCUS handles TLS externally).
+    certResolver: ""    # e.g. "le" for Let's Encrypt
+  # Full mosquitto.conf injected as a ConfigMap.
+  # per_listener_settings false ensures auth applies to both listeners.
   config: |
-    listener 1883
+    per_listener_settings false
     allow_anonymous true
+    listener 1883
+    listener 9001
+    protocol websockets
     persistence true
     persistence_location /mosquitto/data/
     log_dest stdout
