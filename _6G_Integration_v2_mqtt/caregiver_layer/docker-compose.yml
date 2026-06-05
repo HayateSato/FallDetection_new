@@ -86,8 +86,14 @@ services:
     container_name: focus_mqtt
     restart: unless-stopped
     ports:
-      - "1883:1883"
-      - "8883:8883"
+      # Bind explicitly to 0.0.0.0 so the broker is reachable from other devices
+      # on the LAN (phones), not just localhost. Docker Desktop (WSL2) otherwise
+      # tends to expose published ports on 127.0.0.1 only.
+      - "0.0.0.0:1883:1883"   # plain MQTT — the working port; clients connect here
+      # 8883 = MQTT-over-TLS placeholder. NOTE: mosquitto.conf defines no TLS
+      # listener yet, so nothing actually serves this port. Clients must use 1883
+      # (no TLS) until a TLS listener + certs are configured. Kept for future use.
+      - "0.0.0.0:8883:8883"
     volumes:
       - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
       - mqtt_data:/mosquitto/data
