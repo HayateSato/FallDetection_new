@@ -83,16 +83,11 @@ services:
     image: eclipse-mosquitto:2
     container_name: focus_mqtt
     restart: unless-stopped
-    entrypoint: ["sh", "/mosquitto/config/entrypoint.sh"]
     ports:
       - "9001:9001"    # WebSocket — mobile app (Isa) connects here: ws://<host-ip>:9001
       # Port 1883 (plain TCP) is internal only — fall-dashboard and mock-app use Docker DNS
-    environment:
-      MQTT_USERNAME: ${MQTT_USERNAME}
-      MQTT_PASSWORD: ${MQTT_PASSWORD}
     volumes:
       - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
-      - ./mosquitto-entrypoint.sh:/mosquitto/config/entrypoint.sh:ro
       - mqtt_data:/mosquitto/data
       - mqtt_logs:/mosquitto/log
     networks: [caregiver-net]

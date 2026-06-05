@@ -37,3 +37,19 @@ PS C:\Users\HayateSato\Documents\FallDetection_new\_6G_integration_v3_docker_foc
 
 
 New-NetFirewallRule -DisplayName "Fall Detection - MQTT WebSocket" -Direction Inbound -Protocol TCP -LocalPort 9001 -Action Allow
+
+
+Now re-run:
+
+
+cd c:\Users\hayat\Documents\6G\FallDetection_new\_6G_integration_v3_docker_focus
+docker compose --env-file .env up -d --force-recreate mqtt
+docker logs focus_mqtt
+Expected — no password errors, just clean startup:
+
+
+mosquitto version 2.1.2 starting
+...
+Opening ipv4 listen socket on port 1883
+Opening ipv4 listen socket on port 9001
+mosquitto version 2.1.2 running
