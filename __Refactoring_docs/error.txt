@@ -33,3 +33,7 @@ What's next:
     View and search logs for all containers in one place
     with Docker Desktop's Logs view. docker-desktop://dashboard/logs
 PS C:\Users\HayateSato\Documents\FallDetection_new\_6G_integration_v3_docker_focus>
+
+
+
+New-NetFirewallRule -DisplayName "Fall Detection - MQTT WebSocket" -Direction Inbound -Protocol TCP -LocalPort 9001 -Action Allow
