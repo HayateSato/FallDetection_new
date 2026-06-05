@@ -82,11 +82,16 @@ services:
     image: eclipse-mosquitto:2
     container_name: focus_mqtt
     restart: unless-stopped
+    entrypoint: ["sh", "/mosquitto/config/entrypoint.sh"]
     ports:
       - "1883:1883"
       - "8883:8883"
+    environment:
+      MQTT_USERNAME: ${MQTT_USERNAME}
+      MQTT_PASSWORD: ${MQTT_PASSWORD}
     volumes:
       - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+      - ./mosquitto-entrypoint.sh:/mosquitto/config/entrypoint.sh:ro
       - mqtt_data:/mosquitto/data
       - mqtt_logs:/mosquitto/log
     networks: [caregiver-net]
