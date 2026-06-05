@@ -1,114 +1,35 @@
-2026-06-03 14:27:42,793 [INFO] local_dev.mock_app.poller — no fall — patient=patient_test_3  confidence=0.002
-2026-06-03 14:27:48,249 [INFO] local_dev.mock_app.poller — no fall — patient=patient_test_3  confidence=0.002
-2026-06-03 14:27:53,885 [INFO] local_dev.mock_app.poller — no fall — patient=patient_test_3  confidence=0.002
-2026-06-03 14:27:59,632 [INFO] local_dev.mock_app.poller — FALL DETECTED — patient=patient_test_3  confidence=0.998  opening patient confirmation window (1s)...
-2026-06-03 14:27:59,633 [INFO] local_dev.mock_app.patient_server — PatientServer: awaiting confirmation  patient=patient_test_3  open http://localhost:8005/ to respond
-2026-06-03 14:28:00,633 [INFO] local_dev.mock_app.poller — [Patient confirmation received]  patient=patient_test_3  confirmed=not_answered  needs_help=None
-2026-06-03 14:28:00,634 [INFO] local_dev.mock_app.poller — *** ALERT published  topic=fall/alert/patient_test_3  patient=patient_test_3  confirmed=not_answered
-2026-06-03 14:28:00,668 [INFO] local_dev.mock_app.influx_writer — InfluxDB fall_events write OK  patient=patient_test_3  confirmed=not_answered  needs_help=False  observation_id=99b37c13-864a-4444-b447-17a87c419187
-2026-06-03 14:28:02,883 [INFO] local_dev.mock_app.patient_server — PatientServer: response received — confirmed=yes  needs_help=True
-2026-06-03 14:28:05,074 [INFO] local_dev.mock_app.poller — no fall — patient=patient_test_3  confidence=0.002
-2026-06-03 14:28:10,428 [INFO] local_dev.mock_app.poller — no fall — patient=patient_test_3  confidence=0.002
-2026-06-03 14:28:15,903 [INFO] local_dev.mock_app.poller — no fall — patient=patient_test_3  confidence=0.002
 
+PS C:\Users\HayateSato\Documents\FallDetection_new\_6G_integration_v3_docker_focus> docker logs -f focus_mqtt
+Adding password for user 6G_MQTT_USER
+MQTT: password file generated for user '6G_MQTT_USER'
+1780670755: The 'per_listener_settings' option is now deprecated and will be removed in version 3.0. Please see the documentation for how to achieve the same effect.
+1780670755: Info: running mosquitto as user: mosquitto.
+1780670755: mosquitto version 2.1.2 starting
+1780670755: Restored 0 base messages
+1780670755: Restored 0 retained messages
+1780670755: Restored 0 clients
+1780670755: Restored 0 subscriptions
+1780670755: Restored 0 client messages
+1780670755: Config loaded from /mosquitto/config/mosquitto.conf.
+1780670755: Bridge support available.
+1780670755: Persistence support available.
+1780670755: TLS support available.
+1780670755: TLS-PSK support available.
+1780670755: Websockets support available.
+1780670755: password-file: Error: Unable to open pwfile "/mosquitto/config/passwd".
+1780670755: mosquitto version 2.1.2 terminating
+1780670755: Saving in-memory database to /mosquitto/data//mosquitto.db.
+Error: Unable to open file /mosquitto/config/passwd for writing. File exists.
+Error: Unable to open file /mosquitto/config/passwd for writing. File exists.
+Error: Unable to open file /mosquitto/config/passwd for writing. File exists.
+Error: Unable to open file /mosquitto/config/passwd for writing. File exists.
+Error: Unable to open file /mosquitto/config/passwd for writing. File exists.
+Error: Unable to open file /mosquitto/config/passwd for writing. File exists.
+Error: Unable to open file /mosquitto/config/passwd for writing. File exists.
+Error: Unable to open file /mosquitto/config/passwd for writing. File exists.
+Error: Unable to open file /mosquitto/config/passwd for writing. File exists.
 
-1780495839: Received PINGREQ from fall-detection-caregiver
-1780495839: Sending PINGRESP to fall-detection-caregiver
-1780495894: Received PINGREQ from mock-app-publisher
-1780495894: Sending PINGRESP to mock-app-publisher
-1780495899: Received PINGREQ from fall-detection-caregiver
-1780495899: Sending PINGRESP to fall-detection-caregiver
-1780495954: Received PINGREQ from mock-app-publisher
-1780495954: Sending PINGRESP to mock-app-publisher
-1780495959: Received PINGREQ from fall-detection-caregiver
-1780495959: Sending PINGRESP to fall-detection-caregiver
-1780496014: Received PINGREQ from mock-app-publisher
-1780496014: Sending PINGRESP to mock-app-publisher
-1780496019: Received PINGREQ from fall-detection-caregiver
-1780496019: Sending PINGRESP to fall-detection-caregiver
-1780496075: Received PINGREQ from mock-app-publisher
-1780496075: Sending PINGRESP to mock-app-publisher
-1780496080: Received PINGREQ from fall-detection-caregiver
-1780496080: Sending PINGRESP to fall-detection-caregiver
-1780496135: Received PINGREQ from mock-app-publisher
-1780496135: Sending PINGRESP to mock-app-publisher
-1780496140: Received PINGREQ from fall-detection-caregiver
-1780496140: Sending PINGRESP to fall-detection-caregiver
-1780496195: Received PINGREQ from mock-app-publisher
-1780496195: Sending PINGRESP to mock-app-publisher
-1780496200: Received PINGREQ from fall-detection-caregiver
-1780496200: Sending PINGRESP to fall-detection-caregiver
-1780496255: Received PINGREQ from mock-app-publisher
-1780496255: Sending PINGRESP to mock-app-publisher
-1780496260: Received PINGREQ from fall-detection-caregiver
-1780496260: Sending PINGRESP to fall-detection-caregiver
-1780496301: Client fall-detection-caregiver [172.18.0.5:37973] disconnected: connection closed by client.
-1780496306: New connection from 172.18.0.5:44213 on port 1883.
-1780496306: New client connected from 172.18.0.5:44213 as fall-detection-caregiver (p4, c1, k60).
-1780496306: No will message specified.
-1780496306: Sending CONNACK to fall-detection-caregiver (0, 0)
-1780496306: Received SUBSCRIBE from fall-detection-caregiver
-1780496306:     fall/alert/# (QoS 0)
-1780496306: fall-detection-caregiver 0 fall/alert/#
-1780496306: Sending SUBACK to fall-detection-caregiver
-1780496315: Received PINGREQ from mock-app-publisher
-1780496315: Sending PINGRESP to mock-app-publisher
-1780496341: Received DISCONNECT from mock-app-publisher
-1780496341: Client mock-app-publisher [172.18.0.4:46667] disconnected.
-1780496344: New connection from 172.18.0.4:54547 on port 1883.
-1780496344: New client connected from 172.18.0.4:54547 as mock-app-publisher (p4, c1, k60).
-1780496344: No will message specified.
-1780496344: Sending CONNACK to mock-app-publisher (0, 0)
-1780496366: Received PINGREQ from fall-detection-caregiver
-1780496366: Sending PINGRESP to fall-detection-caregiver
-1780496402: Received PUBLISH from mock-app-publisher (d0, q0, r0, m0, 'fall/alert/patient_test_3', ... (1503 bytes))
-1780496402: Sending PUBLISH to fall-detection-caregiver (d0, q0, r0, m0, 'fall/alert/patient_test_3', ... (1503 bytes))
-1780496404: Received PINGREQ from mock-app-publisher
-1780496404: Sending PINGRESP to mock-app-publisher
-1780496408: Received PUBLISH from mock-app-publisher (d0, q0, r0, m0, 'fall/alert/patient_test_3', ... (1503 bytes))
-1780496408: Sending PUBLISH to fall-detection-caregiver (d0, q0, r0, m0, 'fall/alert/patient_test_3', ... (1503 bytes))
-1780496427: Received PINGREQ from fall-detection-caregiver
-1780496427: Sending PINGRESP to fall-detection-caregiver
-1780496429: Received PUBLISH from mock-app-publisher (d0, q0, r0, m0, 'fall/alert/patient_test_3', ... (1505 bytes))
-1780496429: Sending PUBLISH to fall-detection-caregiver (d0, q0, r0, m0, 'fall/alert/patient_test_3', ... (1505 bytes))
-1780496435: Received PUBLISH from mock-app-publisher (d0, q0, r0, m0, 'fall/alert/patient_test_3', ... (1505 bytes))
-1780496435: Sending PUBLISH to fall-detection-caregiver (d0, q0, r0, m0, 'fall/alert/patient_test_3', ... (1505 bytes))
-1780496465: Received PINGREQ from mock-app-publisher
-1780496465: Sending PINGRESP to mock-app-publisher
-1780496488: Received PINGREQ from fall-detection-caregiver
-1780496488: Sending PINGRESP to fall-detection-caregiver
-1780496525: Received PINGREQ from mock-app-publisher
-1780496525: Sending PINGRESP to mock-app-publisher
-1780496548: Received PINGREQ from fall-detection-caregiver
-1780496548: Sending PINGRESP to fall-detection-caregiver
-1780496585: Received PINGREQ from mock-app-publisher
-1780496585: Sending PINGRESP to mock-app-publisher
-1780496608: Received PINGREQ from fall-detection-caregiver
-1780496608: Sending PINGRESP to fall-detection-caregiver
-1780496645: Received PINGREQ from mock-app-publisher
-1780496645: Sending PINGRESP to mock-app-publisher
-1780496668: Received PINGREQ from fall-detection-caregiver
-1780496668: Sending PINGRESP to fall-detection-caregiver
-1780496705: Received PINGREQ from mock-app-publisher
-1780496705: Sending PINGRESP to mock-app-publisher
-1780496728: Received PINGREQ from fall-detection-caregiver
-1780496728: Sending PINGRESP to fall-detection-caregiver
-1780496765: Received PINGREQ from mock-app-publisher
-1780496765: Sending PINGRESP to mock-app-publisher
-1780496788: Received PINGREQ from fall-detection-caregiver
-1780496788: Sending PINGRESP to fall-detection-caregiver
-1780496810: Client fall-detection-caregiver [172.18.0.5:44213] disconnected: connection closed by client.
-1780496816: New connection from 172.18.0.5:59747 on port 1883.
-1780496816: New client connected from 172.18.0.5:59747 as fall-detection-caregiver (p4, c1, k60).
-1780496816: No will message specified.
-1780496816: Sending CONNACK to fall-detection-caregiver (0, 0)
-1780496816: Received SUBSCRIBE from fall-detection-caregiver
-1780496816:     fall/alert/# (QoS 0)
-1780496816: fall-detection-caregiver 0 fall/alert/#
-1780496816: Sending SUBACK to fall-detection-caregiver
-1780496825: Received PINGREQ from mock-app-publisher
-1780496825: Sending PINGRESP to mock-app-publisher
-1780496876: Received PINGREQ from fall-detection-caregiver
-1780496876: Sending PINGRESP to fall-detection-caregiver
-1780496880: Received PUBLISH from mock-app-publisher (d0, q0, r0, m0, 'fall/alert/patient_test_3', ... (1505 bytes))
-1780496880: Sending PUBLISH to fall-detection-caregiver (d0, q0, r0, m0, 'fall/alert/patient_test_3', ... (1505 bytes))
+What's next:
+    View and search logs for all containers in one place
+    with Docker Desktop's Logs view. docker-desktop://dashboard/logs
+PS C:\Users\HayateSato\Documents\FallDetection_new\_6G_integration_v3_docker_focus>
