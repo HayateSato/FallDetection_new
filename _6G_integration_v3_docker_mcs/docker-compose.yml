@@ -165,7 +165,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - ./infrastructure/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U fall_user -d fall_detection"]
       interval: 10s
@@ -251,8 +251,8 @@ services:
       GF_USERS_ALLOW_SIGN_UP:     "false"
       GF_AUTH_ANONYMOUS_ENABLED:  "false"
     volumes:
-      - infrastructure/grafana/provisioning:/etc/grafana/provisioning:ro
-      - infrastructure/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - ./infrastructure/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./infrastructure/grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana_data:/var/lib/grafana
     depends_on:
       - prometheus
