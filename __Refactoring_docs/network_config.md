@@ -1,3 +1,77 @@
+## Check existing Windows Firewall rules
+
+### List all enabled inbound Allow rules (with port details)
+
+```powershell
+# Summary list — names only
+Get-NetFirewallRule -Direction Inbound -Action Allow | Where-Object { $_.Enabled -eq "True" } | Select-Object DisplayName | Sort-Object DisplayName
+
+# Full detail — name + port + protocol + profile
+Get-NetFirewallRule -Direction Inbound -Action Allow | Where-Object { $_.Enabled -eq "True" } | ForEach-Object {
+    $portFilter = $_ | Get-NetFirewallPortFilter
+    [PSCustomObject]@{
+        Name      = $_.DisplayName
+        Profile   = $_.Profile
+        Protocol  = $portFilter.Protocol
+        LocalPort = $portFilter.LocalPort
+        Enabled   = $_.Enabled
+    }
+} | Sort-Object Name | Format-Table -AutoSize
+```
+
+### Filter to Fall Detection rules only
+
+```powershell
+Get-NetFirewallRule -Direction Inbound -Action Allow | Where-Object { $_.DisplayName -match "Fall Detection|MQTT 1883" -and $_.Enabled -eq "True" } | ForEach-Object {
+    $portFilter = $_ | Get-NetFirewallPortFilter
+    [PSCustomObject]@{
+        Name      = $_.DisplayName
+        Profile   = $_.Profile
+        Protocol  = $portFilter.Protocol
+        LocalPort = $portFilter.LocalPort
+    }
+} | Format-Table -AutoSize
+```
+
+### Disable (not delete) an existing rule
+
+Disabling keeps the rule for later re-enabling — safer than deleting.
+
+```powershell
+# Disable a single rule by exact display name
+Set-NetFirewallRule -DisplayName "Fall Detection - Inference Server" -Enabled False
+
+# Disable all Fall Detection rules at once
+Get-NetFirewallRule | Where-Object { $_.DisplayName -match "Fall Detection" } | Set-NetFirewallRule -Enabled False
+
+# Re-enable them again
+Get-NetFirewallRule | Where-Object { $_.DisplayName -match "Fall Detection" } | Set-NetFirewallRule -Enabled True
+```
+
+### Delete a rule permanently
+
+```powershell
+# Delete a single rule by exact display name
+Remove-NetFirewallRule -DisplayName "Fall Detection - Inference Server"
+
+# Delete all Fall Detection rules at once
+Get-NetFirewallRule | Where-Object { $_.DisplayName -match "Fall Detection" } | Remove-NetFirewallRule
+```
+
+> Run PowerShell as Administrator for Set-NetFirewallRule and Remove-NetFirewallRule.
+
+### Current rules in place (as of 2026-06-05)
+
+| Rule | Port | Profile | Notes |
+|---|---|---|---|
+| Fall Detection - Inference Server | 8001 | Any | Laptop 1 (MCS) |
+| Fall Detection - MQTT | 1883 | Any | Laptop 2 (FOCUS) |
+| Fall Detection - Fall Dashboard | 8002 | Any | Laptop 2 (FOCUS) |
+| Fall Detection - Mock App | 8005 | Any | Laptop 2 (FOCUS) |
+| MQTT 1883 | 1883 | Any | Older duplicate — safe to leave |
+
+---
+
 ## Why the mobile app can't reach your laptops
 
 ### 1. Windows Firewall (most likely — fix this first)
