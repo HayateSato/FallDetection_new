@@ -59,6 +59,10 @@ fallDashboard:
   # Keep replicas at 1 -- SSE fan-out is in-process; multiple replicas silently drop events
   replicas: 1
   port: 8002
+  # NodePort for HTTP (30000-32767). Set for local two-laptop testing so Laptop 2
+  # server-health can probe fall-dashboard at http://<node-ip>:<httpNodePort>.
+  # Leave blank ("") for production -- Traefik IngressRoute handles external access.
+  httpNodePort: 30802    # e.g. 30802 for local testing
 
   persistence:
     size: 500Mi         # SQLite patient store -- small, but needs a real PVC
