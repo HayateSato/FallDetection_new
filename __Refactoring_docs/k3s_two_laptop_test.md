@@ -305,7 +305,7 @@ docker run --rm `
   -e INFLUXDB_ORG="MCS Datalabs GmbH" `
   -e INFLUXDB_BUCKET="fd_test" `
   -e INFLUXDB_FALL_EVENTS_BUCKET="fd_test" `
-  -e INFERENCE_SERVER_URL="http://localhost:8001" `
+  -e INFERENCE_SERVER_URL="http://host.docker.internal:8001" `
   -e INFERENCE_API_KEY="<your-api-key>" `
   -e MQTT_BROKER_HOST="<LAPTOP1_IP>" `
   -e MQTT_BROKER_PORT="30901" `
@@ -322,11 +322,14 @@ docker run --rm `
   -e MOCK_PATIENT_SERVER_PORT="8005" `
   -e LOG_LEVEL="INFO" `
   -p 8005:8005 `
-  --network host `
   fall-detection/mock-app:latest
 ```
 
-> `--network host` lets the container reach `localhost:8001` (inference-server) directly.
+> **No `--network host`** — that flag does not work on Windows Docker Desktop (containers run
+> inside a Linux VM so host networking binds to the VM NIC, not the Windows NIC).
+> Instead, `host.docker.internal` is Docker Desktop's special hostname that routes back
+> to the Windows host where inference-server is running. Port 8005 is exposed via `-p 8005:8005`
+> so the patient popup is reachable at `http://localhost:8005/` in a browser on Laptop 2.
 
 ---
 
@@ -376,5 +379,6 @@ curl.exe http://localhost:18002/api/falls
 | mock-app: `Connection refused` to MQTT WebSocket | NodePort service not created — `wsNodePort` blank or helm not reinstalled after values change | Verify `mosquitto.wsNodePort: 30901` in values.yaml, run `helm upgrade ...`, check `kubectl get svc -n fall-dashboard` shows `9001:30901/TCP` |
 | fall-dashboard pod: `ImagePullBackOff` | Local registry not reachable from K3s | Check registries.yaml in WSL2, restart k3s |
 | MQTT connected but no SSE events | fall-dashboard not subscribed to mosquitto | Check fall-dashboard logs for MQTT connect message |
+| fall-dashboard log shows `MQTT broker connection failed ([Errno 111] Connection refused)` at startup | fall-dashboard started before mosquitto was ready — one-time race condition | Delete the pod: `kubectl delete pod -n fall-dashboard <fall-dashboard-pod-name>` — k8s recreates it and this time mosquitto is already running. The code retries 5 times (25s) so this should self-heal on recreation. |
 | mock-app: `Connection refused` to inference-server | inference layer not healthy yet | Check `docker ps` on Laptop 2 for `(healthy)` |
 | All tests pass but no falls triggered | No new sensor data in InfluxDB | Check InfluxDB `fd_test` bucket has recent ACC data |
