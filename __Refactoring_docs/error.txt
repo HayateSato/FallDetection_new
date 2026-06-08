@@ -64,3 +64,14 @@ WARNING: Published ports are discarded when using host network mode
 2026-06-08 14:23:56,419 [INFO] mock_app.poller — no fall — patient=patient_test_500  confidence=0.002
 2026-06-08 14:24:06,549 [INFO] mock_app.poller — no fall — patient=patient_test_500  confidence=0.002
 
+
+
+------------------------------------- 
+
+
+
+2026-06-08 14:36:34,468 [ERROR] mock_app.api_caller — Inference server unreachable: HTTPConnectionPool(host='localhost', port=8001): Max retries exceeded with url: /predict (Caused by NewConnectionError("HTTPConnection(host='localhost', port=8001): Failed to establish a new connection: [Errno 111] Connection refused"))
+2026-06-08 14:36:44,589 [ERROR] mock_app.api_caller — Inference server unreachable: HTTPConnectionPool(host='localhost', port=8001): Max retries exceeded with url: /predict (Caused by NewConnectionError("HTTPConnection(host='localhost', port=8001): Failed to establish a new connection: [Errno 111] Connection refused"))
+2026-06-08 14:36:54,710 [ERROR] mock_app.api_caller — Inference server unreachable: HTTPConnectionPool(host='localhost', port=8001): Max retries exceeded with url: /predict (Caused by NewConnectionError("HTTPConnection(host='localhost', port=8001): Failed to establish a new connection: [Errno 111] Connection refused"))
+2026-06-08 14:37:04,828 [ERROR] mock_app.api_caller — Inference server unreachable: HTTPConnectionPool(host='localhost', port=8001): Max retries exceeded with url: /predict (Caused by NewConnectionError("HTTPConnection(host='localhost', port=8001): Failed to establish a new connection: [Errno 111] Connection refused"))
+2026-06-08 14:37:11,933 [INFO] mock_app — Shutting down mock app...
