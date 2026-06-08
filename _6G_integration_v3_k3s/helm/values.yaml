@@ -22,6 +22,10 @@ mosquitto:
   port: 1883
   # WebSocket port -- Traefik forwards external WSS traffic here
   wsPort: 9001
+  # NodePort for WebSocket (30000-32767). Set for local two-laptop testing so the
+  # mock-app on Laptop 2 can reach ws://<node-ip>:<wsNodePort> without TLS.
+  # Leave blank ("") for production -- Traefik IngressRoute handles external WSS.
+  wsNodePort: ""    # e.g. 30901 for local testing
   persistence:
     size: 500Mi
     storageClass: ""    # blank = use k3s cluster default (local-path provisioner)

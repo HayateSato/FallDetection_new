@@ -58,13 +58,14 @@ kubectl get nodes   # should show one node Ready
 
 ---
 
-### Step 2 — Open firewall port 9001 on Laptop 1
+### Step 2 — Open firewall port 30901 on Laptop 1
 
-Mosquitto exposes WebSocket on port 9001. A NodePort service in K3s maps this to the host NIC.
-Open it so Laptop 2 (mock-app) can reach it:
+For local testing the Helm chart exposes mosquitto's WebSocket port as NodePort 30901 on the
+host NIC (see Step 5 — this requires setting `mosquitto.wsNodePort: 30901` in values.yaml).
+Open the firewall so Laptop 2 (mock-app) can reach it:
 
 ```powershell
-New-NetFirewallRule -DisplayName "Fall Detection - MQTT WebSocket (K3s)" -Direction Inbound -Protocol TCP -LocalPort 9001 -Action Allow
+New-NetFirewallRule -DisplayName "Fall Detection - MQTT WebSocket NodePort (K3s)" -Direction Inbound -Protocol TCP -LocalPort 30901 -Action Allow
 ```
 
 Also open 80 and 443 if the Flutter dashboard will be tested too:
@@ -74,42 +75,55 @@ New-NetFirewallRule -DisplayName "Fall Detection - HTTP (K3s)" -Direction Inboun
 New-NetFirewallRule -DisplayName "Fall Detection - HTTPS (K3s)" -Direction Inbound -Protocol TCP -LocalPort 443 -Action Allow
 ```
 
+**Linux (FOCUS production server):** On most k3s-ready Linux servers (Ubuntu Server, Debian)
+`ufw` is inactive and no firewall change is needed — k3s adds the iptables NodePort rules
+automatically. Check first:
+
+```bash
+sudo ufw status
+```
+
+If `ufw` is active, allow the port:
+
+```bash
+sudo ufw allow 30901/tcp      # MQTT WebSocket NodePort
+sudo ufw allow 80/tcp         # HTTP (fall-dashboard via Traefik)
+sudo ufw allow 443/tcp        # HTTPS (fall-dashboard + WSS via Traefik)
+```
+
+With `firewalld` (RHEL/CentOS):
+
+```bash
+sudo firewall-cmd --add-port=30901/tcp --permanent
+sudo firewall-cmd --add-port=80/tcp --permanent
+sudo firewall-cmd --add-port=443/tcp --permanent
+sudo firewall-cmd --reload
+```
+
+Note: in the production FOCUS deployment `wsNodePort` will be blank (ClusterIP) and port 30901
+will not be used — mobile app WebSocket traffic goes through Traefik on port 443 instead.
+The NodePort rule is only needed for the local two-laptop test.
+
 ---
 
-### Step 3 — Expose mosquitto WebSocket port via NodePort (one-time)
+### Step 3 — Verify mosquitto NodePort for external WebSocket access
 
-WebSocket rides over HTTP, so no Traefik TCP entrypoint is needed. Instead, expose mosquitto's
-port 9001 as a NodePort service so Laptop 2 can reach it directly on the host NIC.
+For local testing the Helm chart can expose mosquitto's WebSocket port (9001) as a NodePort
+on the host NIC. This is controlled by `mosquitto.wsNodePort` in `values.yaml` — see Step 5
+where you set it to `30901` for local testing.
 
-This is declared in the Helm chart's mosquitto Service template. Verify it is in place:
+After Step 6 (helm install), verify the service type and NodePort are correct:
 
 ```powershell
 kubectl get svc mosquitto -n fall-dashboard
-# Should show port 9001:3xxxx/TCP (NodePort) alongside 1883 (ClusterIP internal)
+# Should show: port 9001:30901/TCP (NodePort) alongside 1883 (ClusterIP internal)
 ```
 
-If using a manual manifest instead:
+The mock-app (and eventually the real mobile app) connects to `ws://<LAPTOP1_IP>:30901`.
+The fall-dashboard pod reaches mosquitto on 1883 via cluster-internal DNS — no change needed there.
 
-```yaml
-apiVersion: v1
-kind: Service
-metadata:
-  name: mosquitto-ws
-  namespace: fall-dashboard
-spec:
-  type: NodePort
-  selector:
-    app: mosquitto
-  ports:
-    - name: websocket
-      port: 9001
-      targetPort: 9001
-      nodePort: 30901   # fixed port on the host NIC (or omit to let K3s assign one)
-```
-
-The mock-app (and eventually the real mobile app) connects to `ws://<LAPTOP1_IP>:30901`
-(or the assigned nodePort). The fall-dashboard pod still reaches mosquitto on 1883 via
-cluster-internal DNS -- no change needed there.
+In production (FOCUS cluster) `wsNodePort` is left blank so the service is ClusterIP.
+Traefik IngressRoute handles external mobile app traffic as WSS on port 443 instead.
 
 Verify mosquitto is listening on both ports:
 
@@ -163,6 +177,12 @@ Open `_6G_integration_v3_k3s/helm/values.yaml` and update:
 # Use local registry instead of FOCUS production registry
 registry: localhost:5000
 imagePullSecret: ""        # no pull secret needed for local registry
+
+mosquitto:
+  wsNodePort: 30901   # expose WS port on host NIC so Laptop 2 mock-app can reach it
+  ingress:
+    host: "CHANGE_ME"   # still required by template but not used in local NodePort test
+    certResolver: ""
 
 fallDashboard:
   image: localhost:5000/fall-detection/fall-dashboard:latest
@@ -255,8 +275,8 @@ Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.PrefixOrigin -eq "Dhcp"
 ### Step 3 — Run mock-app pointing to Laptop 1 MQTT WebSocket
 
 The mock-app is NOT in the K3s chart (dev-only). Run it as a standalone Docker container,
-overriding the MQTT broker to point at Laptop 1's mosquitto WebSocket port 9001 (or the NodePort
-assigned in Step 3 of the Laptop 1 section — use whichever port `kubectl get svc` reported).
+overriding the MQTT broker to point at Laptop 1's mosquitto NodePort 30901 (set via
+`mosquitto.wsNodePort: 30901` in values.yaml — see Laptop 1 Steps 3 and 5).
 
 Build the image first (if not already built):
 
@@ -277,8 +297,8 @@ docker run --rm `
   -e INFERENCE_SERVER_URL="http://localhost:8001" `
   -e INFERENCE_API_KEY="<your-api-key>" `
   -e MQTT_BROKER_HOST="<LAPTOP1_IP>" `
-  -e MQTT_BROKER_PORT="9001" `
-  -e MQTT_USE_WEBSOCKET="true" `
+  -e MQTT_BROKER_PORT="30901" `
+  -e MQTT_TRANSPORT="websockets" `
   -e MQTT_ALERT_TOPIC="fall/alert" `
   -e MQTT_POSSIBLE_TOPIC="fall/possible" `
   -e MQTT_USERNAME="" `
@@ -341,8 +361,8 @@ curl.exe http://localhost:18002/api/falls
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| mock-app: `Connection refused` to MQTT WebSocket | Firewall on Laptop 1 blocking 9001 (or the NodePort) | Re-run Step 2 of Laptop 1 section |
-| mock-app: `Connection refused` to MQTT WebSocket | NodePort service not created / mosquitto not listening on 9001 | Check `kubectl get svc -n fall-dashboard` and mosquitto logs for `websockets listen socket on port 9001` |
+| mock-app: `Connection refused` to MQTT WebSocket | Firewall on Laptop 1 blocking port 30901 | Re-run Laptop 1 Step 2 firewall rule |
+| mock-app: `Connection refused` to MQTT WebSocket | NodePort service not created — `wsNodePort` blank or helm not reinstalled after values change | Verify `mosquitto.wsNodePort: 30901` in values.yaml, run `helm upgrade ...`, check `kubectl get svc -n fall-dashboard` shows `9001:30901/TCP` |
 | fall-dashboard pod: `ImagePullBackOff` | Local registry not reachable from K3s | Check registries.yaml in WSL2, restart k3s |
 | MQTT connected but no SSE events | fall-dashboard not subscribed to mosquitto | Check fall-dashboard logs for MQTT connect message |
 | mock-app: `Connection refused` to inference-server | inference layer not healthy yet | Check `docker ps` on Laptop 2 for `(healthy)` |

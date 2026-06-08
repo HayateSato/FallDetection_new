@@ -16,8 +16,12 @@ spec:
     - name: mqtt-ws
       port: {{ .Values.mosquitto.wsPort }}
       targetPort: {{ .Values.mosquitto.wsPort }}
-  type: ClusterIP
+      {{- if .Values.mosquitto.wsNodePort }}
+      nodePort: {{ .Values.mosquitto.wsNodePort }}
+      {{- end }}
+  type: {{ if .Values.mosquitto.wsNodePort }}NodePort{{ else }}ClusterIP{{ end }}
   # fall-dashboard reaches broker via internal DNS (plain TCP):
   #   mosquitto.fall-dashboard.svc.cluster.local:1883
-  # Traefik reaches broker for mobile app WebSocket traffic:
-  #   mosquitto.fall-dashboard.svc.cluster.local:9001
+  # Production: Traefik IngressRoute forwards mobile app WSS traffic to port 9001.
+  # Local two-laptop testing: set mosquitto.wsNodePort (e.g. 30901) to expose port
+  # 9001 as a NodePort on the node NIC -- bypasses Traefik, no TLS needed.

@@ -1,5 +1,5 @@
 # test.ps1 -- Smoke-test the caregiver deployment after install.
-# Run from _6G_Integration_v2_mqtt/ as working directory.
+# Run from _6G_integration_v3_k3s/ as working directory.
 # Requires: kubectl, curl.exe
 
 $Namespace = "fall-dashboard"
@@ -70,8 +70,8 @@ Test-Probe "fall-dashboard IngressRoute exists" {
     $ir -ne $null
 }
 
-Test-Probe "mosquitto IngressRouteTCP exists" {
-    $ir = kubectl get ingressroutetcp mosquitto-mqtts -n $Namespace 2>$null
+Test-Probe "mosquitto WebSocket IngressRoute exists" {
+    $ir = kubectl get ingressroute mosquitto-ws -n $Namespace 2>$null
     $ir -ne $null
 }
 
