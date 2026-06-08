@@ -122,27 +122,36 @@ End-to-end flow verified between two Windows laptops:
 
 ## 5. Integration Testing with Isa (Mobile App)
 
-- [ ] Test **mobile app -> inference server HTTPS** communication (end-to-end, new MCS endpoint)
+- [x] Test **mobile app -> inference server HTTPS** communication (end-to-end, new MCS endpoint) — **PASSED 2026-06-08**
 - [ ] Test **InfluxDB marker injection** from mobile app (fall_events point written to FOCUS InfluxDB)
-- [ ] Test **MQTT flow**: mobile app -> MQTT broker (FOCUS) -> caregiver dashboard SSE/alert
-- [ ] Validate patient confirmation popup and the three response paths:
+      ⚠️ **NOT YET — mobile app is not currently injecting fall timestamps to InfluxDB.**
+      As a result, the fall dashboard fall history tab shows no data. Isa needs to implement the
+      InfluxDB write (`fall_events` point) after the patient confirmation popup.
+- [x] Test **MQTT flow**: mobile app -> MQTT broker (FOCUS network) -> caregiver dashboard SSE/alert — **PASSED 2026-06-08**
+- [x] Validate patient confirmation popup and the three response paths — **PASSED 2026-06-08**
   - Patient confirms fall + requests help -> rescue MQTT message sent
   - Patient confirms fall, no help needed -> no rescue message
   - No response within 10s -> rescue message sent automatically
-- [ ] Confirm MQTT payload includes observation_id so it can be cross-referenced with inference_log
+- [x] Confirm MQTT payload includes observation_id so it can be cross-referenced with inference_log — **PASSED 2026-06-08**
 - [ ] Test **POST /inference/{observation_id}/confirm** call from mobile app after popup
       (Isa needs to add this call after the confirmation popup)
 
-> **Two-laptop local test PASSED (2026-06-03):** `caregiver_layer/` runs mock-app, mqtt, fall-dashboard
-> on the second laptop. Cross-machine communication verified. The mock-app is now containerised
-> in Docker inside the caregiver layer, correctly simulating the mobile app on the FOCUS network.
+> **Two-laptop + real mobile app test PASSED (2026-06-08):**
+> - `_6G_integration_v3_docker_mcs/` (inference layer, no mock app) on Laptop 1 (MCS side)
+> - `_6G_integration_v3_docker_focus/` (caregiver layer: mqtt + fall-dashboard) on Laptop 2 (FOCUS side)
+> - Real mobile app (Isa) connected to the same network
+> - Full alert flow confirmed: mobile app → /predict → patient popup → MQTT → broker → fall-dashboard → SSE
+> - **Gap:** mobile app does not yet write to InfluxDB → fall history dashboard has no data
 
 ---
 
 ## 6. End-to-End Testing
 
 - [ ] Full sequence: SmarKo -> mobile app -> inference server -> response -> InfluxDB injection -> MQTT -> caregiver dashboard alert
+      ⚠️ **Partially done (2026-06-08):** SmarKo → mobile app → inference server → MQTT → caregiver alert all verified.
+      InfluxDB injection step is missing — Isa has not yet implemented the `fall_events` write.
 - [ ] Fall-history dashboard: verify it reads correctly from InfluxDB (filter by patient, period, help-requested)
+      ⚠️ **Blocked** until Isa implements InfluxDB injection above.
 - [ ] Retraining pipeline: feature_snapshot (MCS Postgres) -> retrain script -> MLflow -> hot-swap from ml-dashboard
 - [ ] Grafana dashboards loading correctly for MCS-hosted components
 
