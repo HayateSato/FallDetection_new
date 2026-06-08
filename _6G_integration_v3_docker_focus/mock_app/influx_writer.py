@@ -70,6 +70,8 @@ def inject_fall_marker(
         .field("patient_confirmed", confirmed_int)
         .field("needs_help",        bool(needs_help))
         .field("confidence",        round(float(confidence), 4))
+        .field("observation_id",    observation_id)
+        .field("model_version",     model_version)
         .time(ts, "ns")
     )
 
