@@ -1,3 +1,36 @@
+# Network Configuration — Windows Firewall Rules
+
+## Allow inbound port 8001 (Inference Server)
+
+Run in an **elevated PowerShell** (Run as Administrator) on the host machine
+(Laptop 1 / MCS) so another device on the same Wi-Fi can reach the inference
+server (TCP, inbound):
+
+```powershell
+New-NetFirewallRule -DisplayName "Fall Detection - Inference Server" -Direction Inbound -Protocol TCP -LocalPort 8001 -Action Allow
+```
+
+Scope to the Private profile only (recommended for same-Wi-Fi use, avoids
+exposing it on public networks):
+
+```powershell
+New-NetFirewallRule -DisplayName "Fall Detection - Inference Server" -Direction Inbound -Protocol TCP -LocalPort 8001 -Action Allow -Profile Private
+```
+
+Remove it later:
+
+```powershell
+Remove-NetFirewallRule -DisplayName "Fall Detection - Inference Server"
+```
+
+Generic form for any other port (replace `<PORT>` and the display name):
+
+```powershell
+New-NetFirewallRule -DisplayName "<DISPLAY NAME>" -Direction Inbound -Protocol TCP -LocalPort <PORT> -Action Allow
+```
+
+---
+
 ## Check existing Windows Firewall rules
 
 ### List all enabled inbound Allow rules (with port details)

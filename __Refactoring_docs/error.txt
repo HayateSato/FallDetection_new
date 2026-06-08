@@ -1,2 +1,66 @@
-PS C:\Users\HayateSato\Documents\FallDetection_new\_6G_integration_v3_docker_mcs> docker compose --env-file .env up -d
-unable to get image 'fall-detection/mlflow:latest': failed to connect to the docker API at npipe:////./pipe/dockerDesktopLinuxEngine; check if the path is correct and if the daemon is running: open //./pipe/dockerDesktopLinuxEngine: The system cannot find the file specified.
+PS C:\Users\HayateSato\Documents\FallDetection_new\_6G_integration_v3_docker_focus> docker run --rm `
+>>   -e INFLUXDB_URL="https://ecosystem-influxdb.smarko-health.de" `
+>>   -e INFLUXDB_TOKEN="v3vG3RliwQKPhUCYmlu4GAjrQcf0uITn_J2E08FaJdpn1-rNU5j0lSX9Cp9VNKw4i9fRjB6cvSO-euuG5IOnWg==" `
+>>   -e INFLUXDB_ORG="MCS Datalabs GmbH" `
+>>   -e INFLUXDB_BUCKET="fd_test" `
+>>   -e INFLUXDB_FALL_EVENTS_BUCKET="fd_test" `
+>>   -e INFERENCE_SERVER_URL="http://localhost:8001" `
+>>   -e INFERENCE_API_KEY="CHANGE_ME" `
+>>   -e MQTT_BROKER_HOST="192.168.8.131" `
+>>   -e MQTT_BROKER_PORT="30901" `
+>>   -e MQTT_TRANSPORT="websockets" `
+>>   -e MQTT_ALERT_TOPIC="fall/alert" `
+>>   -e MQTT_POSSIBLE_TOPIC="fall/possible" `
+>>   -e MQTT_USERNAME="" `
+>>   -e MQTT_PASSWORD="" `
+>>   -e PATIENT_IDS="patient_test_500" `
+>>   -e MAC_IDS="6c:1d:eb:04:a9:d9" `
+>>   -e POLL_INTERVAL_SECONDS="10" `
+>>   -e POLL_LOOKBACK_SECONDS="15" `
+>>   -e MOCK_PATIENT_RESPONSE_TIMEOUT="1" `
+>>   -e MOCK_PATIENT_SERVER_PORT="8005" `
+>>   -e LOG_LEVEL="INFO" `
+>>   -p 8005:8005 `
+>>   --network host `
+>>   fall-detection/mock-app:latest
+WARNING: Published ports are discarded when using host network mode
+/app/mock_app/main.py:88: DeprecationWarning: Callback API version 1 is deprecated, update to latest version
+  client = mqtt.Client(client_id="mock-app-publisher", transport=MQTT_TRANSPORT)
+================================================================
+  Mock Mobile App — Fall Detection
+  Inference server:     http://localhost:8001
+  Patients:             ['patient_test_500']
+  MAC map:              {'patient_test_500': '6c:1d:eb:04:a9:d9'}
+  Poll interval:        10s
+  MQTT broker:          192.168.8.131:30901
+  Alert topic:          fall/alert/<patient_id>
+  Confirmation timeout: 1s
+  Patient popup:        http://localhost:8005/
+
+  FLOW: InfluxDB → /predict → patient popup → MQTT alert → caregiver
+        → InfluxDB fall_events write → /inference/{obs_id}/confirm
+================================================================
+2026-06-08 14:22:14,779 [INFO] mock_app — MQTT publisher connected  websockets://192.168.8.131:30901  alert_topic=fall/alert/<patient_id>
+2026-06-08 14:22:14,819 [INFO] mock_app.patient_server — PatientConfirmationServer started — open http://localhost:8005/ to see patient popup
+2026-06-08 14:22:14,819 [INFO] mock_app.poller — MockAppPoller started  patients=['patient_test_500']  interval=10s  lookback=15s  confirmation_timeout=1s  alert_topic=fall/alert/#
+2026-06-08 14:22:14,830 [INFO] mock_app.poller — Server uses_barometer = False
+2026-06-08 14:22:14,830 [INFO] ml_pipeline.data_input.data_loader.influx_client_manager — Creating new InfluxDB client connection...
+2026-06-08 14:22:14,853 [INFO] ml_pipeline.data_input.data_loader.influx_client_manager — InfluxDB client connection established
+2026-06-08 14:22:15,069 [INFO] mock_app.poller — no fall — patient=patient_test_500  confidence=0.002
+2026-06-08 14:22:25,204 [INFO] mock_app.poller — no fall — patient=patient_test_500  confidence=0.002
+2026-06-08 14:22:35,345 [INFO] mock_app.poller — no fall — patient=patient_test_500  confidence=0.002
+2026-06-08 14:22:45,476 [INFO] mock_app.poller — no fall — patient=patient_test_500  confidence=0.002
+2026-06-08 14:22:55,615 [INFO] mock_app.poller — FALL DETECTED — patient=patient_test_500  confidence=0.999  opening patient confirmation window (1s)...
+2026-06-08 14:22:55,616 [INFO] mock_app.poller — Possible fall published  patient=patient_test_500
+2026-06-08 14:22:55,616 [INFO] mock_app.patient_server — PatientServer: awaiting confirmation  patient=patient_test_500  open http://localhost:8005/ to respond
+2026-06-08 14:22:56,617 [INFO] mock_app.poller — [Patient confirmation received]  patient=patient_test_500  confirmed=not_answered  needs_help=None
+2026-06-08 14:22:56,617 [INFO] mock_app.poller — *** ALERT published  topic=fall/alert/patient_test_500  patient=patient_test_500  confirmed=not_answered
+2026-06-08 14:22:56,652 [INFO] mock_app.influx_writer — InfluxDB fall_events write OK  patient=patient_test_500  confirmed=not_answered(-1)  needs_help=False
+2026-06-08 14:23:05,758 [INFO] mock_app.poller — no fall — patient=patient_test_500  confidence=0.004
+2026-06-08 14:23:15,887 [INFO] mock_app.poller — no fall — patient=patient_test_500  confidence=0.002
+2026-06-08 14:23:26,026 [INFO] mock_app.poller — no fall — patient=patient_test_500  confidence=0.002
+2026-06-08 14:23:36,153 [INFO] mock_app.poller — no fall — patient=patient_test_500  confidence=0.005
+2026-06-08 14:23:46,283 [INFO] mock_app.poller — no fall — patient=patient_test_500  confidence=0.002
+2026-06-08 14:23:56,419 [INFO] mock_app.poller — no fall — patient=patient_test_500  confidence=0.002
+2026-06-08 14:24:06,549 [INFO] mock_app.poller — no fall — patient=patient_test_500  confidence=0.002
+
