@@ -38,7 +38,9 @@ never talks back to you — MQTT is one-way here.
 | Setting | Value |
 |---------|-------|
 | Broker host | the caregiver-layer machine's IP (the laptop running `focus_mqtt`) |
-| Port | `1883` (plain TCP) |
+| Port | `9001` (WebSocket) |
+| URL scheme | `ws://<host>:9001` for local/LAN; `wss://<host>` (port 443) for production with TLS |
+| Library | MQTT.js — React Native does not support raw TCP MQTT, so WebSocket is required |
 | Auth | none for local testing (`allow_anonymous true`). Production will add user/pass — ask MCS. |
 | **Client ID** | **must be unique.** Do NOT reuse `mock-app-publisher`. Use something stable per device, e.g. `mobile-<deviceid>`. ⚠️ See §6. |
 | QoS | currently 0 (fire-and-forget). See §7 — alerts may move to QoS 1. |
@@ -195,7 +197,7 @@ the patient's answer so the retraining pipeline gets the ground-truth label.
 
 ## 9. Quick checklist for Isa
 
-- [ ] Connect to broker `tcp://<caregiver-machine-ip>:1883`, **unique client ID**.
+- [ ] Connect to broker `ws://<caregiver-machine-ip>:9001` (WebSocket, MQTT.js), **unique client ID**.
 - [ ] On fall detected → publish `fall/possible/<patient_id>` with `fall_detected:true`, `status:"pending"`, `observation_id`.
 - [ ] Show popup capturing **both** "did you fall?" and "do you need help?".
 - [ ] On answer/timeout → publish `fall/alert/<patient_id>` with `patient_confirmed` (`"yes"`/`"no"`/`"not_answered"`) and `needs_help` bool, same `observation_id`.
@@ -210,9 +212,9 @@ the patient's answer so the retraining pipeline gets the ground-truth label.
 
 1. Make sure the mock app is **stopped** (`docker stop focus_mock_app`) so it
    doesn't publish competing messages.
-2. Point your app's broker host at the caregiver-layer laptop's IP, port 1883.
+2. Point your app's broker host at the caregiver-layer laptop's IP, port 9001 (WebSocket: `ws://<ip>:9001`).
 3. Publish a test `fall/alert/<patient_id>` and watch it arrive:
-   - Broker log: `docker logs -f focus_mqtt` — look for `Received PUBLISH from <your-client-id> 'fall/alert/...'` followed by `Sending PUBLISH to fall-detection-caregiver`.
+   - Broker log: `docker logs -f focus_mqtt` — look for `Received PUBLISH from <your-client-id> 'fall/alert/...'` followed by `Sending PUBLISH to fall-detection-caregiver`. WebSocket clients will show `New connection from ... on port 9001` on first connect.
    - Dashboard log: `docker logs -f focus_fall_dashboard` — confirms the app *processed* it.
    - Browser: `http://<caregiver-ip>:8002/` — the alert/badge should appear.
 

@@ -4,29 +4,30 @@ The system is composed of three layers in a big picture
  3. Inference & Post-training layer (backend + frontend)  = server in MCS network
 
 Subcompoenents in each layer is hosted either in 
- (F): FOCUS network
+ (F1):Services already running in FOCUS network 
+ (F2):Services that will be added in FOCUS network 
  (M): MCS network
 
 
 1. Patient layer
 -----------------------------------------------------------------------------------------------
-- SmarKo                      (F)         collecting physiological data and sends to mobile app
-- mobile app                  (F)         transmits the collected data to influxDB 
+- SmarKo                      (F1)        collecting physiological data and sends to mobile app
+- mobile app                  (F2)        transmits the collected data to influxDB 
                                           directly POST request to inference API to detect a fall
                                           displays fall confirmation popup and alert caregiver if confirmed & injects the marker into influxDB 
-- MQTT client A               (F)         publishes fall event to caregiver webapp server as soon as fall is detected
+- MQTT client A               (F2)        publishes fall event to caregiver webapp server as soon as fall is detected
 
 2. Caregiver layer
 -----------------------------------------------------------------------------------------------
 BACKEND
-  - influxDB                  (F)         stores physiological infomration of patients + fall timestamp per user ID
-  - data table A              (F)         stored user (caregiver)/session infomration (it can be a simple SQLite or postgres table if required)
-  - MQTT broker               (F)         infrastructure for MQTT protocol 
-  - MQTT client B             (F)         event subscriber and expose the event to web app server 
-  - caregiver webapp server   (F)         backend component for caregiver web app 
+  - influxDB                  (F1)        stores physiological infomration of patients + fall timestamp per user ID
+  - caregiver webapp server   (F1)        backend component for caregiver web app 
+  - data table A              (F2)        stored patient session infomration (stored in SQLite, not postgres)
+  - MQTT broker               (F2)        infrastructure for MQTT protocol 
+  - MQTT client B             (F2)        event subscriber and expose the event to web app server 
 FRONTEND
-  - patinet dashboard         (F)         displays registered patients and their personal information (gender, BMI etc.) and health monitoring status (HR, SpO2 etc.)
-  - fall dashboard            (F)         displays all the falls, can be filited by period, patient, whether help requetsed or not 
+  - patinet dashboard         (F1)        displays registered patients and their personal information (gender, BMI etc.) and health monitoring status (HR, SpO2 etc.)
+  - fall dashboard            (F2)        displays all the falls, can be filited by period, patient, whether help requetsed or not 
                                           for real time use, all detected fall will be indicated followed by patient confirmation  
 
 3. Inference & Post-training layer

@@ -51,7 +51,7 @@ the cluster over the network.
 │  Patient Dashboard   |     │    (Postgres — fall_detection DB)                   │
 |  (one web app shown  │     |                                                      |
 │   to the caregiver): │     │                                                      │
-│   • patient info     │     │  MQTT broker  :1883                                  │
+│   • patient info     │     │  MQTT broker  :1883 (internal) / :9001 (WebSocket)   │
 │     panel — FHIR     │     │    fall/alert/<patient_id>                           │
 │     demographics     │     │                                                      │
 │     (height, weight) │     │                                                      │
@@ -175,7 +175,7 @@ phase:
 | `files/grafana/dashboards/` | 3 Grafana dashboards mounted into the grafana pod |
 | `build.ps1` | builds all 4 custom Python images (`registry.example.com/` prefix for Docker Desktop K8s) |
 | `install.ps1` | `helm upgrade --install` + `--wait` + shows pod status; refuses to run on non-`docker-desktop` context |
-| `port-forward.ps1` | opens 7 tunnels (8001/8002/8004/8006/5000/3000/1883) in separate windows |
+| `port-forward.ps1` | opens 7 tunnels (8001/8002/8004/8006/5000/3000/1883/9001) in separate windows — 1883 for internal fall_dashboard, 9001 for mobile app WebSocket |
 | `test.ps1` | 8 in-cluster health probes (self + cross-service via K8s DNS + Grafana provisioning sanity) |
 | `teardown.ps1` | uninstalls + deletes namespace (also drops PVCs) |
 | `README.md` | quickstart at top + manual command walkthrough below |
@@ -220,7 +220,7 @@ for the production-tag manual workflow.
 | `fall_dashboard` | 8002 | caregiver | Subscribes to MQTT `fall/alert/#`; writes `fall_history`; `/api/falls` + `/api/stream` SSE | Implemented |
 | `ml_dashboard` | 8004 | **admin** | Retrain + register + promote alias + hot-swap inference server (one UI). See [ml_dashboard/README.md](../_6G_Integration_v2_mqtt/ml_dashboard/README.md) | Implemented (2026-04-28) — auth gate deferred (todo 11.5.4) |
 | `server_health` | 8006 | **admin** | Aggregate `/health` probes of 6 services with traffic-light banner. See [server_health/README.md](../_6G_Integration_v2_mqtt/server_health/README.md) | Implemented (2026-04-28) — auth gate deferred (todo 11.5.4) |
-| `mqtt_broker` | 1883 | internal | eclipse-mosquitto; routes `fall/alert/<patient_id>` between mobile app and fall_dashboard | Running locally |
+| `mqtt_broker` | 1883 (internal TCP) / 9001 (WebSocket) | internal + mobile app | eclipse-mosquitto; 1883 for fall_dashboard (internal), 9001 WebSocket for mobile app (React Native cannot use raw TCP) | Running locally |
 | `Postgres` | 5432 | internal | One instance, two logical databases: `fall_detection` (our data) + `mlflow` (MLflow internals) | Implemented |
 | `MLflow tracking server` | 5000 | retrain.py + inference_server | Postgres-backed run + registry store; Dockerfile in `infrastructure/mlflow/` | Implemented (2026-04-28) |
 | `Prometheus` | 9090 | Grafana | Scrapes `/metrics` from inference_server every 15s; 30-day retention | Implemented |

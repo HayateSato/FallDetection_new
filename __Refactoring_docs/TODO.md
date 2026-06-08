@@ -96,7 +96,11 @@ End-to-end flow verified between two Windows laptops:
 
 **Instruction document needs to cover:**
 - [ ] **MQTT broker setup**: how to deploy and configure a broker (e.g. Mosquitto) in the
-      FOCUS network; recommended port (1883 / 8883 TLS); auth credentials format
+      FOCUS network; two listeners required:
+      - Port 1883 (plain TCP, internal only -- fall_dashboard inside cluster)
+      - Port 9001 (WebSocket -- for mobile app; React Native cannot use raw TCP MQTT)
+      Production TLS: expose 9001 behind Traefik HTTPS as WSS on port 443.
+      Auth credentials format.
 - [ ] **MQTT topics** (updated 2026-06-04 — two topics now):
       - `fall/possible/<patient_id>` — published immediately on fall detection (pre-confirmation); Flutter shows subtle "Possible fall" notice
       - `fall/alert/<patient_id>` — published after patient confirms or 10s timeout; Flutter shows full alert
@@ -173,8 +177,8 @@ needs to be adapted for their cluster. Two open architectural questions before i
 - Pros: broker is reachable by any device on the network without cluster config; mobile app connects directly; no Traefik TCP setup needed.
 - Cons: `fall_dashboard` (inside k3s) must reach the broker via the host IP or a k8s ExternalName Service — requires `MQTT_BROKER_HOST` set to the host machine IP (not a cluster DNS name).
 
-**Recommended: Option A** — broker inside k3s, exposed via Traefik TCP IngressRoute on port 1883.
-This keeps everything managed by one platform. The mobile app connects to the FOCUS server's external IP on :1883, same as it would with a standalone broker.
+**Recommended: Option A** — broker inside k3s, exposed via WebSocket on port 9001 (NodePort for LAN testing; Traefik HTTPS ingress on 443 for production with TLS).
+This keeps everything managed by one platform. The mobile app connects via `ws://<host>:9001` (LAN) or `wss://<host>` (production). Note: raw TCP IngressRouteTCP is NOT used -- React Native requires WebSocket, so the exposure is an HTTP/WebSocket NodePort or Ingress, not a Traefik TCP route.
 
 ### Caregiver layer — what to wrap
 
@@ -182,14 +186,14 @@ Current 3 services (`caregiver_layer/docker-compose.yml`):
 
 | Service | Wrap in k3s? | Notes |
 |---------|-------------|-------|
-| mqtt (Mosquitto) | Yes | Deployment + PVC for persistence + Traefik TCP route on :1883 |
+| mqtt (Mosquitto) | Yes | Deployment + PVC for persistence. Two listeners: 1883 (ClusterIP internal for fall-dashboard) + 9001 WebSocket (NodePort / Ingress for mobile app) |
 | fall-dashboard | Yes | Deployment, no PVC (stateless), HTTP Ingress on caregiver path |
 | mock-app | No — replace with real mobile app in production | Mock only; real Isa app runs on a phone, not in k3s |
 
 ### Tasks
 
 - [ ] **Decide** with FOCUS DevOps: broker inside or outside k3s (see above)
-- [ ] **If inside k3s**: write Helm chart or k8s manifests for mqtt + fall-dashboard; add Traefik TCP IngressRoute for MQTT port
+- [ ] **If inside k3s**: write Helm chart or k8s manifests for mqtt + fall-dashboard; expose mosquitto port 9001 WebSocket via NodePort (LAN testing) or Traefik HTTPS Ingress (production). No Traefik TCP IngressRoute needed -- WebSocket is HTTP.
 - [ ] **If outside k3s**: configure `MQTT_BROKER_HOST` as ExternalName Service or plain IP in fall-dashboard Deployment env
 - [ ] **Verify** MQTT_POSSIBLE_TOPIC (`fall/possible/#`) is documented in the FOCUS instruction doc — both topics must be subscribed by the Flutter client
 - [ ] **Confirm** fall-dashboard `PATIENT_IDS` env var is populated from FOCUS's patient management system (or hardcoded in their k3s ConfigMap)

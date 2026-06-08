@@ -1,6 +1,6 @@
-For **React Native** (mobile), there's a catch: JavaScript can't open raw TCP sockets directly, so most JS MQTT libraries use **WebSockets** instead of plain TCP. That means port `1883` won't work out of the box.
+For **React Native** (mobile), JavaScript can't open raw TCP sockets directly, so MQTT must go over **WebSockets** — port `1883` raw TCP does not work. The architecture is now settled on **Option A (MQTT.js + port 9001 WebSocket)**.
 
-You have two options:
+The two options were:
 
 ---
 
@@ -42,13 +42,26 @@ No mosquitto config change needed.
 
 ---
 
-## Recommendation for Isa
+## Decision: Option A — MQTT.js over WebSocket (confirmed)
 
-|  | Option A (MQTT.js) | Option B (react-native-mqtt) |
+|  | Option A (MQTT.js) — CHOSEN | Option B (react-native-mqtt) |
 | --- | --- | --- |
 | Port | 9001 (WebSocket) | 1883 (TCP) |
 | Mosquitto change | Yes — add WS listener | No |
 | Library maturity | Very high | Moderate |
 | Setup effort | Easy | Requires native build config |
 
-**Go with Option A** if Isa is already using MQTT.js or wants the simplest JS setup — just requires adding 4 lines to `mosquitto.conf`. Pass her the WS listener change and the `ws://192.168.8.126:9001` address.
+**Option A is the chosen architecture.** React Native cannot open raw TCP sockets in standard JS, so port 1883 TCP is not viable. MQTT.js over WebSocket (port 9001) is the only approach that works without native module dependencies.
+
+Mosquitto must be configured with both listeners:
+
+```
+listener 1883
+allow_anonymous true
+
+listener 9001
+protocol websockets
+allow_anonymous true
+```
+
+The 1883 listener remains for internal service-to-service connections (fall_dashboard → broker inside the container network). Port 9001 WebSocket is what the mobile app uses externally.

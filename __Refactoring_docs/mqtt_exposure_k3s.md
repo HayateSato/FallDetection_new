@@ -117,23 +117,26 @@ mqtt.connect('wss://focus-server.hospital.de')  // port 443, TLS at Traefik
 
 ---
 
-## Recommendation for your setup
+## Decision for your setup
 
-|  | Option A | Option B | Option C |
+**The mobile app is built in React Native and cannot open raw TCP sockets in standard JavaScript. It must use WebSocket MQTT (MQTT.js). Option C is the chosen architecture.**
+
+|  | Option A | Option B | Option C — CHOSEN |
 |---|---|---|---|
 | Config effort | Minimal | Medium | Medium |
 | TLS support | No (raw TCP) | Needs cert on broker | Yes (Traefik terminates) |
-| Works with port 1883 | Yes | Yes | No (uses 443/WebSocket) |
-| Works with MQTT.js (React Native) | No (needs WebSocket) | No | Yes |
-| Good for FOCUS physical machine | Yes — simple LAN exposure | Yes | Only if FOCUS has a hostname + cert |
+| Works with port 1883 | Yes | Yes | No (uses 9001/WebSocket internally, 443/WSS externally) |
+| Works with MQTT.js (React Native) | No — raw TCP not usable in JS | No | Yes |
+| Good for FOCUS physical machine | Not viable — mobile app can't connect | Not viable | Yes |
 
-**For local K3s testing on FOCUS machine:** Option A — ServiceLB exposes port 1883 on the physical NIC directly, Isa's app connects to that IP. Matches the two-laptop test setup exactly.
+**For local K3s testing on FOCUS machine:** Use a NodePort service exposing mosquitto's port 9001 directly on the physical NIC. The mobile app connects with `ws://<FOCUS-machine-ip>:9001`. No Traefik TCP config needed — WebSocket rides over HTTP.
 
-**For production on FOCUS machine:** depends on whether FOCUS requires TLS and whether Isa's app uses plain TCP MQTT or WebSocket MQTT.
-- If Isa's app uses `react-native-mqtt` (plain TCP) → Option A or B, port 1883.
-- If Isa's app uses `MQTT.js` (WebSocket) → Option C, port 9001 behind Traefik HTTPS.
+**For production on FOCUS machine (with hostname + cert):** Option C as described above — Traefik HTTPS ingress routes to mosquitto:9001 inside the cluster; mobile app uses `wss://focus-server.hospital.de` on port 443.
+
+**Mosquitto always runs two listeners:**
+- `1883` — plain TCP, for internal service-to-service use (fall_dashboard → broker inside the cluster, never exposed externally)
+- `9001` — WebSocket, for external clients (mobile app)
 
 **Coordinate with FOCUS DevOps** (Mohammed's counterpart there) on:
-1. Whether their machine has a hostname or just an IP.
-2. Whether their internal network policy requires TLS.
-3. Which MQTT library Isa's app will use — that determines Option A/B vs C.
+1. Whether their machine has a hostname or just an IP (determines whether WSS/TLS is possible).
+2. Whether their internal network policy requires TLS (if yes, use the full Option C ingress setup; if no, NodePort on 9001 is enough for the hospital LAN).

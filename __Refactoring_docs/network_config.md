@@ -22,7 +22,7 @@ Get-NetFirewallRule -Direction Inbound -Action Allow | Where-Object { $_.Enabled
 ### Filter to Fall Detection rules only
 
 ```powershell
-Get-NetFirewallRule -Direction Inbound -Action Allow | Where-Object { $_.DisplayName -match "Fall Detection|MQTT 1883" -and $_.Enabled -eq "True" } | ForEach-Object {
+Get-NetFirewallRule -Direction Inbound -Action Allow | Where-Object { $_.DisplayName -match "Fall Detection|MQTT" -and $_.Enabled -eq "True" } | ForEach-Object {
     $portFilter = $_ | Get-NetFirewallPortFilter
     [PSCustomObject]@{
         Name      = $_.DisplayName
@@ -60,15 +60,15 @@ Get-NetFirewallRule | Where-Object { $_.DisplayName -match "Fall Detection" } | 
 
 > Run PowerShell as Administrator for Set-NetFirewallRule and Remove-NetFirewallRule.
 
-### Current rules in place (as of 2026-06-05)
+### Current rules in place (as of 2026-06-08)
 
 | Rule | Port | Profile | Notes |
 |---|---|---|---|
 | Fall Detection - Inference Server | 8001 | Any | Laptop 1 (MCS) |
-| Fall Detection - MQTT | 1883 | Any | Laptop 2 (FOCUS) |
+| Fall Detection - MQTT WebSocket | 9001 | Any | Laptop 2 (FOCUS) — WebSocket for mobile app (React Native) |
 | Fall Detection - Fall Dashboard | 8002 | Any | Laptop 2 (FOCUS) |
 | Fall Detection - Mock App | 8005 | Any | Laptop 2 (FOCUS) |
-| MQTT 1883 | 1883 | Any | Older duplicate — safe to leave |
+| MQTT 1883 | 1883 | Any | Internal only — fall_dashboard → broker inside Docker network. Not needed as a Windows firewall rule (traffic stays inside Docker). |
 
 ---
 
@@ -80,11 +80,12 @@ Docker publishes ports to `0.0.0.0` (all interfaces) but **Windows Firewall stil
 
 Run this on **both laptops** in PowerShell (as Administrator) to open the relevant ports:
 
-`# Laptop 1 (MCS) — inference server
+`# Laptop 1 (MCS) -- inference server
 New-NetFirewallRule -DisplayName "Fall Detection - Inference Server" -Direction Inbound -Protocol TCP -LocalPort 8001 -Action Allow
 
-# Laptop 2 (FOCUS) — MQTT + fall dashboard + mock app
-New-NetFirewallRule -DisplayName "Fall Detection - MQTT" -Direction Inbound -Protocol TCP -LocalPort 1883 -Action Allow
+# Laptop 2 (FOCUS) -- MQTT WebSocket (port 9001) + fall dashboard + mock app
+# Note: 1883 is internal Docker-only; mobile app connects via WebSocket on 9001
+New-NetFirewallRule -DisplayName "Fall Detection - MQTT WebSocket" -Direction Inbound -Protocol TCP -LocalPort 9001 -Action Allow
 New-NetFirewallRule -DisplayName "Fall Detection - Fall Dashboard" -Direction Inbound -Protocol TCP -LocalPort 8002 -Action Allow
 New-NetFirewallRule -DisplayName "Fall Detection - Mock App" -Direction Inbound -Protocol TCP -LocalPort 8005 -Action Allow`
 
@@ -122,8 +123,8 @@ Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.PrefixOrigin -eq "Dhcp"
 # 2. From Laptop 2 (or any device on the same WiFi), test Laptop 1:
 Invoke-WebRequest -Uri "http://<Laptop1-IP>:8001/health" -TimeoutSec 5
 
-# 3. From Laptop 2, test MQTT port is reachable:
-Test-NetConnection -ComputerName <Laptop2-IP> -Port 1883`
+# 3. From Laptop 2, test MQTT WebSocket port is reachable:
+Test-NetConnection -ComputerName <Laptop2-IP> -Port 9001`
 
 If step 2/3 fail even from **another laptop on the same WiFi**, the firewall or AP isolation is the blocker — not the mobile app. Fix those first, then the mobile app will work the same way.
 
