@@ -76,17 +76,22 @@ class FallEventBroker:
         client.on_disconnect = self._on_disconnect
         client.on_message    = self._on_message
 
-        try:
-            client.connect(MQTT_BROKER_HOST, MQTT_BROKER_PORT, keepalive=60)
-            client.loop_start()  # paho background thread
-            self._client = client
-            logger.info(f"FallEventBroker connecting to MQTT "
-                        f"{MQTT_BROKER_HOST}:{MQTT_BROKER_PORT}"
-                        f"  subscribing to {MQTT_ALERT_TOPIC}/#")
-        except Exception as exc:
-            logger.warning(f"MQTT broker connection failed ({exc}) — "
-                           "live dashboard alerts disabled.")
-            self._client = None
+        for attempt in range(1, 6):
+            try:
+                client.connect(MQTT_BROKER_HOST, MQTT_BROKER_PORT, keepalive=60)
+                client.loop_start()  # paho background thread
+                self._client = client
+                logger.info(f"FallEventBroker connecting to MQTT "
+                            f"{MQTT_BROKER_HOST}:{MQTT_BROKER_PORT}"
+                            f"  subscribing to {MQTT_ALERT_TOPIC}/#")
+                return
+            except Exception as exc:
+                logger.warning(f"MQTT connection attempt {attempt}/5 failed ({exc}) — "
+                               f"retrying in 5s...")
+                await asyncio.sleep(5)
+
+        logger.warning("MQTT broker unreachable after 5 attempts — live dashboard alerts disabled.")
+        self._client = None
 
     async def stop(self) -> None:
         if self._client is not None:
