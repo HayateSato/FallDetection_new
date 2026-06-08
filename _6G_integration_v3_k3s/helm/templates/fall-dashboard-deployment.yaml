@@ -16,12 +16,14 @@ spec:
       labels:
         app: fall-dashboard
     spec:
+      {{- if .Values.imagePullSecret }}
       imagePullSecrets:
         - name: {{ .Values.imagePullSecret }}
+      {{- end }}
       containers:
         - name: fall-dashboard
           image: {{ .Values.fallDashboard.image }}
-          imagePullPolicy: Always
+          imagePullPolicy: {{ .Values.fallDashboard.imagePullPolicy | default "Always" }}
           ports:
             - containerPort: {{ .Values.fallDashboard.port }}
               name: http

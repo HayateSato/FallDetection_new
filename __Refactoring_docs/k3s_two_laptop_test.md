@@ -31,19 +31,41 @@ fall-dashboard (Laptop 1, K3s pod)
 
 ### Step 1 — Prerequisites
 
-K3s and Helm must be installed. Check:
+A Kubernetes cluster, kubectl, and Helm must be available. Check:
 
 ```powershell
 kubectl version --client
 helm version
+kubectl get nodes   # should show one node Ready
 ```
 
-If K3s is not installed, install it inside WSL2:
+**Option A — Docker Desktop Kubernetes (Windows local testing)**
+
+Enable Kubernetes in Docker Desktop → Settings → Kubernetes → "Enable Kubernetes" → Apply & Restart.
+This is the simplest option for local two-laptop testing on Windows.
+
+Docker Desktop does NOT include Traefik (unlike real k3s). Install it once:
+
+```powershell
+helm repo add traefik https://traefik.github.io/charts
+helm repo update
+helm install traefik traefik/traefik --namespace kube-system
+kubectl get pods -n kube-system | Select-String "traefik"
+# Wait until: traefik-xxxx   1/1   Running
+```
+
+Traefik is needed because the caregiver Helm chart creates `IngressRoute` resources (Traefik CRDs).
+Without it the chart install fails with "no matches for kind IngressRoute".
+
+**Option B — Real k3s (WSL2 or Linux)**
+
+Real k3s bundles Traefik automatically — no separate install needed.
+
+Install k3s inside WSL2:
 
 ```bash
 # Inside WSL2
 curl -sfL https://get.k3s.io | sh -
-# Copy kubeconfig to Windows-accessible location
 mkdir -p ~/.kube
 sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
 sudo chown $USER ~/.kube/config
@@ -106,18 +128,11 @@ The NodePort rule is only needed for the local two-laptop test.
 
 ---
 
-### Step 3 — Verify mosquitto NodePort for external WebSocket access
+### Step 3 — Understand how external WebSocket access works
 
-For local testing the Helm chart can expose mosquitto's WebSocket port (9001) as a NodePort
-on the host NIC. This is controlled by `mosquitto.wsNodePort` in `values.yaml` — see Step 5
-where you set it to `30901` for local testing.
-
-After Step 6 (helm install), verify the service type and NodePort are correct:
-
-```powershell
-kubectl get svc mosquitto -n fall-dashboard
-# Should show: port 9001:30901/TCP (NodePort) alongside 1883 (ClusterIP internal)
-```
+For local testing the Helm chart exposes mosquitto's WebSocket port (9001) as a NodePort on
+the host NIC. This is controlled by `mosquitto.wsNodePort` in `values.yaml` — set it to
+`30901` in Step 5 before running helm install.
 
 The mock-app (and eventually the real mobile app) connects to `ws://<LAPTOP1_IP>:30901`.
 The fall-dashboard pod reaches mosquitto on 1883 via cluster-internal DNS — no change needed there.
@@ -125,47 +140,43 @@ The fall-dashboard pod reaches mosquitto on 1883 via cluster-internal DNS — no
 In production (FOCUS cluster) `wsNodePort` is left blank so the service is ClusterIP.
 Traefik IngressRoute handles external mobile app traffic as WSS on port 443 instead.
 
-Verify mosquitto is listening on both ports:
-
-```powershell
-kubectl logs -n fall-dashboard -l app=mosquitto | Select-String "1883|9001"
-# Expected: "Opening ipv4 listen socket on port 1883" and "Opening websockets listen socket on port 9001"
-```
+> **Verification commands (run these AFTER Step 6 helm install):**
+>
+> ```powershell
+> kubectl get svc mosquitto -n fall-dashboard
+> # Should show: port 9001:30901/TCP (NodePort) alongside 1883 (ClusterIP internal)
+>
+> kubectl logs -n fall-dashboard -l app=mosquitto | Select-String "1883|9001"
+> # Expected: "Opening ipv4 listen socket on port 1883" and "Opening websockets listen socket on port 9001"
+> ```
 
 ---
 
 ### Step 4 — Build the fall-dashboard image locally
 
-For local testing, push to a local registry running in Docker rather than the FOCUS
-production registry (`registry-smarko-health.de`).
+For local testing we build a local image and use it directly — no registry push needed.
+Docker Desktop Kubernetes shares the same Docker daemon as your desktop, so any image
+you build with `docker build` is immediately available to the cluster.
 
-Start a local registry:
-
-```powershell
-docker run -d -p 5000:5000 --name local-registry registry:2
-```
-
-Build and push (run from `_6G_integration_v3_k3s/` as working directory):
+Build (run from `_6G_integration_v3_k3s/` as working directory):
 
 ```powershell
-docker build -t localhost:5000/fall-detection/fall-dashboard:latest -f fall_dashboard/Dockerfile .
-docker push localhost:5000/fall-detection/fall-dashboard:latest
+docker build -t fall-detection/fall-dashboard:local -f fall_dashboard/Dockerfile .
 ```
 
-Make the local registry reachable from inside WSL2/K3s. Add it as an insecure registry
-in the K3s containerd config (inside WSL2):
-
-```bash
-# Inside WSL2
-sudo mkdir -p /etc/rancher/k3s
-sudo tee /etc/rancher/k3s/registries.yaml <<EOF
-mirrors:
-  "localhost:5000":
-    endpoint:
-      - "http://localhost:5000"
-EOF
-sudo systemctl restart k3s
+The `values.yaml` for local testing already points at this image tag:
+```yaml
+fallDashboard:
+  image: fall-detection/fall-dashboard:local
+  imagePullPolicy: IfNotPresent   # uses local image; never tries to pull from registry
 ```
+
+`imagePullPolicy: IfNotPresent` is critical — without it Kubernetes tries to pull from the
+registry (`registry-smarko-health.de`) and fails because we have not pushed there yet.
+
+> **Note for real k3s (WSL2):** k3s uses its own containerd, which does NOT share the
+> Docker daemon. You would need to either run a local registry or import the image with:
+> `docker save fall-detection/fall-dashboard:local | k3s ctr images import -`
 
 ---
 
@@ -174,9 +185,8 @@ sudo systemctl restart k3s
 Open `_6G_integration_v3_k3s/helm/values.yaml` and update:
 
 ```yaml
-# Use local registry instead of FOCUS production registry
-registry: localhost:5000
-imagePullSecret: ""        # no pull secret needed for local registry
+# No registry pull needed for local testing -- image is built locally
+imagePullSecret: ""        # blank: no pull secret needed
 
 mosquitto:
   wsNodePort: 30901   # expose WS port on host NIC so Laptop 2 mock-app can reach it
@@ -185,7 +195,8 @@ mosquitto:
     certResolver: ""
 
 fallDashboard:
-  image: localhost:5000/fall-detection/fall-dashboard:latest
+  image: fall-detection/fall-dashboard:local   # locally built image (docker build step above)
+  imagePullPolicy: IfNotPresent                # do not pull from registry
   patientIds: "patient_test_1"    # must match Laptop 2 mock-app PATIENT_IDS
   macIds: "6c:1d:eb:04:a9:d9"
 

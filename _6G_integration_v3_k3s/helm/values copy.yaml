@@ -10,9 +10,8 @@
 namespace: fall-dashboard
 
 # Container registry (FOCUS private registry + pull secret)
-# For local testing: set imagePullSecret to "" and use a locally built image tag below.
 registry: registry-smarko-health.de
-imagePullSecret: ""    # mcs-labs for production; blank for local testing
+imagePullSecret: mcs-labs
 
 # =============================================================================
 # mosquitto MQTT broker
@@ -26,7 +25,7 @@ mosquitto:
   # NodePort for WebSocket (30000-32767). Set for local two-laptop testing so the
   # mock-app on Laptop 2 can reach ws://<node-ip>:<wsNodePort> without TLS.
   # Leave blank ("") for production -- Traefik IngressRoute handles external WSS.
-  wsNodePort: 30901    # e.g. 30901 for local testing
+  wsNodePort: ""    # e.g. 30901 for local testing
   persistence:
     size: 500Mi
     storageClass: ""    # blank = use k3s cluster default (local-path provisioner)
@@ -54,8 +53,7 @@ mosquitto:
 # fall-dashboard
 # =============================================================================
 fallDashboard:
-  image: fall-detection/fall-dashboard:local    # production: registry-smarko-health.de/fall-detection/fall-dashboard:latest
-  imagePullPolicy: IfNotPresent                 # production: Always
+  image: registry-smarko-health.de/fall-detection/fall-dashboard:latest
   # Keep replicas at 1 -- SSE fan-out is in-process; multiple replicas silently drop events
   replicas: 1
   port: 8002
@@ -65,8 +63,8 @@ fallDashboard:
     storageClass: ""    # blank = use k3s cluster default (local-path provisioner)
 
   # Comma-separated patient IDs and MAC addresses (positional 1:1 mapping)
-  patientIds: "patient_test_50"    # e.g. "patient_01,patient_02"
-  macIds: "6c:1d:eb:04:a9:d9"                 # e.g. "aa:bb:cc:dd:ee:01,aa:bb:cc:dd:ee:02" (optional)
+  patientIds: "CHANGE_ME"    # e.g. "patient_01,patient_02"
+  macIds: ""                 # e.g. "aa:bb:cc:dd:ee:01,aa:bb:cc:dd:ee:02" (optional)
 
   mqtt:
     alertTopic: fall/alert
@@ -76,17 +74,17 @@ fallDashboard:
     password: ""
 
   influxdb:
-    url: "https://ecosystem-influxdb.smarko-health.de"               # e.g. https://influxdb.xxx.e-healthservice.de
-    org: "MCS Datalabs GmbH"               # InfluxDB organisation name
-    bucket: "fd_test"            # bucket for raw ACC sensor data (read by fall-dashboard)
-    fallEventsBucket: "fd_test"  # bucket for fall_events measurement (often same as bucket)
+    url: "CHANGE_ME"               # e.g. https://influxdb.xxx.e-healthservice.de
+    org: "CHANGE_ME"               # InfluxDB organisation name
+    bucket: "CHANGE_ME"            # bucket for raw ACC sensor data (read by fall-dashboard)
+    fallEventsBucket: "CHANGE_ME"  # bucket for fall_events measurement (often same as bucket)
     # Token is stored in a Kubernetes Secret.
     # Set this here or pass via --set fallDashboard.influxdb.token=XXX at install time.
-    token: "v3vG3RliwQKPhUCYmlu4GAjrQcf0uITn_J2E08FaJdpn1-rNU5j0lSX9Cp9VNKw4i9fRjB6cvSO-euuG5IOnWg=="
+    token: "CHANGE_ME"
 
   ingress:
     # Domain where the Flutter dashboard reaches fall-dashboard on port 443
-    host: "localhost"    # e.g. fall.xxx.healthservice.de
+    host: "CHANGE_ME"    # e.g. fall.xxx.healthservice.de
     # TLS cert resolver -- set if the FOCUS cluster uses Let's Encrypt via Traefik.
     # Leave blank to omit TLS config from this chart (FOCUS handles TLS externally).
     certResolver: ""     # e.g. "le" for Let's Encrypt
