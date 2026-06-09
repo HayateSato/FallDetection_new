@@ -190,7 +190,7 @@
     {
       "id": 6,
       "title": "Confidence Score Over Time",
-      "description": "Scatter of XGBoost confidence for every inference. Sustained clustering near 0.5 threshold suggests the model is uncertain — trigger retraining review.",
+      "description": "Scatter of XGBoost confidence for every inference (green). Sustained clustering near the 0.5 threshold suggests the model is uncertain — trigger retraining review. The red threshold line marks 0.5 (the fall/no-fall cutoff).",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 14, "x": 0, "y": 4 },
       "datasource": { "type": "grafana-postgresql-datasource", "uid": "postgresql" },
@@ -198,7 +198,7 @@
         {
           "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT detection_time AS time, confidence, fall_detected::int AS fall FROM inference_log WHERE $__timeFilter(detection_time) AND patient_id LIKE '$patient_id' ORDER BY time",
+          "rawSql": "SELECT detection_time AS time, confidence FROM inference_log WHERE $__timeFilter(detection_time) AND patient_id LIKE '$patient_id' ORDER BY time",
           "refId": "A"
         }
       ],

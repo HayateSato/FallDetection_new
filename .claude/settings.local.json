@@ -121,7 +121,10 @@
       "PowerShell(Start-Sleep -Seconds 15; $logs = docker logs --since 25s fall_grafana 2>&1 | Select-String \"/api/ds/query\"; if \\($logs\\) { $logs | Group-Object { if \\($_ -match \"status=\\(\\\\d+\\)\"\\) { $matches[1] } } | Select-Object @{N='HTTP Status';E={$_.Name}}, Count } else { \"No /api/ds/query calls in the last 25s — refresh the browser \\(Ctrl+Shift+R\\) and I'll recheck.\" })",
       "PowerShell(docker exec fall_grafana sh -c \"sed -n '14,35p' /var/lib/grafana/dashboards/fall_events_timeline.json\" 2>&1)",
       "PowerShell(\"=== variable block as Grafana sees it \\(inside container\\) ===\")",
-      "Bash(python -c 'import json,sys; d=json.load\\(open\\('\\\\''__TRACKED_VAR__'\\\\''\\)\\); print\\(json.dumps\\(d.get\\('\\\\''templating'\\\\'',{}\\).get\\('\\\\''list'\\\\'',[]\\), indent=2\\)\\)')"
+      "Bash(python -c 'import json,sys; d=json.load\\(open\\('\\\\''__TRACKED_VAR__'\\\\''\\)\\); print\\(json.dumps\\(d.get\\('\\\\''templating'\\\\'',{}\\).get\\('\\\\''list'\\\\'',[]\\), indent=2\\)\\)')",
+      "PowerShell(docker exec mcs_fall_postgres psql -U fall_user -d fall_detection -c \"SELECT detection_time, ROUND\\(confidence::numeric,3\\) AS confidence, fall_detected, fall_detected::int AS fall FROM inference_log WHERE detection_time >= NOW\\(\\) - INTERVAL '15 minutes' ORDER BY detection_time DESC LIMIT 12\")",
+      "PowerShell(\"=== the panel's query \\(raw\\) ===\")",
+      "PowerShell(\"=== count of fall vs no-fall in last 15 min ===\")"
     ],
     "additionalDirectories": [
       "c:\\Users\\hayat\\.claude\\projects\\c--Users-hayat-Documents-6G-FallDetection-new\\memory",
