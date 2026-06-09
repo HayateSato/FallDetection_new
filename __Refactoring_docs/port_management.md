@@ -178,7 +178,7 @@ routes from inside the container back to the Windows host where inference-server
 
 | Access method | Port | From | When to use |
 |---|---|---|---|
-| **NodePort** `<Laptop1-IP>:30802` | 30802 | Laptop 2 / LAN | server-health probe, API calls from outside |
+| **NodePort** `<Laptop1-IP>:30802` | 30802 (local) → 8002 (pod) | Laptop 2 / LAN | server-health probe, API calls from outside (used to run a kbectl command in a terminal)  |
 | **Port-forward** `localhost:18002` | 18002 (local) → 8002 (pod) | Laptop 1 terminal | quick curl / debug without opening firewall |
 | **Traefik IngressRoute** | 80 / 443 | LAN | Flutter dashboard path `/falls` |
 

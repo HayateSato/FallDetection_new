@@ -7,7 +7,11 @@
       "Bash(curl.exe -s -X POST https://ecosystem-influxdb.smarko-health.de/api/v2/query?org=MCS+Datalabs+GmbH -H 'Authorization: Token v3vG3RliwQKPhUCYmlu4GAjrQcf0uITn_J2E08FaJdpn1-rNU5j0lSX9Cp9VNKw4i9fRjB6cvSO-euuG5IOnWg==' -H 'Content-Type: application/vnd.flux' --data-binary 'from\\(bucket: \"fd_test\"\\) *)",
       "Bash(curl.exe -s -X POST 'https://ecosystem-influxdb.smarko-health.de/api/v2/delete?org=MCS+Datalabs+GmbH&bucket=fd_test' -H 'Authorization: Token v3vG3RliwQKPhUCYmlu4GAjrQcf0uITn_J2E08FaJdpn1-rNU5j0lSX9Cp9VNKw4i9fRjB6cvSO-euuG5IOnWg==' -H 'Content-Type: application/json' --data-binary '{\"start\":\"2020-01-01T00:00:00Z\",\"stop\":\"2030-01-01T00:00:00Z\",\"predicate\":\"_measurement=\\\\\"fall_events\\\\\"\"}')",
       "PowerShell(Get-ChildItem -Recurse -File \"C:\\\\Users\\\\hayat\\\\Documents\\\\6G\\\\FallDetection_new\\\\_6G_integration_v3_k3s\" | Select-Object -ExpandProperty FullName | ForEach-Object { $_.Replace\\(\"C:\\\\Users\\\\hayat\\\\Documents\\\\6G\\\\FallDetection_new\\\\_6G_integration_v3_k3s\\\\\", \"\"\\) })",
-      "PowerShell(Get-ChildItem -Recurse -File \"C:\\\\Users\\\\hayat\\\\Documents\\\\6G\\\\FallDetection_new\\\\_6G_integration_v3_docker_focus\" | Select-Object -ExpandProperty FullName | ForEach-Object { $_.Replace\\(\"C:\\\\Users\\\\hayat\\\\Documents\\\\6G\\\\FallDetection_new\\\\_6G_integration_v3_docker_focus\\\\\", \"\"\\) })"
+      "PowerShell(Get-ChildItem -Recurse -File \"C:\\\\Users\\\\hayat\\\\Documents\\\\6G\\\\FallDetection_new\\\\_6G_integration_v3_docker_focus\" | Select-Object -ExpandProperty FullName | ForEach-Object { $_.Replace\\(\"C:\\\\Users\\\\hayat\\\\Documents\\\\6G\\\\FallDetection_new\\\\_6G_integration_v3_docker_focus\\\\\", \"\"\\) })",
+      "Bash(New-Item -ItemType Directory -Force -Path \"C:\\\\Users\\\\hayat\\\\Documents\\\\6G\\\\FallDetection_new\\\\FOCUS_devs_handover\")",
+      "Bash(Out-Null)",
+      "Bash(Write-Output \"done\")",
+      "PowerShell(New-Item -ItemType Directory -Force -Path \"C:\\\\Users\\\\hayat\\\\Documents\\\\6G\\\\FallDetection_new\\\\FOCUS_devs_handover\")"
     ]
   }
 }
