@@ -238,38 +238,54 @@
 
     {
       "id": 7,
-      "title": "Falls per Patient (last 24h)",
-      "type": "barchart",
+      "title": "Confidence Drift — Falls Only (Avg per Hour)",
+      "description": "Average model confidence per hour computed over ONLY the inferences predicted as a fall (fall_detected = true). Unlike the all-inference average, this is not dragged down by the no-fall floor (~0.002), so it tracks how confident the model is when it actually flags a fall. A downward drift here means the model is becoming less sure about its fall calls — a retraining signal. n = number of falls in that hour.",
+      "type": "timeseries",
       "gridPos": { "h": 8, "w": 10, "x": 14, "y": 4 },
       "datasource": { "type": "grafana-postgresql-datasource", "uid": "postgresql" },
       "targets": [
         {
-          "format": "table",
+          "format": "time_series",
           "rawQuery": true,
-          "rawSql": "SELECT patient_id, COUNT(*) AS falls FROM inference_log WHERE fall_detected = true AND detection_time >= NOW() - INTERVAL '24 hours' GROUP BY patient_id ORDER BY falls DESC",
+          "rawSql": "SELECT date_trunc('hour', detection_time) AS time, AVG(confidence) AS avg_fall_confidence, COUNT(*) AS n FROM inference_log WHERE fall_detected = true AND $__timeFilter(detection_time) AND patient_id LIKE '$patient_id' GROUP BY 1 ORDER BY 1",
           "refId": "A"
         }
       ],
       "options": {
-        "orientation": "horizontal",
-        "xTickLabelRotation": 0,
-        "xTickLabelMaxLength": 20,
-        "legend": { "displayMode": "hidden" },
-        "tooltip": { "mode": "single" }
+        "tooltip": { "mode": "multi", "sort": "none" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
       },
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
-          "color": { "mode": "thresholds" },
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "lineWidth": 2,
+            "pointSize": 6,
+            "drawStyle": "line",
+            "showPoints": "always",
+            "spanNulls": true
+          },
           "thresholds": {
             "mode": "absolute",
             "steps": [
-              { "color": "green",  "value": null },
-              { "color": "orange", "value": 2 },
-              { "color": "red",    "value": 5 }
+              { "color": "red",    "value": null },
+              { "color": "orange", "value": 0.5 },
+              { "color": "green",  "value": 0.75 }
             ]
           }
-        }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "n" },
+            "properties": [
+              { "id": "custom.axisPlacement", "value": "hidden" },
+              { "id": "custom.lineWidth", "value": 0 },
+              { "id": "custom.showPoints", "value": "never" }
+            ]
+          }
+        ]
       }
     },
 
