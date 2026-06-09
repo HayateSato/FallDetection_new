@@ -159,7 +159,7 @@ End-to-end flow verified between two Windows laptops:
 
 ## 7. Credentials & Configuration
 
-- [ ] Store FOCUS InfluxDB credentials securely in MCS environment (if any MCS component needs them -- verify first)
+- [x] ~~Store FOCUS InfluxDB credentials in MCS environment~~ — **NOT needed.** Verified 2026-06-09: no service in `_6G_integration_v3_docker_mcs/docker-compose.yml` uses any `INFLUXDB_*` variable. InfluxDB credentials belong only to the FOCUS caregiver layer (`values_production.yaml`). MCS `.env.example` corrected.
 - [ ] Store WireGuard conf securely even if unused (keep for contingency)
 - [ ] Confirm the HTTPS public endpoint URL with Isa so mobile app config can be updated
 - [ ] Document final .env variable list for MCS deployment
@@ -173,40 +173,39 @@ End-to-end flow verified between two Windows laptops:
 FOCUS runs k3s in production. The caregiver layer (currently Docker Compose on a second laptop)
 needs to be adapted for their cluster. Two open architectural questions before implementation.
 
-### Open question: should the MQTT broker be inside or outside k3s?
+### DECIDED: MQTT broker inside k3s (Option A) ✓
 
-**Option A — MQTT broker inside k3s** (wrapped as a Deployment/StatefulSet):
+**Decision (2026-06-08):** Option A chosen — mosquitto runs as a pod inside FOCUS's k3s cluster alongside fall-dashboard.
 
-- Pros: lifecycle managed by k3s, single place to configure TLS + auth, easy scaling
-- Cons: the mobile app (Isa) publishes from outside the cluster → needs a NodePort or LoadBalancer + Traefik IngressRouteTCP to expose port 1883/8883 externally. This is solvable but requires Traefik TCP routing config (different from HTTP ingress).
-- `fall_dashboard` reaches the broker via its k8s internal DNS name — simple.
+- Port `1883` — ClusterIP internal only; fall-dashboard reaches it via cluster DNS (`mosquitto:1883`, plain TCP)
+- Port `9001` — WebSocket; exposed as:
+  - NodePort `30901` for local two-laptop testing (LAN)
+  - Traefik HTTPS IngressRoute on port 443 for production (WSS)
+- React Native cannot use raw TCP — WebSocket is the only viable approach. No Traefik TCP IngressRoute needed.
+- fall-dashboard reaches broker via K8s DNS: `MQTT_BROKER_HOST=mosquitto` (cluster-internal service name)
 
-**Option B — MQTT broker outside k3s** (standalone Mosquitto on the FOCUS server, or existing broker):
-
-- Pros: broker is reachable by any device on the network without cluster config; mobile app connects directly; no Traefik TCP setup needed.
-- Cons: `fall_dashboard` (inside k3s) must reach the broker via the host IP or a k8s ExternalName Service — requires `MQTT_BROKER_HOST` set to the host machine IP (not a cluster DNS name).
-
-**Recommended: Option A** — broker inside k3s, exposed via WebSocket on port 9001 (NodePort for LAN testing; Traefik HTTPS ingress on 443 for production with TLS).
-This keeps everything managed by one platform. The mobile app connects via `ws://<host>:9001` (LAN) or `wss://<host>` (production). Note: raw TCP IngressRouteTCP is NOT used -- React Native requires WebSocket, so the exposure is an HTTP/WebSocket NodePort or Ingress, not a Traefik TCP route.
+**K3s chart implemented and tested:** `_6G_integration_v3_k3s/` — Helm chart, two-laptop test PASSED 2026-06-09.
 
 ### Caregiver layer — what to wrap
 
-Current 3 services (`caregiver_layer/docker-compose.yml`):
-
-| Service | Wrap in k3s? | Notes |
-|---------|-------------|-------|
-| mqtt (Mosquitto) | Yes | Deployment + PVC for persistence. Two listeners: 1883 (ClusterIP internal for fall-dashboard) + 9001 WebSocket (NodePort / Ingress for mobile app) |
-| fall-dashboard | Yes | Deployment, no PVC (stateless), HTTP Ingress on caregiver path |
-| mock-app | No — replace with real mobile app in production | Mock only; real Isa app runs on a phone, not in k3s |
+| Service | In k3s? | Status |
+|---------|---------|--------|
+| mqtt (Mosquitto) | Yes | Done — Deployment + PVC + ConfigMap, two listeners (1883 ClusterIP / 9001 WS NodePort + IngressRoute) |
+| fall-dashboard | Yes | Done — Deployment + PVC (SQLite patient store) + Service + IngressRoute |
+| mock-app | No — replaced by real mobile app in production | Not in chart; dev-only |
 
 ### Tasks
 
-- [ ] **Decide** with FOCUS DevOps: broker inside or outside k3s (see above)
-- [ ] **If inside k3s**: write Helm chart or k8s manifests for mqtt + fall-dashboard; expose mosquitto port 9001 WebSocket via NodePort (LAN testing) or Traefik HTTPS Ingress (production). No Traefik TCP IngressRoute needed -- WebSocket is HTTP.
-- [ ] **If outside k3s**: configure `MQTT_BROKER_HOST` as ExternalName Service or plain IP in fall-dashboard Deployment env
+- [x] **Decided**: broker inside k3s (Option A) — 2026-06-08
+- [x] **Helm chart written**: `_6G_integration_v3_k3s/` — mosquitto + fall-dashboard as K3s pods
+- [x] **Mosquitto port 9001 WebSocket** exposed via NodePort (LAN) and Traefik IngressRoute (production)
+- [x] **Two-laptop K3s test PASSED** (2026-06-09): possible alert + confirmed alert + dashboard animations verified
+- [x] **mock-app removed** from production chart — not in `_6G_integration_v3_k3s/` manifests
+- [x] **Production values template** prepared: `_6G_integration_v3_k3s/helm/values_production.yaml`
+- [x] **Production config checklist** prepared: `FOCUS_devs_handover/production_config_checklist.md`
+- [ ] **[Mohammed]** Fill in all `CHANGE_ME` values in `values_production.yaml` and deliver chart to FOCUS DevOps
 - [ ] **Verify** MQTT_POSSIBLE_TOPIC (`fall/possible/#`) is documented in the FOCUS instruction doc — both topics must be subscribed by the Flutter client
 - [ ] **Confirm** fall-dashboard `PATIENT_IDS` env var is populated from FOCUS's patient management system (or hardcoded in their k3s ConfigMap)
-- [ ] **Remove mock-app** from any production manifests — it is a dev-only simulation of the mobile app
 
 ---
 
@@ -219,4 +218,4 @@ Current 3 services (`caregiver_layer/docker-compose.yml`):
 | 3 | ~~What InfluxDB schema?~~ **Resolved: MCS decides.** measurement=`fall_events`, fields: `fall_detected`, `patient_confirmed`, `needs_help`, `observation_id`, `confidence`, `model_version`; tags: `patient_id`, `device_id` | DONE |
 | 4 | ~~Timestamp only or full fields?~~ **Resolved: full fields needed** (`patient_confirmed` + `needs_help` required in InfluxDB) | DONE |
 | 5 | ~~Who updates caregiver dashboard?~~ **Resolved: FOCUS DevOps implements in Flutter** based on instruction document MCS prepares | DONE |
-| 6 | MQTT broker — inside or outside k3s for FOCUS production? See Section 8 above. | Open |
+| 6 | ~~MQTT broker — inside or outside k3s?~~ **Resolved: inside k3s (Option A).** Mosquitto pod in FOCUS cluster. Port 1883 ClusterIP internal, port 9001 WebSocket via Traefik. K3s Helm chart in `_6G_integration_v3_k3s/`, tested 2026-06-09. | DONE |

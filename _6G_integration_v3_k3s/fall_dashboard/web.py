@@ -16,12 +16,14 @@ import logging
 from pathlib import Path
 from typing import Optional
 
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
 from fall_dashboard import db as cdb
+from fall_dashboard import patient_store
 from fall_dashboard.mqtt_listener import FallEventBroker
 
 
@@ -56,6 +58,12 @@ async def _shutdown() -> None:
 mac_map: dict = {}
 
 
+class PatientCreate(BaseModel):
+    patient_id: str
+    name: Optional[str] = None
+    mac_id: Optional[str] = None
+
+
 @app.get("/api/patients")
 def api_patients():
     # list_patients() already carries mac_id from the SQLite store; fall back to
@@ -65,6 +73,23 @@ def api_patients():
         if not p.get("mac_id"):
             p["mac_id"] = mac_map.get(p["patient_id"], "")
     return {"patients": patients}
+
+
+@app.post("/api/patients", status_code=201)
+def api_add_patient(body: PatientCreate):
+    pid = body.patient_id.strip()
+    if not pid:
+        raise HTTPException(status_code=400, detail="patient_id is required")
+    patient_store.upsert_patient(patient_id=pid, name=body.name, mac_id=body.mac_id)
+    return {"patient_id": pid, "created": True}
+
+
+@app.delete("/api/patients/{patient_id}")
+def api_delete_patient(patient_id: str):
+    deleted = patient_store.delete_patient(patient_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Patient not found")
+    return {"patient_id": patient_id, "deleted": True}
 
 
 @app.get("/api/falls")

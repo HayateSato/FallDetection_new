@@ -22,13 +22,15 @@ async function loadPatients() {
     const resp = await fetch(API.patients);
     const data = await resp.json();
     if (!data.patients || data.patients.length === 0) {
-      list.innerHTML = '<p class="empty">No patients registered yet. Set PATIENT_IDS in .env.</p>';
+      list.innerHTML = '<p class="empty">No patients registered yet. Click "+ Add Patient" to get started.</p>';
       document.getElementById('stat-patients').textContent = '0';
       return;
     }
     list.innerHTML = data.patients.map((p) => `
       <div class="patient-card" data-patient-id="${escapeHtml(p.patient_id)}" onclick="openPatient('${escapeHtml(p.patient_id)}')">
+        <button class="btn-delete-patient" onclick="deletePatient(event, '${escapeHtml(p.patient_id)}')" title="Remove patient">&#x2715;</button>
         <div class="patient-name">${escapeHtml(p.patient_id)}</div>
+        ${p.name ? `<div class="patient-display-name">${escapeHtml(p.name)}</div>` : ''}
         <div class="patient-meta">
           <span class="badge">${p.fall_count} falls</span>
           ${p.mac_id ? `<span class="badge">${escapeHtml(p.mac_id)}</span>` : ''}
@@ -212,6 +214,84 @@ function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
   }[c]));
+}
+
+// ---------------------------------------------------------------------------
+// Add Patient modal
+// ---------------------------------------------------------------------------
+
+function showAddPatientModal() {
+  document.getElementById('modal-patient-id').value = '';
+  document.getElementById('modal-patient-name').value = '';
+  document.getElementById('modal-patient-mac').value = '';
+  document.getElementById('modal-error').classList.add('hidden');
+  document.getElementById('modal-overlay').classList.remove('hidden');
+  document.getElementById('modal-patient-id').focus();
+}
+
+function hideAddPatientModal() {
+  document.getElementById('modal-overlay').classList.add('hidden');
+}
+
+function handleModalOverlayClick(event) {
+  if (event.target === document.getElementById('modal-overlay')) hideAddPatientModal();
+}
+
+async function submitAddPatient() {
+  const patientId = document.getElementById('modal-patient-id').value.trim();
+  const name      = document.getElementById('modal-patient-name').value.trim();
+  const macId     = document.getElementById('modal-patient-mac').value.trim();
+  const errorEl   = document.getElementById('modal-error');
+  const submitBtn = document.getElementById('modal-submit');
+
+  if (!patientId) {
+    errorEl.textContent = 'Patient ID is required.';
+    errorEl.classList.remove('hidden');
+    return;
+  }
+
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Adding...';
+  errorEl.classList.add('hidden');
+
+  try {
+    const resp = await fetch('/api/patients', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ patient_id: patientId, name: name || null, mac_id: macId || null }),
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+    hideAddPatientModal();
+    loadPatients();
+  } catch (e) {
+    errorEl.textContent = `Failed: ${e.message}`;
+    errorEl.classList.remove('hidden');
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Add Patient';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Delete patient
+// ---------------------------------------------------------------------------
+
+async function deletePatient(event, patientId) {
+  event.stopPropagation();
+  if (!confirm(`Remove "${patientId}" from the dashboard?\n\nFall history in InfluxDB is not affected.`)) return;
+  try {
+    const resp = await fetch(`/api/patients/${encodeURIComponent(patientId)}`, { method: 'DELETE' });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${resp.status}`);
+    }
+    loadPatients();
+  } catch (e) {
+    alert(`Failed to remove patient: ${e.message}`);
+  }
 }
 
 // ---------------------------------------------------------------------------
