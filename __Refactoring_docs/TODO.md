@@ -152,8 +152,16 @@ End-to-end flow verified between two Windows laptops:
       InfluxDB injection step is missing — Isa has not yet implemented the `fall_events` write.
 - [ ] Fall-history dashboard: verify it reads correctly from InfluxDB (filter by patient, period, help-requested)
       ⚠️ **Blocked** until Isa implements InfluxDB injection above.
-- [ ] Retraining pipeline: feature_snapshot (MCS Postgres) -> retrain script -> MLflow -> hot-swap from ml-dashboard
-- [ ] Grafana dashboards loading correctly for MCS-hosted components
+- [x] Retraining pipeline: feature_snapshot (MCS Postgres) -> retrain script -> MLflow -> hot-swap from ml-dashboard
+      — **PASSED on Docker version of the inference layer** (`_6G_integration_v3_docker_mcs/`)
+- [x] Grafana dashboards loading correctly for MCS-hosted components
+      — **PASSED on Docker version of the inference layer** (`_6G_integration_v3_docker_mcs/`); `fall_events_timeline` dashboard fixed to query `inference_log` (dropped tables removed), Postgres datasource auth fixed, confidence-drift panels added
+
+> **Inference-layer ML pipeline tested on Docker (2026-06-09):** The full pipeline —
+> ML dashboards, retraining based on `feature_snapshot` data, and visualizing data on
+> Grafana — is verified on the **Docker version** of the inference layer
+> (`_6G_integration_v3_docker_mcs/`). **Remaining gate:** once the same is tested on the
+> **Hetzner version**, the inference-layer side should be fully ready.
 
 ---
 
