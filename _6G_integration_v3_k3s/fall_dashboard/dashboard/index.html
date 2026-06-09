@@ -31,10 +31,37 @@
 
   <!-- ── Patients tab ─────────────────────────────────────────────────── -->
   <main id="tab-patients" class="tab-content">
+    <div class="patient-toolbar">
+      <button class="btn-primary" onclick="showAddPatientModal()">+ Add Patient</button>
+    </div>
     <div id="patient-list" class="patient-grid">
       <p class="loading">Loading patients...</p>
     </div>
   </main>
+
+  <!-- ── Add Patient modal ────────────────────────────────────────────── -->
+  <div id="modal-overlay" class="modal-overlay hidden" onclick="handleModalOverlayClick(event)">
+    <div class="modal">
+      <h3>Add Patient</h3>
+      <div class="form-group">
+        <label for="modal-patient-id">Patient ID <span class="req">*</span></label>
+        <input id="modal-patient-id" type="text" placeholder="e.g. patient_01" autocomplete="off" />
+      </div>
+      <div class="form-group">
+        <label for="modal-patient-name">Name (optional)</label>
+        <input id="modal-patient-name" type="text" placeholder="e.g. John Doe" />
+      </div>
+      <div class="form-group">
+        <label for="modal-patient-mac">MAC address (optional)</label>
+        <input id="modal-patient-mac" type="text" placeholder="e.g. aa:bb:cc:dd:ee:01" />
+      </div>
+      <p id="modal-error" class="modal-error hidden"></p>
+      <div class="modal-actions">
+        <button class="btn-secondary" onclick="hideAddPatientModal()">Cancel</button>
+        <button class="btn-primary" id="modal-submit" onclick="submitAddPatient()">Add Patient</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ── Patient detail view (drill-down from patient card) ─────────── -->
   <main id="tab-patient-detail" class="tab-content hidden">

@@ -179,3 +179,15 @@ def upsert_patient(
             """,
             (patient_id, name, age, gender, mac_id or "", 1 if session_active else 0),
         )
+
+
+def delete_patient(patient_id: str) -> bool:
+    """Delete a patient from the store. Returns True if a row was deleted."""
+    with _connect() as conn:
+        cursor = conn.execute("DELETE FROM patients WHERE patient_id = ?", (patient_id,))
+        deleted = cursor.rowcount > 0
+    if deleted:
+        logger.info(f"Deleted patient {patient_id!r}")
+    else:
+        logger.warning(f"delete_patient: no row found for {patient_id!r}")
+    return deleted
