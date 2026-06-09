@@ -18,21 +18,14 @@
         "type": "query",
         "label": "Patient",
         "datasource": { "type": "grafana-postgresql-datasource", "uid": "postgresql" },
-        "query": {
-          "rawSql": "SELECT DISTINCT patient_id AS __text, patient_id AS __value FROM inference_log ORDER BY 1",
-          "format": "table",
-          "rawQuery": true,
-          "editorMode": "code"
-        },
-        "definition": "SELECT DISTINCT patient_id AS __text, patient_id AS __value FROM inference_log ORDER BY 1",
-        "refresh": 2,
-        "regex": "",
+        "query": "SELECT DISTINCT patient_id FROM inference_log ORDER BY 1",
+        "definition": "SELECT DISTINCT patient_id FROM inference_log ORDER BY 1",
+        "refresh": 1,
         "sort": 1,
         "multi": false,
         "includeAll": true,
         "allValue": "%",
         "current": { "text": "All", "value": "$__all", "selected": false },
-        "options": [],
         "hide": 0
       }
     ]

@@ -118,7 +118,10 @@
       "PowerShell(\"=== verify from a psql-capable container ===\")",
       "PowerShell(docker compose -f \"c:\\\\Users\\\\HayateSato\\\\Documents\\\\FallDetection_new\\\\_6G_integration_v3_docker_mcs\\\\docker-compose.yml\" --env-file \"c:\\\\Users\\\\HayateSato\\\\Documents\\\\FallDetection_new\\\\_6G_integration_v3_docker_mcs\\\\.env\" up -d --force-recreate grafana)",
       "PowerShell(\"Hard-refresh the dashboard in your browser now \\(Ctrl+Shift+R\\). Capturing query results:\"; Start-Sleep -Seconds 10; docker logs --since 15s fall_grafana 2>&1 | Select-String \"/api/ds/query\" | Group-Object { if \\($_ -match \"status=\\(\\\\d+\\)\"\\) { $matches[1] } } | Select-Object Name, Count)",
-      "PowerShell(Start-Sleep -Seconds 15; $logs = docker logs --since 25s fall_grafana 2>&1 | Select-String \"/api/ds/query\"; if \\($logs\\) { $logs | Group-Object { if \\($_ -match \"status=\\(\\\\d+\\)\"\\) { $matches[1] } } | Select-Object @{N='HTTP Status';E={$_.Name}}, Count } else { \"No /api/ds/query calls in the last 25s — refresh the browser \\(Ctrl+Shift+R\\) and I'll recheck.\" })"
+      "PowerShell(Start-Sleep -Seconds 15; $logs = docker logs --since 25s fall_grafana 2>&1 | Select-String \"/api/ds/query\"; if \\($logs\\) { $logs | Group-Object { if \\($_ -match \"status=\\(\\\\d+\\)\"\\) { $matches[1] } } | Select-Object @{N='HTTP Status';E={$_.Name}}, Count } else { \"No /api/ds/query calls in the last 25s — refresh the browser \\(Ctrl+Shift+R\\) and I'll recheck.\" })",
+      "PowerShell(docker exec fall_grafana sh -c \"sed -n '14,35p' /var/lib/grafana/dashboards/fall_events_timeline.json\" 2>&1)",
+      "PowerShell(\"=== variable block as Grafana sees it \\(inside container\\) ===\")",
+      "Bash(python -c 'import json,sys; d=json.load\\(open\\('\\\\''__TRACKED_VAR__'\\\\''\\)\\); print\\(json.dumps\\(d.get\\('\\\\''templating'\\\\'',{}\\).get\\('\\\\''list'\\\\'',[]\\), indent=2\\)\\)')"
     ],
     "additionalDirectories": [
       "c:\\Users\\hayat\\.claude\\projects\\c--Users-hayat-Documents-6G-FallDetection-new\\memory",
