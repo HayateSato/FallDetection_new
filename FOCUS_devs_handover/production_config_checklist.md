@@ -27,14 +27,6 @@ Copy `.env.example` to `.env`, then change every row marked REQUIRED below.
 | `MINIO_PASSWORD` | `CHANGE_ME` | Strong random password | MinIO admin password |
 | `GF_SECURITY_ADMIN_PASSWORD` | `CHANGE_ME` | Strong random password | Grafana admin login |
 
-### InfluxDB — NOT needed in MCS .env
-
-No service in `_6G_integration_v3_docker_mcs/docker-compose.yml` uses any `INFLUXDB_*` variable.
-The InfluxDB credentials belong entirely to the FOCUS caregiver layer (Part 2).
-
-The `INFLUXDB_*` lines in `.env.example` are leftovers from when `mock_app` was part of this stack.
-They can be left commented out or deleted. Do not fill them in for Hetzner.
-
 ### Caregiver layer URL — REQUIRED
 
 | Variable | Local testing value | Production value | Notes |
@@ -193,20 +185,52 @@ kubectl exec -n fall-dashboard deploy/fall-dashboard -- \
 | MCS `.env` | FOCUS `values.yaml` | Must be equal |
 |---|---|---|
 | `MQTT_ALERT_TOPIC=fall/alert` | `fallDashboard.mqtt.alertTopic: fall/alert` | yes |
-| `INFLUXDB_FALL_EVENTS_BUCKET=<bucket>` | `fallDashboard.influxdb.fallEventsBucket: <bucket>` | yes — same InfluxDB bucket |
 | `FALL_DASHBOARD_URL=https://<host>` | `fallDashboard.ingress.host: <host>` | yes — MCS server-health probes this URL |
 
 ---
 
-## What Isa (mobile app) needs from Mohammed
+## Shared secrets and cross-party agreements
 
-Once the Hetzner server is running, share with Isa:
+Three parties are involved: **Mohammed (MCS)**, **FOCUS DevOps**, and **Isa (mobile app)**.
+Some values must be agreed or exchanged between parties before the system works end-to-end.
 
-| Item | Value |
-|---|---|
-| Inference server URL | `https://<hetzner-domain>/predict` |
-| API key | Value of `API_KEYS` from `.env` |
-| MQTT broker WebSocket URL | `wss://<mosquitto.ingress.host>` |
-| MQTT alert topic | `fall/alert` |
-| MQTT possible topic | `fall/possible` |
-| InfluxDB measurement name | `fall_events` (see `__Refactoring_docs/influxdb_schema.md`) |
+### Mohammed → Isa
+
+Mohammed generates these on the Hetzner server and shares them with Isa.
+
+| What | Where Mohammed sets it | What Isa does with it |
+|---|---|---|
+| Inference server URL | Hetzner domain (e.g. `https://inference.mcs-smarko.de`) | Puts in mobile app config as the `/predict` endpoint |
+| API key | `API_KEYS` in MCS `.env` | Puts in mobile app config as `X-API-Key` header on every `/predict` call |
+
+### FOCUS DevOps → Isa
+
+FOCUS DevOps sets these in k3s and shares them with Isa.
+
+| What | Where FOCUS sets it | What Isa does with it |
+|---|---|---|
+| MQTT broker domain | `mosquitto.ingress.host` in `values.yaml` | Mobile app connects as `wss://<host>` to publish fall alerts |
+| MQTT username | `fallDashboard.mqtt.username` in `values.yaml` | Mobile app uses this to authenticate with the broker |
+| MQTT password | `fallDashboard.mqtt.password` in `values.yaml` | Mobile app uses this to authenticate with the broker |
+| InfluxDB write credentials | FOCUS's own InfluxDB (URL, token, org, bucket) | Mobile app writes `fall_events` point after each confirmation popup |
+
+> **MQTT auth note:** The username and password set in `values.yaml` under `fallDashboard.mqtt.*`
+> are what fall-dashboard uses to connect to mosquitto inside the cluster. The real mobile app
+> (Isa) connects from outside and must use the **exact same** credentials. If FOCUS DevOps
+> changes these, they must inform Isa immediately — a mismatch causes silent connection failure
+> on Isa's side (the mobile app cannot publish alerts, so falls are never shown on the dashboard).
+
+### FOCUS DevOps → Mohammed
+
+| What | Where FOCUS sets it | What Mohammed does with it |
+|---|---|---|
+| Fall-dashboard domain | `fallDashboard.ingress.host` in `values.yaml` | Sets `FALL_DASHBOARD_URL` in MCS `.env` so server-health can probe it |
+
+### All three agree on
+
+| What | Current value | Note |
+|---|---|---|
+| Patient IDs | e.g. `patient_test_50` | Must be identical in FOCUS `values.yaml` (`patientIds`), in the mobile app, and in InfluxDB tag `patient_id` |
+| MAC addresses | e.g. `6c:1d:eb:04:a9:d9` | Positional mapping to patient IDs — must match across all parties |
+| MQTT alert topic | `fall/alert` | Hardcoded default on all sides — only change if all parties change together |
+| MQTT possible topic | `fall/possible` | Same as above |

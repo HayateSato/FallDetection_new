@@ -30,7 +30,7 @@ mosquitto:
     size: 500Mi
     storageClass: ""    # blank = use k3s cluster default (local-path provisioner)
   ingress:
-    # Domain the mobile app (Isa) connects to: wss://<host>
+    # Domain the mobile app (Isa) connects to: wss://internal.e-healthservice.de/  
     # Set to a subdomain of the FOCUS server, e.g. mqtt.focus-server.hospital.de
     host: "CHANGE_ME"
     # TLS cert resolver -- set if FOCUS cluster uses Let's Encrypt via Traefik.
@@ -74,7 +74,7 @@ fallDashboard:
     password: ""
 
   influxdb:
-    url: "CHANGE_ME"               # e.g. https://influxdb.xxx.e-healthservice.de
+    url: "CHANGE_ME"               # e.g. https://influxdb.internal.e-healthservice.de/
     org: "CHANGE_ME"               # InfluxDB organisation name
     bucket: "CHANGE_ME"            # bucket for raw ACC sensor data (read by fall-dashboard)
     fallEventsBucket: "CHANGE_ME"  # bucket for fall_events measurement (often same as bucket)
@@ -84,7 +84,7 @@ fallDashboard:
 
   ingress:
     # Domain where the Flutter dashboard reaches fall-dashboard on port 443
-    host: "CHANGE_ME"    # e.g. fall.xxx.healthservice.de
+    host: "CHANGE_ME"    # e.g. https://internal.e-healthservice.de/  
     # TLS cert resolver -- set if the FOCUS cluster uses Let's Encrypt via Traefik.
     # Leave blank to omit TLS config from this chart (FOCUS handles TLS externally).
     certResolver: ""     # e.g. "le" for Let's Encrypt
