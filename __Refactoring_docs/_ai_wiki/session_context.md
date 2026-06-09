@@ -166,6 +166,16 @@ mqtt.connect('wss://focus-server.hospital.de')
 - Verified: `fall/possible/<pid>` pre-alert (pale-red card animation) + `fall/alert/<pid>` confirmed alert + dashboard animations — all working end-to-end
 - Key fix for K3s test: mock-app must use `host.docker.internal:8001` (not `localhost`) for inference server, `MQTT_TRANSPORT=websockets`, port `30901` (NodePort), no `--network host`
 
+### Docker MCS ↔ K3s caregiver cross-layer connectivity — PASSED (2026-06-09)
+- server_health (Docker, Laptop 2) now probes all K3s services on Laptop 1
+- fall-dashboard probe: `http://<laptop1-ip>:30802` via NodePort ✓
+- mqtt_broker TCP probe: `<laptop1-ip>:30901` via WebSocket NodePort ✓
+- Key fixes applied:
+  1. `server-health` docker-compose was missing 5 env vars — added `DATABASE_URL`, `MLFLOW_TRACKING_URI`, `MLFLOW_S3_ENDPOINT_URL`, `MQTT_BROKER_HOST`, `MQTT_BROKER_PORT`
+  2. `FALL_DASHBOARD_URL` and `MQTT_BROKER_HOST` now set to Laptop 1 IP in `.env`
+  3. `fall-dashboard` K3s Service was ClusterIP (NodePort never applied) — fixed by running `helm upgrade`
+- `.env.example` updated: `FALL_DASHBOARD_URL=http://<LAPTOP1_IP>:30802`, `MQTT_BROKER_HOST=<LAPTOP1_IP>`, `MQTT_BROKER_PORT=30901`
+
 ### NOT working yet (open gap — needs Isa)
 - Mobile app does NOT write `fall_events` to InfluxDB after confirmation
 - Therefore: fall history tab on the dashboard is empty (no data to show)
@@ -292,6 +302,9 @@ C:\Users\hayat\Documents\6G\FallDetection_new\
     helm/values.yaml                    Local testing values (NodePorts 30901/30802, local image)
     helm/values_production.yaml         Production values template — fill in all CHANGE_ME values
     fall_dashboard/mqtt_listener.py     5-retry startup loop (same fix as docker_focus)
+    fall_dashboard/patient_store.py     SQLite CRUD — upsert_patient() + delete_patient() (added 2026-06-09)
+    fall_dashboard/web.py               POST /api/patients + DELETE /api/patients/{id} (added 2026-06-09)
+    fall_dashboard/dashboard/           UI: "+ Add Patient" button + modal + per-card delete (added 2026-06-09)
   _6G_Integration_v2_mqtt/             Previous version (reference only, frozen)
   __Refactoring_docs/
     TODO.md                             Main task tracker
@@ -328,6 +341,10 @@ Current git branch: `mcs-docker-version`
 - **MCS `.env` does NOT need InfluxDB credentials** — no service in `_6G_integration_v3_docker_mcs/` uses InfluxDB. Those vars in `.env.example` are now commented out with an explanation.
 - **`imagePullPolicy: IfNotPresent` required for local K3s testing** — without it, K8s tries to pull from `registry-smarko-health.de` and fails. Set to `Always` in `values_production.yaml` only.
 - **`imagePullSecrets` must be conditional** — a blank `imagePullSecret: ""` in values.yaml must NOT produce an `imagePullSecrets: [{name: ""}]` block in the deployment (K8s rejects it). The template wraps it in `{{- if .Values.imagePullSecret }}`.
+- **`helm upgrade` required after every values.yaml change** — Kubernetes does not watch the file. A Service that was installed as ClusterIP stays ClusterIP until `helm upgrade` is run, even if the template now says NodePort. Rule: after any edit to `values.yaml` or a Helm template, re-run `helm upgrade caregiver helm --namespace fall-dashboard --values helm/values.yaml` (or just run `install.ps1` which is idempotent).
+- **`server-health` docker-compose needs 5 env vars explicitly** — `DATABASE_URL`, `MLFLOW_TRACKING_URI`, `MLFLOW_S3_ENDPOINT_URL`, `MQTT_BROKER_HOST`, `MQTT_BROKER_PORT`. Without them, all five probes fall back to `localhost:...` defaults which fail inside the container. Only `INFERENCE_SERVER_URL` and `FALL_DASHBOARD_URL` were originally set.
+- **`FALL_DASHBOARD_URL` and `MQTT_BROKER_HOST` in Laptop 2 `.env`** must point to Laptop 1's LAN IP. Ports: `30802` (fall-dashboard NodePort), `30901` (MQTT WebSocket NodePort). Port 1883 is K3s-internal only and not reachable from Laptop 2.
+- **Patient add/delete is now dynamic from the UI** — `POST /api/patients` and `DELETE /api/patients/{id}` endpoints added to fall_dashboard. No longer need to edit `values.yaml` / `PATIENT_IDS` env var and restart the pod to add patients. The SQLite store on the PVC persists across restarts.
 
 ---
 

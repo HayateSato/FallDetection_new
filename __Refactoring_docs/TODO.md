@@ -211,9 +211,10 @@ needs to be adapted for their cluster. Two open architectural questions before i
 - [x] **mock-app removed** from production chart — not in `_6G_integration_v3_k3s/` manifests
 - [x] **Production values template** prepared: `_6G_integration_v3_k3s/helm/values_production.yaml`
 - [x] **Production config checklist** prepared: `FOCUS_devs_handover/production_config_checklist.md`
+- [x] **Patient add/delete from UI (2026-06-09)**: fall_dashboard now has "+ Add Patient" button + modal + per-card delete button. `POST /api/patients` and `DELETE /api/patients/{id}` endpoints added. No longer need to edit `PATIENT_IDS` in values.yaml and restart the pod — SQLite store on the PVC persists dynamically added patients across restarts.
+- [x] **Docker MCS ↔ K3s caregiver cross-layer connectivity verified (2026-06-09)**: server_health (Laptop 2 Docker) now probes fall-dashboard (:30802) and mqtt-broker (:30901) on Laptop 1 K3s. Root cause of earlier failures: (1) server-health docker-compose was missing `DATABASE_URL`, `MLFLOW_TRACKING_URI`, `MLFLOW_S3_ENDPOINT_URL`, `MQTT_BROKER_HOST`, `MQTT_BROKER_PORT` env vars; (2) fall-dashboard K3s Service was ClusterIP — `helm upgrade` was never run after `httpNodePort: 30802` was added to values.yaml.
 - [ ] **[Mohammed]** Fill in all `CHANGE_ME` values in `values_production.yaml` and deliver chart to FOCUS DevOps
 - [ ] **Verify** MQTT_POSSIBLE_TOPIC (`fall/possible/#`) is documented in the FOCUS instruction doc — both topics must be subscribed by the Flutter client
-- [ ] **Confirm** fall-dashboard `PATIENT_IDS` env var is populated from FOCUS's patient management system (or hardcoded in their k3s ConfigMap)
 
 ---
 

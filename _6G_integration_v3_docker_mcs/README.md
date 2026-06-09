@@ -1,7 +1,12 @@
 # Fall Detection — MCS Inference Layer (Docker)
 
 Production Docker Compose stack for the MCS / Hetzner server.
-Run this on Laptop 1 (MCS machine) or the Hetzner cloud server.
+Run this on the MCS machine (Laptop 2 in local two-laptop tests, Hetzner in production).
+
+The caregiver layer (MQTT broker + fall-dashboard) runs separately on a different machine
+(`_6G_integration_v3_k3s/` for K3s or `_6G_integration_v3_docker_focus/` for Docker).
+server-health probes that machine over the LAN — set `FALL_DASHBOARD_URL` and
+`MQTT_BROKER_HOST` in `.env` to point at it.
 
 8 long-running services + 2 one-off init jobs.
 
@@ -63,6 +68,11 @@ Open `.env` and set at minimum:
 - `API_KEYS` — comma-separated API keys for the inference server
 - `GF_SECURITY_ADMIN_PASSWORD` — Grafana admin password
 
+For server-health to probe the caregiver layer (K3s NodePorts on the other machine):
+- `FALL_DASHBOARD_URL=http://<CAREGIVER_IP>:30802` — fall-dashboard NodePort
+- `MQTT_BROKER_HOST=<CAREGIVER_IP>` — same machine as fall-dashboard
+- `MQTT_BROKER_PORT=30901` — MQTT WebSocket NodePort (port 1883 is K3s-internal only)
+
 ### 2. Start
 
 Run from `_6G_integration_v3_docker_mcs/` as working directory:
@@ -78,11 +88,12 @@ inference-server starts.
 
 ```powershell
 docker compose ps
-curl.exe http://localhost:8001/health     # inference-server
-curl.exe http://localhost:8006/health     # server-health
-# Grafana: http://localhost:3000  (admin / your password)
-# MLflow:  http://localhost:5000
-# MinIO:   http://localhost:9002  (minioadmin / minioadmin)
+curl.exe http://localhost:8001/health       # inference-server
+curl.exe http://localhost:8006/api/status   # server-health (returns JSON for all 6 probes)
+# Grafana:    http://localhost:3000  (admin / your password)
+# MLflow:     http://localhost:5000
+# MinIO:      http://localhost:9002  (minioadmin / minioadmin)
+# ml-dashboard: http://localhost:8004
 ```
 
 ---
@@ -95,6 +106,9 @@ Run all commands from `_6G_integration_v3_docker_mcs/` as working directory.
 # Logs
 docker compose logs -f inference-server
 docker compose logs -f ml-dashboard
+docker compose logs -f server-health
+docker compose logs -f mlflow
+docker compose logs -f postgres
 
 # Rebuild after code changes
 docker compose build --no-cache inference-server
@@ -117,12 +131,26 @@ docker compose down -v
 
 ## Notes
 
-- inference-server runs with `--workers 1` — Prometheus counters and asyncio timers
+- **inference-server runs with `--workers 1`** — Prometheus counters and asyncio timers
   are per-process; multiple workers would give incorrect metrics.
-- Grafana admin password set via env var is ignored after first startup.
+- **Grafana admin password** set via env var is ignored after first startup.
   Reset it with: `docker exec fall_grafana grafana cli admin reset-admin-password <new>`
-- FOCUS caregiver services (MQTT broker + fall-dashboard) are in a separate repo:
-  `_6G_integration_v3_docker_focus/`
+- **server-health probes the caregiver layer over the LAN.** It needs `FALL_DASHBOARD_URL`,
+  `MQTT_BROKER_HOST`, and `MQTT_BROKER_PORT` in `.env` to reach the K3s NodePorts on the
+  caregiver machine. Without them, those two probe cards will show "down" (defaults to
+  `localhost` which fails inside the container). Use port `30802` for fall-dashboard and
+  `30901` for MQTT — port 1883 is K3s-internal only and not reachable externally.
+  **In production (Hetzner → FOCUS server), the fall-dashboard and mqtt-broker probes will
+  likely show "down" unless a VPN tunnel (e.g. WireGuard) is established between the Hetzner
+  server and the FOCUS network. Without it, Hetzner cannot reach the FOCUS K3s NodePorts.
+  This is acceptable — the MCS-side probes (inference-server, postgres, mlflow, minio) will
+  still be healthy. The caregiver-layer cards can be ignored or left unconfigured in the
+  Hetzner `.env` until a VPN is in place.**
+- **server-health "View logs" commands** show `docker logs <container>` for services in
+  this stack and `kubectl logs` for fall-dashboard and mqtt-broker (K3s on the other machine).
+- **FOCUS caregiver services** (MQTT broker + fall-dashboard) run separately:
+  `_6G_integration_v3_k3s/` (K3s, production target) or
+  `_6G_integration_v3_docker_focus/` (Docker Compose, local testing).
 
 ---
 
