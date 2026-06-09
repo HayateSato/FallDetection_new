@@ -7,22 +7,20 @@ const OVERALL_TEXT = {
 };
 const OVERALL_ICON = { healthy: '●', degraded: '●', down: '●' };
 
-// Namespace + pod/deployment identifier used by `kubectl logs`.
-// Postgres + MinIO are StatefulSets so we target the pod by index, not the deploy.
-const NAMESPACE = 'mcs-fall-detection';
+// Log commands per service.
+// MCS services run in Docker Compose (docker logs <container_name>).
+// Caregiver services (fall_dashboard, mqtt_broker) are in K3s on Laptop 1 (kubectl logs).
 const LOG_TARGETS = {
-  inference_server: 'deploy/inference-server',
-  fall_dashboard:   'deploy/fall-dashboard',
-  mqtt_broker:      'deploy/mqtt-broker',
-  postgres:         'pod/postgres-0',
-  mlflow:           'deploy/mlflow',
-  minio:            'pod/minio-0',
+  inference_server: { runtime: 'docker',  cmd: 'docker logs fall_inference_server --tail=200 -f' },
+  postgres:         { runtime: 'docker',  cmd: 'docker logs mcs_fall_postgres --tail=200 -f' },
+  mlflow:           { runtime: 'docker',  cmd: 'docker logs fall_mlflow --tail=200 -f' },
+  minio:            { runtime: 'docker',  cmd: 'docker logs fall_minio --tail=200 -f' },
+  fall_dashboard:   { runtime: 'kubectl', cmd: 'kubectl logs -n fall-dashboard -l app=fall-dashboard --tail=200 -f' },
+  mqtt_broker:      { runtime: 'kubectl', cmd: 'kubectl logs -n fall-dashboard -l app=mosquitto --tail=200 -f' },
 };
 
-function kubectlLogsCmd(serviceName) {
-  const target = LOG_TARGETS[serviceName];
-  if (!target) return null;
-  return `kubectl logs ${target} -n ${NAMESPACE} --tail=200 -f`;
+function logsEntry(serviceName) {
+  return LOG_TARGETS[serviceName] || null;
 }
 
 async function copyCmd(btn, cmd) {
@@ -57,15 +55,15 @@ async function refresh() {
       `Last checked ${new Date().toLocaleTimeString()}  •  ${data.services.length} services`;
 
     services.innerHTML = data.services.map(s => {
-      const cmd = kubectlLogsCmd(s.name);
-      const logsBlock = cmd ? `
+      const entry = logsEntry(s.name);
+      const logsBlock = entry ? `
         <details class="logs-details">
-          <summary>View logs (kubectl)</summary>
+          <summary>View logs (${entry.runtime})</summary>
           <div class="logs-cmd-row">
-            <code class="logs-cmd">${escapeHtml(cmd)}</code>
-            <button class="btn-copy" data-cmd="${escapeHtml(cmd)}">Copy</button>
+            <code class="logs-cmd">${escapeHtml(entry.cmd)}</code>
+            <button class="btn-copy" data-cmd="${escapeHtml(entry.cmd)}">Copy</button>
           </div>
-          <div class="logs-hint">Run in a terminal with cluster access. <code>-f</code> streams; drop it for a snapshot.</div>
+          <div class="logs-hint">Run in a terminal with ${entry.runtime === 'kubectl' ? 'cluster (Laptop 1)' : 'Docker host (Laptop 2)'} access. <code>-f</code> streams; drop it for a snapshot.</div>
         </details>
       ` : '';
       return `

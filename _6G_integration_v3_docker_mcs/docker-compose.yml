@@ -139,13 +139,21 @@ services:
     ports:
       - "8006:8006"
     environment:
-      INFERENCE_SERVER_URL:  http://inference-server:8001
-      # FALL_DASHBOARD_URL points to caregiver_layer (different machine or localhost)
-      # For two-laptop test: set to http://<FOCUS_LAPTOP_IP>:8002
-      # For single-machine test: set to http://localhost:8002
-      FALL_DASHBOARD_URL:    ${FALL_DASHBOARD_URL:-http://localhost:8002}
-      SERVER_HEALTH_HOST:    "0.0.0.0"
-      SERVER_HEALTH_PORT:    "8006"
+      # ── MCS services (internal Docker hostnames) ───────────────────────────
+      INFERENCE_SERVER_URL:   http://inference-server:8001
+      DATABASE_URL:           postgresql+psycopg2://fall_user:${POSTGRES_PASSWORD:-fall_pass}@postgres:5432/fall_detection
+      MLFLOW_TRACKING_URI:    http://mlflow:5000
+      MLFLOW_S3_ENDPOINT_URL: http://minio:9000
+      # ── Caregiver layer (K3s on Laptop 1 / FOCUS server) ──────────────────
+      # fall-dashboard: NodePort 30802. Set FALL_DASHBOARD_URL in .env.
+      FALL_DASHBOARD_URL:     ${FALL_DASHBOARD_URL:-http://localhost:30802}
+      # MQTT broker: port 1883 is K3s-internal only; 30901 is the WebSocket
+      # NodePort and is reachable from this machine for a TCP liveness probe.
+      # Set MQTT_BROKER_HOST in .env to the IP of Laptop 1 (K3s node).
+      MQTT_BROKER_HOST:       ${MQTT_BROKER_HOST:-}
+      MQTT_BROKER_PORT:       ${MQTT_BROKER_PORT:-30901}
+      SERVER_HEALTH_HOST:     "0.0.0.0"
+      SERVER_HEALTH_PORT:     "8006"
     depends_on:
       inference-server:
         condition: service_healthy
