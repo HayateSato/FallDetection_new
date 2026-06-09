@@ -1,10 +1,10 @@
 {
   "title": "Fall Events Timeline",
   "uid": "fall-events-timeline",
-  "description": "What happened today? SQL queries against Postgres — fall history, patient list, confidence over time.",
+  "description": "What happened today? SQL queries against Postgres inference_log — confirmations, patient list, confidence over time and drift.",
   "tags": ["fall-detection", "postgres", "operations"],
   "schemaVersion": 39,
-  "version": 1,
+  "version": 2,
   "refresh": "1m",
   "time": { "from": "now-24h", "to": "now" },
   "timepicker": {},
@@ -17,12 +17,23 @@
         "name": "patient_id",
         "type": "query",
         "label": "Patient",
-        "datasource": { "type": "postgres", "uid": "postgresql" },
-        "query": "SELECT DISTINCT patient_id FROM fall_history ORDER BY 1",
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "postgresql" },
+        "query": {
+          "rawSql": "SELECT DISTINCT patient_id AS __text, patient_id AS __value FROM inference_log ORDER BY 1",
+          "format": "table",
+          "rawQuery": true,
+          "editorMode": "code"
+        },
+        "definition": "SELECT DISTINCT patient_id AS __text, patient_id AS __value FROM inference_log ORDER BY 1",
         "refresh": 2,
+        "regex": "",
+        "sort": 1,
+        "multi": false,
         "includeAll": true,
         "allValue": "%",
-        "current": { "text": "All", "value": "$__all" }
+        "current": { "text": "All", "value": "$__all", "selected": false },
+        "options": [],
+        "hide": 0
       }
     ]
   },
@@ -34,12 +45,12 @@
       "title": "Falls Confirmed Today",
       "type": "stat",
       "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
-      "datasource": { "type": "postgres", "uid": "postgresql" },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "postgresql" },
       "targets": [
         {
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT COUNT(*) AS value FROM fall_history WHERE patient_confirmed = 'yes' AND detection_time >= NOW() - INTERVAL '24 hours'",
+          "rawSql": "SELECT COUNT(*) AS value FROM inference_log WHERE patient_confirmed = 'yes' AND detection_time >= NOW() - INTERVAL '24 hours'",
           "refId": "A"
         }
       ],
@@ -69,12 +80,12 @@
       "title": "Unanswered Alerts Today",
       "type": "stat",
       "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
-      "datasource": { "type": "postgres", "uid": "postgresql" },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "postgresql" },
       "targets": [
         {
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT COUNT(*) AS value FROM fall_history WHERE patient_confirmed = 'not_answered' AND detection_time >= NOW() - INTERVAL '24 hours'",
+          "rawSql": "SELECT COUNT(*) AS value FROM inference_log WHERE patient_confirmed = 'not_answered' AND detection_time >= NOW() - INTERVAL '24 hours'",
           "refId": "A"
         }
       ],
@@ -103,7 +114,7 @@
       "title": "Total Predictions Today",
       "type": "stat",
       "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
-      "datasource": { "type": "postgres", "uid": "postgresql" },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "postgresql" },
       "targets": [
         {
           "format": "table",
@@ -126,15 +137,15 @@
 
     {
       "id": 4,
-      "title": "Active Patients (with session open)",
+      "title": "Patients Seen (last 24h)",
       "type": "stat",
       "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
-      "datasource": { "type": "postgres", "uid": "postgresql" },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "postgresql" },
       "targets": [
         {
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT COUNT(*) AS value FROM participant_session WHERE end_time IS NULL",
+          "rawSql": "SELECT COUNT(DISTINCT patient_id) AS value FROM inference_log WHERE detection_time >= NOW() - INTERVAL '24 hours'",
           "refId": "A"
         }
       ],
@@ -155,12 +166,12 @@
       "title": "Help Requested Today",
       "type": "stat",
       "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 },
-      "datasource": { "type": "postgres", "uid": "postgresql" },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "postgresql" },
       "targets": [
         {
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT COUNT(*) AS value FROM fall_history WHERE needs_help = true AND detection_time >= NOW() - INTERVAL '24 hours'",
+          "rawSql": "SELECT COUNT(*) AS value FROM inference_log WHERE needs_help = true AND detection_time >= NOW() - INTERVAL '24 hours'",
           "refId": "A"
         }
       ],
@@ -189,7 +200,7 @@
       "description": "Scatter of XGBoost confidence for every inference. Sustained clustering near 0.5 threshold suggests the model is uncertain — trigger retraining review.",
       "type": "timeseries",
       "gridPos": { "h": 8, "w": 14, "x": 0, "y": 4 },
-      "datasource": { "type": "postgres", "uid": "postgresql" },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "postgresql" },
       "targets": [
         {
           "format": "time_series",
@@ -237,12 +248,12 @@
       "title": "Falls per Patient (last 24h)",
       "type": "barchart",
       "gridPos": { "h": 8, "w": 10, "x": 14, "y": 4 },
-      "datasource": { "type": "postgres", "uid": "postgresql" },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "postgresql" },
       "targets": [
         {
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT patient_id, COUNT(*) AS falls FROM fall_history WHERE fall_detected = true AND detection_time >= NOW() - INTERVAL '24 hours' GROUP BY patient_id ORDER BY falls DESC",
+          "rawSql": "SELECT patient_id, COUNT(*) AS falls FROM inference_log WHERE fall_detected = true AND detection_time >= NOW() - INTERVAL '24 hours' GROUP BY patient_id ORDER BY falls DESC",
           "refId": "A"
         }
       ],
@@ -275,12 +286,12 @@
       "description": "Most recent confirmed fall alerts. observation_id links to inference_log for retraining audit.",
       "type": "table",
       "gridPos": { "h": 10, "w": 24, "x": 0, "y": 12 },
-      "datasource": { "type": "postgres", "uid": "postgresql" },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "postgresql" },
       "targets": [
         {
           "format": "table",
           "rawQuery": true,
-          "rawSql": "SELECT fh.detection_time, fh.patient_id, fh.patient_confirmed, fh.needs_help, il.confidence, il.model_version, fh.observation_id FROM fall_history fh LEFT JOIN inference_log il ON il.observation_id = fh.observation_id WHERE fh.fall_detected = true AND $__timeFilter(fh.detection_time) AND fh.patient_id LIKE '$patient_id' ORDER BY fh.detection_time DESC LIMIT 100",
+          "rawSql": "SELECT detection_time, patient_id, patient_confirmed, needs_help, confidence, model_version, observation_id FROM inference_log WHERE fall_detected = true AND $__timeFilter(detection_time) AND patient_id LIKE '$patient_id' ORDER BY detection_time DESC LIMIT 100",
           "refId": "A"
         }
       ],
@@ -355,6 +366,85 @@
             ]
           }
         ]
+      }
+    },
+
+    {
+      "id": 9,
+      "title": "Confidence Drift — Avg per Hour",
+      "description": "Average model confidence bucketed by hour. A sustained shift in the average is a drift signal — worth a retraining review. Needs days of data to show a real trend.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 14, "x": 0, "y": 22 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "postgresql" },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_trunc('hour', detection_time) AS time, AVG(confidence) AS avg_confidence, COUNT(*) AS n FROM inference_log WHERE $__timeFilter(detection_time) AND patient_id LIKE '$patient_id' GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "none" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "lineWidth": 2,
+            "pointSize": 5,
+            "drawStyle": "line",
+            "showPoints": "always",
+            "spanNulls": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "n" },
+            "properties": [
+              { "id": "custom.axisPlacement", "value": "hidden" },
+              { "id": "custom.lineWidth", "value": 0 }
+            ]
+          }
+        ]
+      }
+    },
+
+    {
+      "id": 10,
+      "title": "Confidence Drift — Avg by Model Version",
+      "description": "Average confidence per model_version per hour. When a new model is deployed, a step change here flags that the new version scores differently — a deployment-drift signal. Single version until v1 ships.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 10, "x": 14, "y": 22 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "postgresql" },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_trunc('hour', detection_time) AS time, model_version AS metric, AVG(confidence) AS avg_confidence FROM inference_log WHERE $__timeFilter(detection_time) AND patient_id LIKE '$patient_id' GROUP BY 1, 2 ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "none" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "lineWidth": 2,
+            "pointSize": 5,
+            "drawStyle": "line",
+            "showPoints": "always",
+            "spanNulls": true
+          }
+        }
       }
     }
 

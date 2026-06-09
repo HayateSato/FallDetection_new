@@ -21,13 +21,15 @@ datasources:
   # Used by the fall_events_timeline dashboard for SQL queries.
   # Connects to the same Postgres instance as inference_server + fall_dashboard.
   - name:     PostgreSQL
-    type:     postgres
+    type:     grafana-postgresql-datasource
     uid:      postgresql
     url:      postgres:5432
     database: fall_detection
     user:     fall_user
     secureJsonData:
-      password: fall_pass
+      # Must match POSTGRES_PASSWORD in .env (the password mcs_fall_postgres was
+      # initialised with). Read from env so it can't drift out of sync.
+      password: ${POSTGRES_PASSWORD}
     jsonData:
       sslmode:         disable
       postgresVersion: 1600
