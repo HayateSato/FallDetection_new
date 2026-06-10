@@ -270,8 +270,14 @@ C:\Users\hayat\Documents\6G\FallDetection_new\
       influx_fetcher.py                   Reads SMART_DATA from InfluxDB (mock of BLE read)
 
   _6G_integration_v3_k3s/               FOCUS caregiver layer, K3s Helm chart (ACTIVE, production target)
+    fall_dashboard/db.py                  InfluxDB client is now INLINED here — ml_pipeline/ removed (2026-06-10)
     helm/values.yaml                      Local testing values (NodePorts 30901/30802, local image)
     helm/values_production.yaml           Production values template — fill in all CHANGE_ME values
+    helm/build.sh / install.sh            Bash equivalents of .ps1 scripts — use these on Linux (FOCUS server)
+    helm/test.sh / teardown.sh            Smoke test (7 probes) + teardown — bash versions for Linux
+    NOTE: ml_pipeline/ and config/ folders DELETED (2026-06-10) — contained MCS ML IP not needed by FOCUS
+    NOTE: traefik-mqtts-entrypoint.yaml (extras/) is DEPRECATED — do NOT apply
+    NOTE: mosquitto-ingressroutetcp.yaml (templates/) is DEPRECATED — do NOT apply
 
   mohammed/                               Handover docs for Mohammed
     mohammed_handover.md                  What Mohammed must do, step-by-step Hetzner deployment
@@ -281,6 +287,17 @@ C:\Users\hayat\Documents\6G\FallDetection_new\
     focus_devops_handover.md              What FOCUS DevOps must do, Step 0 = firewall, step-by-step k3s deploy
     config_checklist_focus_devops.md      Numbered config checklist for values_production.yaml (12 sections)
     production_config_checklist.md        Pointer index → above two files
+    draft/                                Topic-by-topic instruction docs (in progress, 2026-06-10)
+      01_system_overview.md               What FOCUS is adding and why — two pods, how they fit existing stack
+      02_mqtt_broker.md                   MQTT broker setup, port design, config, log reading
+      2.1_mqtt_connection_test.md         MQTT test commands (split from 02)
+      03_k3s_values_and_secrets.md        values_production.yaml field-by-field guide + install steps (bash)
+      04_pulling_fall_dashboard_image.md  Registry pull secret setup + troubleshooting
+      05_firewall_and_ports.md            Port reference, ufw/firewalld commands, k3s+ufw gotcha
+      06_influxdb_schema_and_queries.md   (stub — not yet written)
+      07_fall_dashboard_user_guide.md     Caregiver UI guide: cards, alerts, add/delete patients, history tab
+      08_debug_guide.md                   8 failure modes with kubectl commands and fixes
+      helm_scripts_reference.md           What each .sh script does + who runs it
 
   isa/
     todos_isa.md                          NEW (2026-06-10): Full mobile app to-do list with checkboxes, derived from mock_app comparison. Covers BLE read, InfluxDB SMART_DATA write, /predict, MQTT possible publish, confirmation popup, /confirm, MQTT alert publish, fall_events write.
@@ -319,6 +336,9 @@ Current git branch: `mcs-docker-deployment`
 - **K3s mock-app must NOT use `--network host`** — Docker Desktop on Windows runs containers in a Linux VM; use `host.docker.internal` to reach Windows host services.
 - **K3s fall-dashboard MQTT startup race**: fall-dashboard pod may start before mosquitto is ready. Code retries 5 times with 5s delay. If still failing, `kubectl delete pod` to restart.
 - **Docker Desktop K8s does NOT include Traefik** — must install separately for IngressRoute CRDs to work.
+- **`.ps1` scripts are Windows-only** — FOCUS runs Linux. Bash equivalents (`build.sh`, `install.sh`, `test.sh`, `teardown.sh`) are in `_6G_integration_v3_k3s/helm/`. Use `bash helm/install.sh` on the FOCUS server.
+- **`traefik-mqtts-entrypoint.yaml` is DEPRECATED** — the extras/ file in the k3s chart must NOT be applied. MQTT now goes over WebSocket on standard port 443 via IngressRoute. Applying the old file adds an unused entrypoint.
+- **`ml_pipeline/` and `config/` removed from `_6G_integration_v3_k3s/`** (2026-06-10) — only `influx_client_manager` was used; it is now inlined in `fall_dashboard/db.py`. The folders contained MCS ML pipeline code that should not be shipped to FOCUS.
 - **MCS `.env` does NOT need InfluxDB credentials** — no service in `_6G_integration_v3_docker_mcs/` uses InfluxDB.
 - **`imagePullPolicy: IfNotPresent` required for local K3s testing** — set to `Always` in `values_production.yaml` only.
 - **`helm upgrade` required after every values.yaml change** — K8s does not watch the file.

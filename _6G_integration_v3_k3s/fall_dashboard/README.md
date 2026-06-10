@@ -10,8 +10,9 @@ Drives the **Fall Dashboard** view inside the caregiver web app.
 | Audience | caregivers (read-only via `/api/*`) |
 | Production target | runs in FOCUS's environment (k3s / Docker) |
 
-**No local database.** Patient list comes from `PATIENT_IDS` env var.
-Fall history and fall counts are queried from InfluxDB.
+**No Postgres.** Patient list is stored in SQLite on a PVC (`patient_store.py`), managed
+via the dashboard UI. `PATIENT_IDS` env var can seed initial patients on startup but is
+not the live source of truth. Fall history and fall counts are queried from InfluxDB.
 
 ---
 
@@ -37,7 +38,7 @@ fall_dashboard ─────────────────────�
  0  = patient denied (false positive)  ("no")
 -1  = no response within timeout       ("not_answered")
 ```
-Postgres / MQTT payloads carry the string form. The conversion to int happens in
+MQTT payloads carry the string form. The conversion to int happens in
 `main.py::_on_fall_mqtt` (single conversion point for the caregiver layer).
 
 ---
@@ -46,7 +47,7 @@ Postgres / MQTT payloads carry the string form. The conversion to int happens in
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| GET | `/api/patients` | list of patients from `PATIENT_IDS` env var + fall counts from InfluxDB |
+| GET | `/api/patients` | list of patients from SQLite patient store + fall counts from InfluxDB |
 | GET | `/api/falls?patient_id=&only_falls=&limit=` | fall history from InfluxDB (default `only_falls=true`, `limit=200`) |
 | GET | `/api/stream` | Server-Sent Events — pending and confirmed fall events |
 | GET | `/` | local-test HTML dashboard (replaced by FOCUS Flutter app in production) |
@@ -63,7 +64,7 @@ fall_dashboard/
 ├── main.py             <- uvicorn entry + MQTT subscriber wiring + patient_confirmed normalisation
 ├── web.py              <- FastAPI app: /api/patients, /api/falls, /api/stream
 ├── mqtt_listener.py    <- FallEventBroker — paho thread -> asyncio bridge; subscribes to both topics
-├── db.py               <- list_patients (PATIENT_IDS + InfluxDB counts), list_falls (InfluxDB)
+├── db.py               <- list_patients (SQLite + InfluxDB counts), list_falls (InfluxDB)
 ├── dashboard/          <- local-test HTML/JS (index.html, app.js, style.css)
 ├── Dockerfile
 └── requirements.txt
@@ -85,8 +86,8 @@ fall_dashboard/
 | `INFLUXDB_TOKEN` | (required) | InfluxDB auth token |
 | `INFLUXDB_ORG` | (required) | InfluxDB organisation |
 | `INFLUXDB_FALL_EVENTS_BUCKET` | (or `INFLUXDB_BUCKET`) | bucket for fall_events measurement |
-| `PATIENT_IDS` | (required) | comma-separated patient IDs — defines the patient list |
-| `MAC_IDS` | optional | positional 1:1 with `PATIENT_IDS` — added to API responses |
+| `PATIENT_IDS` | optional | comma-separated patient IDs — seeded into SQLite on startup via `sync_from_env()`. Not the live source of truth; patients can also be added via UI. |
+| `MAC_IDS` | optional | positional 1:1 with `PATIENT_IDS` — MAC addresses added during env seed |
 
 ---
 
