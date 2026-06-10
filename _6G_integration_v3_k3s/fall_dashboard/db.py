@@ -17,15 +17,34 @@ patient_confirmed int encoding:
   -1  = no response within timeout       ('not_answered')
 """
 
+import atexit
 import logging
 import os
 from typing import List, Optional
+
+from influxdb_client import InfluxDBClient
 
 from fall_dashboard import patient_store
 
 logger = logging.getLogger(__name__)
 
 _FALL_EVENTS_BUCKET = os.getenv("INFLUXDB_FALL_EVENTS_BUCKET") or os.getenv("INFLUXDB_BUCKET", "")
+
+_influxdb_client_instance = None
+
+
+def _get_influxdb_client() -> InfluxDBClient:
+    global _influxdb_client_instance
+    if _influxdb_client_instance is None:
+        _influxdb_client_instance = InfluxDBClient(
+            url=os.getenv("INFLUXDB_URL", ""),
+            token=os.getenv("INFLUXDB_TOKEN", ""),
+            org=os.getenv("INFLUXDB_ORG", ""),
+            timeout=30_000,
+            verify_ssl=True,
+        )
+        atexit.register(_influxdb_client_instance.close)
+    return _influxdb_client_instance
 
 
 # ---------------------------------------------------------------------------
@@ -38,7 +57,6 @@ def _get_fall_counts() -> dict:
     if not bucket:
         return {}
     try:
-        from ml_pipeline.data_input.data_loader.influx_client_manager import _get_influxdb_client
         query = f'''from(bucket: "{bucket}")
   |> range(start: -30d)
   |> filter(fn: (r) => r["_measurement"] == "fall_events")
@@ -92,12 +110,6 @@ def list_falls(
     bucket = _FALL_EVENTS_BUCKET
     if not bucket:
         logger.warning("INFLUXDB_BUCKET not configured — list_falls() returning empty")
-        return []
-
-    try:
-        from ml_pipeline.data_input.data_loader.influx_client_manager import _get_influxdb_client
-    except ImportError:
-        logger.warning("InfluxDB client not available — list_falls() returning empty")
         return []
 
     # patient_id is a TAG so it can be filtered before pivot
