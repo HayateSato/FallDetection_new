@@ -174,7 +174,7 @@ fall_dashboard and mqtt run as new pods inside FOCUS's existing k3s cluster. Eac
 - `https://fall.focus-hospital.de` → fall-dashboard
 - `https://mqtt.focus-hospital.de` → mosquitto (WSS)
 
-**Future upgrade (Q3):** If FOCUS grants source repo access, Isa integrates fall features directly into the Flutter patient dashboard. Status: waiting for FOCUS confirmation.
+**Possible future upgrade:** If FOCUS grants source repo access, fall alert features could be integrated directly into the Flutter patient dashboard (eliminating the separate `fall.<domain>` subdomain). Status: waiting for FOCUS confirmation. **Not mentioned in any external handover doc** — tracked internally in `__Refactoring_docs/TODO.md` under "Internal Future Options".
 
 ---
 
