@@ -1,3 +1,173 @@
+ISA MOBILE APP — TO-DO LIST
+(derived from mock_app in _6G_integration_v3_docker_focus/mock_app)
+========================================================================
+
+The mock_app simulates exactly what the real mobile app must do.
+
+------------------------------------------------------------------------
+PART 1 — SENSOR DATA READING
+------------------------------------------------------------------------
+
+1. Read a 9-second ACC window from the SmarKo wearable over BLE.
+          - 3 axes (X, Y, Z), timestamps in milliseconds
+          - 50 Hz = 450 samples per window
+          - Barometer: query GET /model/info first to see if
+            uses_barometer=true. If yes, include pressure[] and
+            pressure_timestamps_ms[] in the /predict payload.
+
+2. Write raw sensor data to FOCUS InfluxDB continuously.
+          - Measurement : SMART_DATA
+          - Tags        : macAddress (device MAC), patient_id
+          - Fields      : acc_x, acc_y, acc_z, pressure (if available)
+          - This is separate from fall_events — it feeds the caregiver
+            dashboard's biosignal display and the fall history tab.
+
+------------------------------------------------------------------------
+PART 2 — FALL DETECTION (calling inference server)
+------------------------------------------------------------------------
+
+3. Query GET /model/info once on startup (or once per session).
+          Cache the uses_barometer flag.
+          Use this to decide whether to include pressure data in /predict.
+
+4. POST /predict to the MCS inference server.
+          - URL         : inference server URL (from Mohammed after Hetzner deploy)
+          - Header      : X-API-Key: <key from Mohammed>
+          - Body fields : patient_id, device_id, acc_x[], acc_y[], acc_z[],
+                          timestamps_ms[], pressure[] (optional),
+                          pressure_timestamps_ms[] (optional)
+          - Response    : { inference: { fall_detected, confidence,
+                            model_version }, observation_id, timestamp }
+          - Save observation_id — needed for the /confirm call later.
+
+------------------------------------------------------------------------
+PART 3 — IMMEDIATE MQTT PUBLISH (before patient sees popup)
+------------------------------------------------------------------------
+
+  3. Publish fall/possible/<patient_id> as soon as
+     fall_detected=true is returned — do NOT wait for patient confirmation.
+     Topic   : fall/possible/<patient_id>
+     Payload :
+       {
+         "patient_id":     "<pid>",
+         "observation_id": "<uuid from /predict>",
+         "fall_detected":  true,
+         "confidence":     0.91,
+         "model_version":  "v0",
+         "timestamp":      "<ISO 8601>",
+         "status":         "pending"
+       }
+     This shows a "possible fall" notice on the caregiver dashboard
+     while the patient confirmation countdown is running.
+
+------------------------------------------------------------------------
+PART 4 — PATIENT CONFIRMATION POPUP
+------------------------------------------------------------------------
+
+  4. Each question has its own 10-second timer,
+     NOT a shared 10-second window for both questions.
+
+     Flow:
+       Step 1: Show "Did you fall?" popup.
+               Timer: 10 seconds.
+               - Yes → go to Step 2.
+               - No  → patient_confirmed = "no", needs_help = null. DONE.
+               - Timeout → patient_confirmed = "not_answered",
+                           needs_help = null (treat as conservative: alert sent).
+
+       Step 2 (only if Step 1 = Yes): Show "Do you need help?" popup.
+               Timer: 10 seconds.
+               - Yes     → needs_help = true.
+               - No      → needs_help = false.
+               - Timeout → needs_help = null.
+               patient_confirmed = "yes" in all cases.
+
+------------------------------------------------------------------------
+PART 5 — AFTER PATIENT CONFIRMATION (or timeout)
+------------------------------------------------------------------------
+
+5. POST /inference/{observation_id}/confirm to MCS inference server.
+          Call this after step 1 or step 2 of the confirmation popup completes.
+          - URL    : POST <inference-server>/inference/<observation_id>/confirm
+          - Header : X-API-Key
+          - Body   :
+              {
+                "patient_confirmed": "yes" | "no" | "not_answered",
+                "needs_help":        true | false | null
+              }
+          This updates the inference_log row in MCS Postgres with the
+          ground-truth label — used for model retraining later.
+
+6. Publish fall/alert/<patient_id> to MQTT broker via WebSocket.
+          Call this after the confirmation popup completes (same trigger as #5).
+          - Topic   : fall/alert/<patient_id>
+          - Protocol: MQTT over WebSocket (WSS) — NOT raw TCP.
+            React Native cannot open raw TCP sockets. Use MQTT.js with
+            WebSocket transport: wss://<FOCUS-domain>:443
+          - Payload :
+              {
+                "patient_id":        "<pid>",
+                "observation_id":    "<uuid>",
+                "fall_detected":     true,
+                "confidence":        0.91,
+                "model_version":     "v0",
+                "timestamp":         "<detection ISO 8601>",
+                "alert_time":        "<confirmation ISO 8601>",
+                "patient_confirmed": "yes" | "no" | "not_answered",
+                "needs_help":        true | false | null
+              }
+          MQTT connection details (from FOCUS DevOps after they deploy):
+            - host     : mosquitto.ingress.host value (e.g. mqtt.focus-hospital.de)
+            - port     : 443 (production via Traefik)
+            - username : fallDashboard.mqtt.username (blank if anonymous allowed)
+            - password : fallDashboard.mqtt.password
+
+7. Write fall_events point to FOCUS InfluxDB.
+          Call this after the confirmation popup completes (same trigger as #5 and #6).
+          - Measurement : fall_events
+          - Tags        : patient_id, device_id (MAC address)
+          - Fields      :
+              fall_detected     (bool)   = true
+              patient_confirmed (int)    = 1 (yes) | 0 (no) | -1 (not_answered)
+              needs_help        (bool)
+              confidence        (float)
+              observation_id    (string) = UUID from /predict response
+              model_version     (string)
+          - Timestamp   : detection time (timestamp from /predict response),
+                          NOT the current time when writing.
+          InfluxDB write credentials (from FOCUS DevOps):
+            - URL, org, bucket, token — same InfluxDB instance as SMART_DATA.
+
+------------------------------------------------------------------------
+PART 6 — TIMESTAMP LOGGING
+------------------------------------------------------------------------
+
+  8. Record and store the following three timestamps per event:
+          - predicted_at   : timestamp in /predict response
+          - confirmed_at   : time patient responded (or timeout expired)
+          - help_requested_at : time patient answered "Do you need help?"
+                                (null if they said No or timed out on question 1)
+          These are already part of the /confirm and MQTT payloads above —
+          make sure all three are captured and populated correctly.
+
+------------------------------------------------------------------------
+SUMMARY — WHAT THE MOCK APP DOES vs REAL APP MUST DO
+------------------------------------------------------------------------
+
+  Mock app does this          Real app must do this
+  --------------------------  -------------------------------------------------
+  Reads ACC from InfluxDB     Read ACC from SmarKo wearable via BLE
+  (n/a)                       Write SMART_DATA to FOCUS InfluxDB continuously
+  POST /predict               Same — identical API call
+  Publish fall/possible/#     Same
+  Browser popup (port 8005)   Native phone popup (React Native UI)
+  POST /confirm               Same — identical API call
+  Publish fall/alert/#        Same — use WebSocket (MQTT.js), NOT raw TCP
+  Write fall_events           Same — identical InfluxDB schema
+
+
+
+
  Isa needs to update the mobile app on the following
   - App needs to write the timestamps of predicted fall, confirmed fall, and requested help
   - Feedback time of patient for their fall/help is 10 seconds for each question, not for both questions
