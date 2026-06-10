@@ -4,6 +4,8 @@ Real-time fall detection using XGBoost + SmarKo wearable sensor. The repository 
 multiple integration variants at different stages. Most readers want the **active v3
 production system** — start with the table below to find your folder.
 
+**Full system overview (all three layers, all components, hosting codes):** [`system_overview.md`](system_overview.md)
+
 ---
 
 ## Start here — pick your role
@@ -29,8 +31,8 @@ This repository contains **multiple integration variants** across different fold
 | `_6G_integration_v3_docker_focus/` | Backup / local test only | MQTT | Docker Compose version of the caregiver layer (two-laptop testing) |
 | `_6G_Integration_v2_mqtt/` | **Legacy — frozen** | MQTT | Previous version where FOCUS hosted all 10 services in k3s |
 | `_6G_Integration_v2_redis/` | **Legacy — frozen** | Redis | Older design before MQTT was introduced — do not run |
-| `_EcoSystem_Integration/` on `6G-integration` branch | Active (internal) | none | Stripped-down internal company integration, no Docker |
-| Repo root + `system_operator/ml_server/` | Active (research) | Redis | Full research stack — see [`_6G_Integration_v2_redis/README.md`](_6G_Integration_v2_redis/README.md) |
+| `_EcoSystem_Integration/` on `6G-integration` branch | **Legacy — frozen** | none | Stripped-down internal company integration, no Docker |
+| Repo root + `system_operator/ml_server/` | **Legacy — frozen** | Redis | Full research stack — see [`_6G_Integration_v2_redis/README.md`](_6G_Integration_v2_redis/README.md) |
 
 > **v2 folders are frozen reference only.** Do not run `_6G_Integration_v2_mqtt/` or
 > `_6G_Integration_v2_redis/` — they reflect an older architecture where FOCUS hosted
