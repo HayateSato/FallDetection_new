@@ -1,5 +1,0 @@
-# DEPRECATED -- replaced by mosquitto-ingressroute.yaml (WebSocket over HTTPS on port 443).
-# The TCP IngressRouteTCP approach (port 8883) has been superseded by WebSocket via the
-# standard Traefik HTTPS entrypoint. This file is kept for reference only and does nothing.
-#
-# The extras/traefik-mqtts-entrypoint.yaml cluster patch is also no longer needed.

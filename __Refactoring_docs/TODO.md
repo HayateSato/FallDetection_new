@@ -218,6 +218,18 @@ needs to be adapted for their cluster. Two open architectural questions before i
 
 ---
 
+## Internal Future Options (not documented for FOCUS)
+
+- [ ] **Q1 upgrade — merge fall-dashboard into Flutter patient dashboard source**
+  - If FOCUS grants source-repo access to the Flutter patient dashboard (their existing app),
+    Isa could integrate the fall alert features directly into it.
+  - This would eliminate the separate `fall.<domain>` subdomain — caregivers use one URL.
+  - Status: waiting for FOCUS to confirm whether they will grant repo access.
+  - **Not mentioned in any handover doc or external-facing doc** — do not raise with FOCUS
+    unless they bring it up or confirm repo access.
+
+---
+
 ## Open Questions
 
 | # | Question | Owner |

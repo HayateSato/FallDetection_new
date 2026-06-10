@@ -81,6 +81,46 @@ What it does NOT do:
 - Registry pull credentials for `registry-smarko-health.de` (obtain from Mohammed)
 - `_6G_integration_v3_k3s/` folder delivered by Mohammed
 
+### 0. Firewall — verify required ports are open
+
+Both services are exposed through Traefik on standard web ports only. No custom port needs to be opened.
+
+| Port | Protocol | Required for |
+|------|----------|--------------|
+| 80 | TCP | Let's Encrypt HTTP-01 ACME challenge (TLS certificate issuance) |
+| 443 | TCP | Traefik HTTPS → fall-dashboard **and** Traefik WSS → MQTT broker (same port, different routes) |
+| 6443 | TCP | K3s API server — needed if you run `kubectl` from a machine outside the server |
+
+If you already have Traefik serving other services, ports 80 and 443 are almost certainly already open and **no new firewall rules are needed**. Run the check below to confirm.
+
+**Check with ufw (Ubuntu):**
+
+```bash
+sudo ufw status
+# Expected: 80/tcp and 443/tcp should show ALLOW
+```
+
+**If they are missing, open them:**
+
+```bash
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
+sudo ufw reload
+```
+
+**If you use firewalld (CentOS/RHEL):**
+
+```bash
+sudo firewall-cmd --list-ports           # check current open ports
+sudo firewall-cmd --add-port=80/tcp --permanent
+sudo firewall-cmd --add-port=443/tcp --permanent
+sudo firewall-cmd --reload
+```
+
+> **k3s + ufw note:** k3s manages its own iptables rules. If you see pods unable to reach each other after enabling ufw, add `--flannel-iface=<interface>` to your k3s service args or whitelist the `flannel.1` and `cni0` interfaces. This is a k3s-level concern, not specific to this deployment.
+
+> **Nothing extra for MQTT:** The mobile app connects to the MQTT broker via WebSocket on port 443 (WSS). Traefik routes this traffic internally to the mosquitto pod on port 9001. No separate MQTT port (1883 or 9001) needs to be opened in the OS firewall.
+
 ### 1. One-time cluster setup (run once, never again)
 
 ```bash
