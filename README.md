@@ -16,7 +16,7 @@ production system** — start with the table below to find your folder.
 | **Isa** — mobile-app developer (React Native) | [`isa/00_ISA_local_setup_quickstart.md`](isa/00_ISA_local_setup_quickstart.md) | [`isa/01_ISA_mobile_app_contract.md`](isa/01_ISA_mobile_app_contract.md) |
 | **FOCUS DevOps** — deploying caregiver layer to k3s | [`FOCUS_devs_handover/focus_devops_handover.md`](FOCUS_devs_handover/focus_devops_handover.md) | [`FOCUS_devs_handover/production_config_checklist.md`](FOCUS_devs_handover/production_config_checklist.md) → [`_6G_integration_v3_k3s/`](_6G_integration_v3_k3s/) Helm chart |
 | **New to project** — want the active production system | this README (sections below) | [`_6G_integration_v3_docker_mcs/README.md`](_6G_integration_v3_docker_mcs/README.md) |
-| Working on the legacy full-research stack | [`Docu/HOW_TO_RUN.md`](Docu/HOW_TO_RUN.md) | [`_6G_Integration_v2_redis/README.md`](_6G_Integration_v2_redis/README.md) |
+| Working on the legacy full-research stack | Not included in this repo | — |
 
 ---
 
@@ -32,7 +32,7 @@ This repository contains **multiple integration variants** across different fold
 | `_6G_Integration_v2_mqtt/` | **Legacy — frozen** | MQTT | Previous version where FOCUS hosted all 10 services in k3s |
 | `_6G_Integration_v2_redis/` | **Legacy — frozen** | Redis | Older design before MQTT was introduced — do not run |
 | `_EcoSystem_Integration/` on `6G-integration` branch | **Legacy — frozen** | none | Stripped-down internal company integration, no Docker |
-| Repo root + `system_operator/ml_server/` | **Legacy — frozen** | Redis | Full research stack — see [`_6G_Integration_v2_redis/README.md`](_6G_Integration_v2_redis/README.md) |
+| Repo root + `system_operator/ml_server/` | **Legacy — frozen** | Redis | Full research stack — not included in this repo |
 
 > **v2 folders are frozen reference only.** Do not run `_6G_Integration_v2_mqtt/` or
 > `_6G_Integration_v2_redis/` — they reflect an older architecture where FOCUS hosted
