@@ -1,0 +1,27 @@
+I need a document that summrises below for Mohammed so that he can understand 
+ - what is inside the inference layer in docker and what each service does 
+ (note that the structure is changed from when i handed over last time which was based on _6G_Integration_v2_mqtt)
+ - what is inside the caregiver layer in docker and what each service does
+ - which service inside the inference layer talks to which service (both inside and outside inference layer) and how (which port or WS/HTTP/TCP etc.)
+ - what tasks are still pending (what he has to do + what I have to do after deploying on hetzner) - refer to C:\Users\hayat\Documents\6G\FallDetection_new\__Refactoring_docs\TODO.md
+
+The documentation should be created in a way that shows a clear to do for him 
+
+i already messsage him below so he has a rough idea 
+Update on 6G Fall Detection Deployment 
+-----------------------------------------------
+ 
+Before:   FOCUS hosting everything = 10 services (k3s)  
+After:     FOCUS hosting 2 services (k3s) + MCS hosting 8 services (docker)  
+ 
+ 
+What will be running in FOCUS side (what is excluded from above) are two services: 
+Fall dashboard 
+MQTT Broker 
+Four+ one things we need help from you
+Deploy the 8 services (docker) on our Hetzner / MCS domain 
+Set up proxy for these 8 services  
+Push a new docker image (of fall dashboard = not included in these 8 services) to our registry for FOCUS to pull into their existing k3s (& remove the old ones) 
+Provide details (domains or subdomain etc.) to FOCUS once 8 services are running  
+ - - - - - - - - - - - - - - - - - - - 
+Test end-to-end pipeline (between mobile app, services on Hetzner, and simulated FOCUS services on MCS WiFi) before shipment

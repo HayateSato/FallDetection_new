@@ -1,0 +1,25 @@
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: fall-dashboard
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: fall-dashboard
+    {{- include "caregiver.labels" . | nindent 4 }}
+spec:
+  entryPoints:
+    - websecure
+  routes:
+    - match: Host(`{{ .Values.fallDashboard.ingress.host }}`)
+      kind: Rule
+      services:
+        - name: fall-dashboard
+          port: {{ .Values.fallDashboard.port }}
+  {{- if .Values.fallDashboard.ingress.certResolver }}
+  tls:
+    certResolver: {{ .Values.fallDashboard.ingress.certResolver }}
+  {{- else }}
+  # TLS is not configured in this chart. FOCUS cluster handles TLS externally.
+  # To enable: set fallDashboard.ingress.certResolver in values.yaml.
+  tls: {}
+  {{- end }}

@@ -1,0 +1,27 @@
+# Prometheus scrape configuration — Fall Detection (production)
+# All targets use Docker service names (resolved on the fall-net network).
+
+global:
+  scrape_interval:     15s
+  evaluation_interval: 15s
+  scrape_timeout:      10s
+
+  external_labels:
+    environment: production
+    project:     fall_detection
+
+scrape_configs:
+
+  - job_name: inference_server
+    static_configs:
+      - targets:
+          - inference-server:8001
+    metrics_path: /metrics
+    scrape_interval: 15s
+    relabel_configs:
+      - target_label: service
+        replacement:  inference_server
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ['localhost:9090']

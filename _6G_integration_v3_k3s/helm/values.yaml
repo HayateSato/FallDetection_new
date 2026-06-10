@@ -1,0 +1,96 @@
+# =============================================================================
+# Fall Detection -- Caregiver Layer Helm Values
+# =============================================================================
+# Fill in every CHANGE_ME value before deploying.
+# Sensitive values (influxdb.token) can also be passed at install time:
+#   helm install caregiver helm/caregiver --set fallDashboard.influxdb.token=XXX
+# NOTE: Kubernetes namespace names cannot contain underscores -- use hyphens.
+# =============================================================================
+
+namespace: fall-dashboard
+
+# Container registry (FOCUS private registry + pull secret)
+# For local testing: set imagePullSecret to "" and use a locally built image tag below.
+registry: registry-smarko-health.de
+imagePullSecret: ""    # mcs-labs for production; blank for local testing
+
+# =============================================================================
+# mosquitto MQTT broker
+# =============================================================================
+mosquitto:
+  image: eclipse-mosquitto:2
+  # Internal TCP port -- fall-dashboard connects here via cluster DNS (mosquitto:1883)
+  port: 1883
+  # WebSocket port -- Traefik forwards external WSS traffic here
+  wsPort: 9001
+  # NodePort for WebSocket (30000-32767). Set for local two-laptop testing so the
+  # mock-app on Laptop 2 can reach ws://<node-ip>:<wsNodePort> without TLS.
+  # Leave blank ("") for production -- Traefik IngressRoute handles external WSS.
+  wsNodePort: 30901    # e.g. 30901 for local testing
+  persistence:
+    size: 500Mi
+    storageClass: ""    # blank = use k3s cluster default (local-path provisioner)
+  ingress:
+    # Domain the mobile app (Isa) connects to: wss://<host>
+    # Set to a subdomain of the FOCUS server, e.g. mqtt.focus-server.hospital.de
+    host: "CHANGE_ME"
+    # TLS cert resolver -- set if FOCUS cluster uses Let's Encrypt via Traefik.
+    # Leave blank to omit TLS config (FOCUS handles TLS externally).
+    certResolver: ""    # e.g. "le" for Let's Encrypt
+  # Full mosquitto.conf injected as a ConfigMap.
+  # per_listener_settings false ensures auth applies to both listeners.
+  config: |
+    per_listener_settings false
+    allow_anonymous true
+    listener 1883
+    listener 9001
+    protocol websockets
+    persistence true
+    persistence_location /mosquitto/data/
+    log_dest stdout
+    log_type all
+
+# =============================================================================
+# fall-dashboard
+# =============================================================================
+fallDashboard:
+  image: fall-detection/fall-dashboard:local    # production: registry-smarko-health.de/fall-detection/fall-dashboard:latest
+  imagePullPolicy: IfNotPresent                 # production: Always
+  # Keep replicas at 1 -- SSE fan-out is in-process; multiple replicas silently drop events
+  replicas: 1
+  port: 8002
+  # NodePort for HTTP (30000-32767). Set for local two-laptop testing so Laptop 2
+  # server-health can probe fall-dashboard at http://<node-ip>:<httpNodePort>.
+  # Leave blank ("") for production -- Traefik IngressRoute handles external access.
+  httpNodePort: 30802    # e.g. 30802 for local testing
+
+  persistence:
+    size: 500Mi         # SQLite patient store -- small, but needs a real PVC
+    storageClass: ""    # blank = use k3s cluster default (local-path provisioner)
+
+  # Comma-separated patient IDs and MAC addresses (positional 1:1 mapping)
+  patientIds: "patient_test_50"    # e.g. "patient_01,patient_02"
+  macIds: "6c:1d:eb:04:a9:d9"                 # e.g. "aa:bb:cc:dd:ee:01,aa:bb:cc:dd:ee:02" (optional)
+
+  mqtt:
+    alertTopic: fall/alert
+    possibleTopic: fall/possible
+    # Leave blank if mosquitto is configured with allow_anonymous true
+    username: ""
+    password: ""
+
+  influxdb:
+    url: "https://ecosystem-influxdb.smarko-health.de"               # e.g. https://influxdb.xxx.e-healthservice.de
+    org: "MCS Datalabs GmbH"               # InfluxDB organisation name
+    bucket: "fd_test"            # bucket for raw ACC sensor data (read by fall-dashboard)
+    fallEventsBucket: "fd_test"  # bucket for fall_events measurement (often same as bucket)
+    # Token is stored in a Kubernetes Secret.
+    # Set this here or pass via --set fallDashboard.influxdb.token=XXX at install time.
+    token: "v3vG3RliwQKPhUCYmlu4GAjrQcf0uITn_J2E08FaJdpn1-rNU5j0lSX9Cp9VNKw4i9fRjB6cvSO-euuG5IOnWg=="
+
+  ingress:
+    # Domain where the Flutter dashboard reaches fall-dashboard on port 443
+    host: "localhost"    # e.g. fall.xxx.healthservice.de
+    # TLS cert resolver -- set if the FOCUS cluster uses Let's Encrypt via Traefik.
+    # Leave blank to omit TLS config from this chart (FOCUS handles TLS externally).
+    certResolver: ""     # e.g. "le" for Let's Encrypt

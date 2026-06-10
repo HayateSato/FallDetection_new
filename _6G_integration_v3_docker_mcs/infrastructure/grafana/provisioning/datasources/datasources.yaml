@@ -1,0 +1,36 @@
+# Grafana datasource provisioning
+# Loaded automatically on Grafana startup — no manual UI configuration needed.
+# UIDs are fixed so dashboard JSON can reference them reliably.
+
+apiVersion: 1
+
+datasources:
+
+  # ── Prometheus ────────────────────────────────────────────────────────────
+  - name:      Prometheus
+    type:      prometheus
+    uid:       prometheus
+    url:       http://prometheus:9090
+    access:    proxy
+    isDefault: true
+    jsonData:
+      httpMethod:       POST
+      timeInterval:     15s   # matches scrape_interval in prometheus.yml
+
+  # ── PostgreSQL — fall_detection database ──────────────────────────────────
+  # Used by the fall_events_timeline dashboard for SQL queries.
+  # Connects to the same Postgres instance as inference_server + fall_dashboard.
+  - name:     PostgreSQL
+    type:     grafana-postgresql-datasource
+    uid:      postgresql
+    url:      postgres:5432
+    database: fall_detection
+    user:     fall_user
+    secureJsonData:
+      # Must match POSTGRES_PASSWORD in .env (the password mcs_fall_postgres was
+      # initialised with). Read from env so it can't drift out of sync.
+      password: ${POSTGRES_PASSWORD}
+    jsonData:
+      sslmode:         disable
+      postgresVersion: 1600
+      timescaledb:     false

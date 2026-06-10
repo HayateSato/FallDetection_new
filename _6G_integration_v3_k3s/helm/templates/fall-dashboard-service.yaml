@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: fall-dashboard
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: fall-dashboard
+    {{- include "caregiver.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: fall-dashboard
+  ports:
+    - name: http
+      port: {{ .Values.fallDashboard.port }}
+      targetPort: {{ .Values.fallDashboard.port }}
+      {{- if .Values.fallDashboard.httpNodePort }}
+      nodePort: {{ .Values.fallDashboard.httpNodePort }}
+      {{- end }}
+  type: {{ if .Values.fallDashboard.httpNodePort }}NodePort{{ else }}ClusterIP{{ end }}
+  # Production: Traefik IngressRoute handles external access via HTTPS.
+  # Local two-laptop testing: set fallDashboard.httpNodePort (e.g. 30802) to expose
+  # port 8002 on the host NIC so Laptop 2 server-health can probe fall-dashboard.

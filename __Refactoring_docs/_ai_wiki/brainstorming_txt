@@ -1,0 +1,6 @@
+i need to make a decision about - fall-dashboard   :8002, can you help me clarifing a few technical restrictions/possibilities? 
+
+currently, FOCUS is hosting a patient dashboard in their existing k3s stack and we are developing fall_dashbaord as one service of newly added, separate k3s service. 
+in the ideal world, these two dashboard should be integrated so that the caregiver user can see the health status and patient list (= those are what is shown on patient dashboard) along with the fall alert and fall history (these are the feature that should be added to patient dashabord from fall_dashabord). If we want to do this (so that the caregiver user does not have to open two separata broweser tabs to see twe information), how can it be done the best? My idea was that 
+- idea1: we provide all the necessary code for those additional features and they will just copy and paste, 
+- idea2: we provide the fall_dashbaord image in the separate k3s stack as is and we somehow let it integrate into patient dashabord running in their esxisting stack 

@@ -1,0 +1,30 @@
+# =============================================================================
+# DEPRECATED -- no longer needed
+# =============================================================================
+#
+# The caregiver layer now exposes MQTT via WebSocket over HTTPS (port 443)
+# using the standard Traefik 'websecure' entrypoint and an IngressRoute.
+# The TCP IngressRouteTCP on port 8883 has been replaced by
+# templates/mosquitto-ingressroute.yaml.
+#
+# DO NOT apply this file. It is kept for historical reference only.
+# If you applied it to a cluster previously, you can remove the patch with:
+#   kubectl edit helmchartconfig traefik -n kube-system
+#   (remove the additionalArguments and ports.mqtts entries)
+# =============================================================================
+
+apiVersion: helm.cattle.io/v1
+kind: HelmChartConfig
+metadata:
+  name: traefik
+  namespace: kube-system
+spec:
+  valuesContent: |-
+    additionalArguments:
+      - "--entrypoints.mqtts.address=:8883"
+    ports:
+      mqtts:
+        port: 8883
+        expose: true
+        exposedPort: 8883
+        protocol: TCP

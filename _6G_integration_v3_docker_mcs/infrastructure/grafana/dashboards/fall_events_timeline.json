@@ -1,0 +1,461 @@
+{
+  "title": "Fall Events Timeline",
+  "uid": "fall-events-timeline",
+  "description": "What happened today? SQL queries against Postgres inference_log — confirmations, patient list, confidence over time and drift.",
+  "tags": ["fall-detection", "postgres", "operations"],
+  "schemaVersion": 39,
+  "version": 2,
+  "refresh": "1m",
+  "time": { "from": "now-24h", "to": "now" },
+  "timepicker": {},
+  "timezone": "browser",
+  "graphTooltip": 1,
+
+  "templating": {
+    "list": [
+      {
+        "name": "patient_id",
+        "type": "query",
+        "label": "Patient",
+        "datasource": { "type": "grafana-postgresql-datasource", "uid": "postgresql" },
+        "query": "SELECT DISTINCT patient_id FROM inference_log ORDER BY 1",
+        "definition": "SELECT DISTINCT patient_id FROM inference_log ORDER BY 1",
+        "refresh": 1,
+        "sort": 1,
+        "multi": false,
+        "includeAll": true,
+        "allValue": "%",
+        "current": { "text": "All", "value": "$__all", "selected": false },
+        "hide": 0
+      }
+    ]
+  },
+
+  "panels": [
+
+    {
+      "id": 1,
+      "title": "Falls Confirmed Today",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 0, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "postgresql" },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(*) AS value FROM inference_log WHERE patient_confirmed = 'yes' AND detection_time >= NOW() - INTERVAL '24 hours'",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^value$/" },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "auto"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "orange", "value": 1 },
+              { "color": "red",    "value": 5 }
+            ]
+          }
+        }
+      }
+    },
+
+    {
+      "id": 2,
+      "title": "Unanswered Alerts Today",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 4, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "postgresql" },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(*) AS value FROM inference_log WHERE patient_confirmed = 'not_answered' AND detection_time >= NOW() - INTERVAL '24 hours'",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^value$/" },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green",  "value": null },
+              { "color": "yellow", "value": 1 },
+              { "color": "orange", "value": 3 }
+            ]
+          }
+        }
+      }
+    },
+
+    {
+      "id": 3,
+      "title": "Total Predictions Today",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 8, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "postgresql" },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(*) AS value FROM inference_log WHERE detection_time >= NOW() - INTERVAL '24 hours'",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^value$/" },
+        "colorMode": "value",
+        "graphMode": "area"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "blue" }
+        }
+      }
+    },
+
+    {
+      "id": 4,
+      "title": "Patients Seen (last 24h)",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 12, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "postgresql" },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(DISTINCT patient_id) AS value FROM inference_log WHERE detection_time >= NOW() - INTERVAL '24 hours'",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^value$/" },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "fixed", "fixedColor": "purple" }
+        }
+      }
+    },
+
+    {
+      "id": 5,
+      "title": "Help Requested Today",
+      "type": "stat",
+      "gridPos": { "h": 4, "w": 4, "x": 16, "y": 0 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "postgresql" },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT COUNT(*) AS value FROM inference_log WHERE needs_help = true AND detection_time >= NOW() - INTERVAL '24 hours'",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "/^value$/" },
+        "colorMode": "background",
+        "graphMode": "none"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": { "mode": "thresholds" },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red",   "value": 1 }
+            ]
+          }
+        }
+      }
+    },
+
+    {
+      "id": 6,
+      "title": "Confidence Score Over Time",
+      "description": "Scatter of XGBoost confidence for every inference (green). Sustained clustering near the 0.5 threshold suggests the model is uncertain — trigger retraining review. The red threshold line marks 0.5 (the fall/no-fall cutoff).",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 14, "x": 0, "y": 4 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "postgresql" },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT detection_time AS time, confidence FROM inference_log WHERE $__timeFilter(detection_time) AND patient_id LIKE '$patient_id' ORDER BY time",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "none" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "lineWidth": 0,
+            "pointSize": 6,
+            "drawStyle": "points",
+            "showPoints": "always"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "green", "value": null },
+              { "color": "red",   "value": 0.5 }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "confidence" },
+            "properties": [
+              { "id": "color", "value": { "mode": "palette-classic" } }
+            ]
+          }
+        ]
+      }
+    },
+
+    {
+      "id": 7,
+      "title": "Confidence Drift — Falls Only (Avg per Hour)",
+      "description": "Average model confidence per hour computed over ONLY the inferences predicted as a fall (fall_detected = true). Unlike the all-inference average, this is not dragged down by the no-fall floor (~0.002), so it tracks how confident the model is when it actually flags a fall. A downward drift here means the model is becoming less sure about its fall calls — a retraining signal. n = number of falls in that hour.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 10, "x": 14, "y": 4 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "postgresql" },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_trunc('hour', detection_time) AS time, AVG(confidence) AS avg_fall_confidence, COUNT(*) AS n FROM inference_log WHERE fall_detected = true AND $__timeFilter(detection_time) AND patient_id LIKE '$patient_id' GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "none" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "lineWidth": 2,
+            "pointSize": 6,
+            "drawStyle": "line",
+            "showPoints": "always",
+            "spanNulls": true
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "color": "red",    "value": null },
+              { "color": "orange", "value": 0.5 },
+              { "color": "green",  "value": 0.75 }
+            ]
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "n" },
+            "properties": [
+              { "id": "custom.axisPlacement", "value": "hidden" },
+              { "id": "custom.lineWidth", "value": 0 },
+              { "id": "custom.showPoints", "value": "never" }
+            ]
+          }
+        ]
+      }
+    },
+
+    {
+      "id": 8,
+      "title": "Recent Fall Events",
+      "description": "Most recent confirmed fall alerts. observation_id links to inference_log for retraining audit.",
+      "type": "table",
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 12 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "postgresql" },
+      "targets": [
+        {
+          "format": "table",
+          "rawQuery": true,
+          "rawSql": "SELECT detection_time, patient_id, patient_confirmed, needs_help, confidence, model_version, observation_id FROM inference_log WHERE fall_detected = true AND $__timeFilter(detection_time) AND patient_id LIKE '$patient_id' ORDER BY detection_time DESC LIMIT 100",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "sortBy": [{ "displayName": "detection_time", "desc": true }],
+        "footer": { "show": false }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "left",
+            "displayMode": "auto",
+            "filterable": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "patient_confirmed" },
+            "properties": [
+              {
+                "id": "custom.displayMode",
+                "value": "color-background"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  { "type": "value", "options": { "yes":          { "text": "Confirmed",    "color": "red"    } } },
+                  { "type": "value", "options": { "no":           { "text": "Denied",       "color": "green"  } } },
+                  { "type": "value", "options": { "not_answered": { "text": "No Response",  "color": "orange" } } }
+                ]
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "confidence" },
+            "properties": [
+              { "id": "unit", "value": "percentunit" },
+              {
+                "id": "custom.displayMode",
+                "value": "gradient-gauge"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    { "color": "green", "value": null },
+                    { "color": "orange","value": 0.5 },
+                    { "color": "red",   "value": 0.75 }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "needs_help" },
+            "properties": [
+              {
+                "id": "mappings",
+                "value": [
+                  { "type": "value", "options": { "true":  { "text": "YES", "color": "red"   } } },
+                  { "type": "value", "options": { "false": { "text": "no",  "color": "green" } } }
+                ]
+              },
+              { "id": "custom.displayMode", "value": "color-background" }
+            ]
+          },
+          {
+            "matcher": { "id": "byName", "options": "observation_id" },
+            "properties": [
+              { "id": "custom.width", "value": 300 }
+            ]
+          }
+        ]
+      }
+    },
+
+    {
+      "id": 9,
+      "title": "Confidence Drift — Avg per Hour",
+      "description": "Average model confidence bucketed by hour. A sustained shift in the average is a drift signal — worth a retraining review. Needs days of data to show a real trend.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 14, "x": 0, "y": 22 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "postgresql" },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_trunc('hour', detection_time) AS time, AVG(confidence) AS avg_confidence, COUNT(*) AS n FROM inference_log WHERE $__timeFilter(detection_time) AND patient_id LIKE '$patient_id' GROUP BY 1 ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "none" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "lineWidth": 2,
+            "pointSize": 5,
+            "drawStyle": "line",
+            "showPoints": "always",
+            "spanNulls": true
+          }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "n" },
+            "properties": [
+              { "id": "custom.axisPlacement", "value": "hidden" },
+              { "id": "custom.lineWidth", "value": 0 }
+            ]
+          }
+        ]
+      }
+    },
+
+    {
+      "id": 10,
+      "title": "Confidence Drift — Avg by Model Version",
+      "description": "Average confidence per model_version per hour. When a new model is deployed, a step change here flags that the new version scores differently — a deployment-drift signal. Single version until v1 ships.",
+      "type": "timeseries",
+      "gridPos": { "h": 8, "w": 10, "x": 14, "y": 22 },
+      "datasource": { "type": "grafana-postgresql-datasource", "uid": "postgresql" },
+      "targets": [
+        {
+          "format": "time_series",
+          "rawQuery": true,
+          "rawSql": "SELECT date_trunc('hour', detection_time) AS time, model_version AS metric, AVG(confidence) AS avg_confidence FROM inference_log WHERE $__timeFilter(detection_time) AND patient_id LIKE '$patient_id' GROUP BY 1, 2 ORDER BY 1",
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "tooltip": { "mode": "multi", "sort": "none" },
+        "legend": { "displayMode": "list", "placement": "bottom" }
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "max": 1,
+          "custom": {
+            "lineWidth": 2,
+            "pointSize": 5,
+            "drawStyle": "line",
+            "showPoints": "always",
+            "spanNulls": true
+          }
+        }
+      }
+    }
+
+  ]
+}

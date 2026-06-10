@@ -1,0 +1,88 @@
+The system is composed of three layers in a big picture
+ 1. Patinet layer (end-user interface)                    = mobile app working in FOCUS network
+ 2. Caregiver layer (backend + frontend)                  = server in FOCUS network
+ 3. Inference & Post-training layer (backend + frontend)  = server in MCS network
+
+Subcompoenents in each layer is hosted either in 
+ (F1):k3s services already running in FOCUS network 
+ (F2):k3s services that will be added in FOCUS network 
+ (F3):Other services that will be added in FOCUS network 
+ (M): MCS network deployed in docker
+
+
+1. Patient layer
+-----------------------------------------------------------------------------------------------
+- SmarKo                      (F3)        collecting physiological data and sends to mobile app
+- mobile app                  (F3)        transmits the collected data to influxDB 
+                                          directly POST request to inference API to detect a fall
+                                          displays fall confirmation popup and alert caregiver if confirmed & injects the marker into influxDB 
+- MQTT client A               (F3)        publishes fall event to caregiver webapp server as soon as fall is detected
+
+2. Caregiver layer
+-----------------------------------------------------------------------------------------------
+BACKEND
+  - influxDB                  (F1)        stores physiological infomration of patients + fall timestamp per user ID
+  - caregiver webapp server   (F1)        backend component for caregiver web app 
+  - data table A              (F2)        stored patient session infomration (stored in SQLite, not postgres)
+  - MQTT broker               (F2)        infrastructure for MQTT protocol 
+  - MQTT client B             (F2)        event subscriber and expose the event to web app server 
+FRONTEND
+  - patinet dashboard         (F1)        displays registered patients and their personal information (gender, BMI etc.) and health monitoring status (HR, SpO2 etc.)
+  - fall dashboard            (F2)        displays all the falls, can be filited by period, patient, whether help requetsed or not 
+                                          for real time use, all detected fall will be indicated followed by patient confirmation  
+
+3. Inference & Post-training layer
+-----------------------------------------------------------------------------------------------
+BACKEND
+  - infrence server           (M)         API server for fall detection, talks to mobile app via HTTPs
+  - postgres table B          (M)         stores inference_log  
+  - postgres table C          (M)         stores snapshot of features 
+  - minIO                     (M)         stores model artifacts (old models) and its path
+  - mlflow                    (M)         manages ml model lifecycle 
+  - grafana                   (M)         monitoring server for ml health performance
+  - promotheus                (M)         scrapes all the health data of ml inference server and model drift
+  - post-trning webapp server (M)         backend component for caregiver web app 
+FRONTEND
+  - ml dashbord               (M)         frontend for admin user to retrain models and hot-swap 
+  - server health dashbaord   (M)         monitoring server performance
+  - grafana dashboard         (M)         monitoring ml model performance
+
+
+================================================================================================
+
+Fall Detection System Sequence 
+  1. SmarKo wearable collects data from patient (local processing, inside the machine)
+  2. Mobile app receives the collcted data via Bluetooth (no network, Bluetooth)
+  3. Mobile app compiles ACC data for 9 seconds time window and sends POST request to inference server via HTTPs (over Internet, with TLS )
+  4. Inference server receives the request, processes it and sends back the result to Mobile app (over Internet, with TLS )
+  5. Mobile app receives the result (suppose it was a fall)
+    5-1. Mobile app injects timestamps into InfluxDB (internal network)
+    5.2. MQTT client inside mobile app sends the fall event & patient ID to MQTT broker (hosted in FOCUS)
+    5-3. MQTT broker passes on the messase to caregiver dashboard
+    5-4. Caregiver dashbaord displays the alert "possible fall, wait for confirmation"
+  6. Mobile app shows a pop-up messgae to patient, asking "strong impact detected, did you fall?", "do you need a help?"
+    6-1. If patient answers yes to both questions --> mobile app sends out rescue message via MQTT client
+    6-2. If patient answers yes to fall but does not request for a help --> mobile app does not send rescue message 
+    6-3. If patient does not answer to either questions within 10 seconds --> mobile app sends out rescue message via MQTT client   
+  7. Caregiver dashbaord displays the rescue message "fall confirmed patientID XXXX" 
+
+
+
+Fall-history Dashboard Sequence
+ 1. Caregiver user opens the fall-history tab of caregiver dashbaord
+ 2. Caregiver user selects a patient
+ 3. Caregiver webapp server fetches the fall data of the selected patient 
+    3-1. dashbaord shows the count of falls (confirmed/uncofirmed) and help requetsed
+
+
+
+Retraining Sequence
+  1. Inference server receives the request from Mobile app
+  2. Postgres writer saves inference data 
+    2-1. inference_log table saves inference ID, inference result, confidence level, fall_confirmed, help_requested, etc.
+    2-2. fall_history table saves patient_ID, inference ID, inference result, confidence level etc.  --> this should be eliminated 
+    2-3. feature_snapshot table saves the recerived dataset (450 datapoints of ACC X, Y, and Z only )
+    2-4. participant_session
+  3. python script to retrain the model is triggered by technical user (MCS) from ml dashbaord 
+  4. model can be re/back-loaded based on the training results
+  

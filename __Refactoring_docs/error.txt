@@ -1,0 +1,31 @@
+PS C:\Users\HayateSato\Documents\FallDetection_new\_6G_integration_v3_k3s> docker logs -f fall_server_health
+INFO:     Started server process [1]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8006 (Press CTRL+C to quit)
+2026-06-09 14:50:05,291 [INFO] httpx — HTTP Request: GET http://minio:9000/minio/health/live "HTTP/1.1 200 OK"
+2026-06-09 14:50:05,293 [INFO] httpx — HTTP Request: GET http://inference-server:8001/health "HTTP/1.1 200 OK"
+2026-06-09 14:50:05,297 [INFO] httpx — HTTP Request: GET http://mlflow:5000/health "HTTP/1.1 200 OK"
+================================================================
+  server_health — admin status dashboard
+  Web UI:  http://localhost:8006/
+
+  WARNING: auth not yet enforced — local / cluster-internal use only.
+================================================================
+INFO:     172.18.0.1:38844 - "GET / HTTP/1.1" 200 OK
+INFO:     172.18.0.1:38844 - "GET /style.css HTTP/1.1" 200 OK
+INFO:     172.18.0.1:38844 - "GET /app.js HTTP/1.1" 200 OK
+2026-06-09 14:50:07,354 [INFO] httpx — HTTP Request: GET http://inference-server:8001/health "HTTP/1.1 200 OK"
+2026-06-09 14:50:07,355 [INFO] httpx — HTTP Request: GET http://minio:9000/minio/health/live "HTTP/1.1 200 OK"
+2026-06-09 14:50:07,356 [INFO] httpx — HTTP Request: GET http://mlflow:5000/health "HTTP/1.1 200 OK"
+INFO:     172.18.0.1:38860 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     172.18.0.1:38844 - "GET /api/status HTTP/1.1" 200 OK
+2026-06-09 14:50:37,358 [INFO] httpx — HTTP Request: GET http://minio:9000/minio/health/live "HTTP/1.1 200 OK"
+2026-06-09 14:50:37,359 [INFO] httpx — HTTP Request: GET http://inference-server:8001/health "HTTP/1.1 200 OK"
+2026-06-09 14:50:37,361 [INFO] httpx — HTTP Request: GET http://mlflow:5000/health "HTTP/1.1 200 OK"
+INFO:     172.18.0.1:38868 - "GET /api/status HTTP/1.1" 200 OK
+2026-06-09 14:51:07,966 [INFO] httpx — HTTP Request: GET http://minio:9000/minio/health/live "HTTP/1.1 200 OK"
+2026-06-09 14:51:07,968 [INFO] httpx — HTTP Request: GET http://inference-server:8001/health "HTTP/1.1 200 OK"
+2026-06-09 14:51:08,053 [INFO] httpx — HTTP Request: GET http://mlflow:5000/health "HTTP/1.1 200 OK"
+INFO:     172.18.0.1:60954 - "GET /api/status HTTP/1.1" 200 OK
+2026-06-09 14:51:37,664 [INFO] httpx — HTTP Request: GET http://inference-server:8001/health "HTTP/1.1 200 OK"

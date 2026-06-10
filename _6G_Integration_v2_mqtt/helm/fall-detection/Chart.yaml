@@ -1,6 +1,0 @@
-apiVersion: v2
-name: fall-detection
-description: Fall Detection — 6G / FOCUS Charite Integration
-type: application
-version: 0.1.0
-appVersion: "1.0.0"
