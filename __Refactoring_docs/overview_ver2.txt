@@ -4,18 +4,19 @@ The system is composed of three layers in a big picture
  3. Inference & Post-training layer (backend + frontend)  = server in MCS network
 
 Subcompoenents in each layer is hosted either in 
- (F1):Services already running in FOCUS network 
- (F2):Services that will be added in FOCUS network 
- (M): MCS network
+ (F1):k3s services already running in FOCUS network 
+ (F2):k3s services that will be added in FOCUS network 
+ (F3):Other services that will be added in FOCUS network 
+ (M): MCS network deployed in docker
 
 
 1. Patient layer
 -----------------------------------------------------------------------------------------------
-- SmarKo                      (F1)        collecting physiological data and sends to mobile app
-- mobile app                  (F2)        transmits the collected data to influxDB 
+- SmarKo                      (F3)        collecting physiological data and sends to mobile app
+- mobile app                  (F3)        transmits the collected data to influxDB 
                                           directly POST request to inference API to detect a fall
                                           displays fall confirmation popup and alert caregiver if confirmed & injects the marker into influxDB 
-- MQTT client A               (F2)        publishes fall event to caregiver webapp server as soon as fall is detected
+- MQTT client A               (F3)        publishes fall event to caregiver webapp server as soon as fall is detected
 
 2. Caregiver layer
 -----------------------------------------------------------------------------------------------
@@ -34,9 +35,8 @@ FRONTEND
 -----------------------------------------------------------------------------------------------
 BACKEND
   - infrence server           (M)         API server for fall detection, talks to mobile app via HTTPs
-  - postgres table B          (M)         stores inference api server log
-  - postgres table C          (M)         stores input data used during inference
-  - postgres table D          (M)         stores retained model information 
+  - postgres table B          (M)         stores inference_log  
+  - postgres table C          (M)         stores snapshot of features 
   - minIO                     (M)         stores model artifacts (old models) and its path
   - mlflow                    (M)         manages ml model lifecycle 
   - grafana                   (M)         monitoring server for ml health performance

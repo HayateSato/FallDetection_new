@@ -1,0 +1,4 @@
+ Isa needs to update the mobile app on the following
+  - App needs to write the timestamps of predicted fall, confirmed fall, and requested help
+  - Feedback time of patient for their fall/help is 10 seconds for each question, not for both questions
+  - App needs to publish the event as soon as a fall is predicted (not just after confirmation is made from patients) 

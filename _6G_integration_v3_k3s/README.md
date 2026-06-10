@@ -91,5 +91,6 @@ Run from this directory as working directory:
 
 ## Related
 
-- `_6G_Integration_v2_mqtt/` — full development repo (inference layer, Docker Compose, local dev tools)
-- `_6G_Integration_v2_mqtt/__Refactoring_docs/k3s_flow_diagram.md` — architecture flow diagram
+- [`_6G_integration_v3_docker_mcs/`](../_6G_integration_v3_docker_mcs/) — MCS inference layer (Docker Compose, deploy to Hetzner)
+- [`_6G_integration_v3_docker_focus/`](../_6G_integration_v3_docker_focus/) — Docker Compose version of this caregiver layer (two-laptop local testing)
+- [`FOCUS_devs_handover/production_config_checklist.md`](../FOCUS_devs_handover/production_config_checklist.md) — full config table for both layers

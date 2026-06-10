@@ -224,6 +224,7 @@ REFACTOR_DOCUS/
 _concept_6G_integration/
 Claude_memory/
 about/
+__Refactoring_docs/
 
 # MLflow local experiment store (reproducible — regenerate with retrain.py)
 mlruns/

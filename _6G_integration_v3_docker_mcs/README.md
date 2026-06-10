@@ -21,7 +21,7 @@ server-health probes that machine over the LAN — set `FALL_DASHBOARD_URL` and
 | server-health | 8006 | Aggregate health probe dashboard (internal) |
 | postgres (mcs_fall_postgres) | 5432 | inference_log + feature_snapshot + MLflow tracking DB |
 | mlflow | 5000 | ML experiment tracking + model registry (internal) |
-| minio | 9000 | Model artifact store — S3-compatible (internal) |
+| minio | 9000 (S3 API) / 9002 (console) | Model artifact store — S3-compatible (internal) |
 | prometheus | 9090 | Metrics scraping (internal) |
 | grafana | 3000 | ML dashboards (internal) |
 | db-migrate | — | One-off: runs Alembic migrations (0001-0005), then exits |

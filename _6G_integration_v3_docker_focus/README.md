@@ -1,7 +1,7 @@
 # Fall Detection — FOCUS Caregiver Layer (Docker)
 
-Simulates the services that FOCUS hosts in their own network:
-MQTT broker, fall-dashboard (MQTT subscriber + caregiver API), and the mock mobile app.
+Simulates the services that FOCUS needs to host additionally in their own network:
+MQTT broker and fall-dashboard (MQTT subscriber + caregiver API).
 
 Run this on the **second Windows laptop** when testing cross-machine communication.
 
@@ -12,13 +12,33 @@ Fall history and fall counts are read from InfluxDB (external, not hosted here).
 
 | Service | Port | Purpose |
 |---------|------|---------|
-| mock-app | 8005 | Simulates the SmarKo mobile app — patient popup at http://localhost:8005/ |
-| mqtt | 1883 | MQTT broker — receives fall alerts from mock-app |
+| mock-app | 8005 | Simulates the SmarKo mobile app — patient popup at http://localhost:8005/ (DO NOT RUN when testing with the real mobile device) |
+| mqtt | 1883 (internal Docker only) / **9001** (host, WebSocket) | MQTT broker. mock-app and fall-dashboard reach it via Docker DNS on TCP :1883. Real mobile app (Isa) connects from outside via WebSocket on host port **9001**. |
 | fall-dashboard | 8002 | SSE feed + /api/falls + /api/patients |
 
 InfluxDB is **not hosted here** — both mock-app and fall-dashboard connect to an external instance:
 - **Local testing:** MCS cloud InfluxDB (`ecosystem-influxdb.smarko-health.de`, `fd_test` bucket)
 - **Production:** FOCUS's own InfluxDB in their k3s cluster
+
+## Structure
+
+```
+_6G_integration_v3_docker_focus/
+  docker-compose.yml        <- start here
+  .env.example              <- copy to .env and fill in
+  fall_dashboard/           FastAPI :8002 — MQTT subscriber + SSE + patient store
+    Dockerfile
+    main.py                 Entry point + MQTT callback
+    web.py                  Routes: /api/stream (SSE), /api/patients (CRUD), /api/falls
+    db.py                   InfluxDB queries (fall history + fall counts)
+    mqtt_listener.py        FallEventBroker — paho -> asyncio SSE bridge
+    patient_store.py        SQLite patient store
+    dashboard/              Static UI (index.html, app.js, style.css)
+  mock_app/                 Simulates the SmarKo mobile app — patient popup at :8005
+  mosquitto/                Mosquitto config (two listeners: 1883 TCP + 9001 WS)
+```
+
+---
 
 ## Two-laptop test setup
 
@@ -27,11 +47,11 @@ Laptop 1 (MCS)                          Laptop 2 (FOCUS mock / this machine)
 ──────────────────────────────────       ────────────────────────────────────────
 inference_posttraining_layer/            _6G_integration_v3_docker_focus/
   inference-server  :8001                  mock-app       :8005
-  ml-dashboard      :8004                  mqtt           :1883
-  server-health     :8006                  fall-dashboard :8002
-  postgres          :5432
+  ml-dashboard      :8004                  mqtt           :1883 (Docker-internal TCP)
+  server-health     :8006                               / :9001 (host NIC, WS for real mobile app)
+  postgres          :5432                  fall-dashboard :8002
   mlflow            :5000
-  minio             :9000                      MCS cloud InfluxDB (internet)
+  minio             :9000/9002                 MCS cloud InfluxDB (internet)
   prometheus        :9090                        fd_test bucket
   grafana           :3000
 ```
@@ -61,16 +81,16 @@ ipconfig | Select-String "IPv4"
 ### 2. Configure .env
 
 ```powershell
-cd C:\...\FallDetection_new\_6G_Integration_v2_mqtt
-copy caregiver_layer\.env.example caregiver_layer\.env
+cd _6G_integration_v3_docker_focus
+copy .env.example .env
 ```
 
-Open `caregiver_layer\.env` and set:
+Open `.env` and set:
 
 ```ini
 # Point to Laptop 1 (MCS) IP
 INFERENCE_SERVER_URL=http://192.168.1.XX:8001
-INFERENCE_API_KEY=<same key as in inference_posttraining_layer/.env>
+INFERENCE_API_KEY=<same key as in _6G_integration_v3_docker_mcs/.env>
 ```
 
 Everything else (InfluxDB, MQTT, patient IDs) has working defaults for local testing.
@@ -94,7 +114,7 @@ curl.exe http://localhost:8002/api/falls       # fall history from InfluxDB
 
 ## Configure Laptop 1 (MCS) to point to this machine
 
-On the MCS laptop, in `inference_posttraining_layer/.env` set:
+On the MCS laptop, in `_6G_integration_v3_docker_mcs/.env` set:
 
 ```ini
 # URL for server-health to probe fall-dashboard on Laptop 2
@@ -104,7 +124,7 @@ FALL_DASHBOARD_URL=http://192.168.1.50:8002
 Then restart server-health:
 
 ```powershell
-docker compose -f inference_posttraining_layer/docker-compose.yml restart server-health
+docker compose restart server-health
 ```
 
 ## Expected end-to-end flow
