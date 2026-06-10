@@ -34,10 +34,10 @@ _6G_integration_v3_k3s/
 │   ├── Chart.yaml
 │   ├── values.yaml                        local two-laptop testing values (NodePorts, local image)
 │   ├── values_production.yaml             production values template — fill in all CHANGE_ME fields
-│   ├── build.ps1                          build + push fall-dashboard image to registry (MCS runs this)
-│   ├── install.ps1                        helm upgrade --install wrapper
-│   ├── test.ps1                           7-probe smoke test (run after install)
-│   ├── teardown.ps1                       helm uninstall + delete namespace
+│   ├── build.ps1 / build.sh               build + push fall-dashboard image to registry (MCS runs this)
+│   ├── install.ps1 / install.sh           helm upgrade --install wrapper
+│   ├── test.ps1 / test.sh                 7-probe smoke test (run after install)
+│   ├── teardown.ps1 / teardown.sh         helm uninstall + delete namespace
 │   ├── README.md                          helm-level deployment notes
 │   ├── extras/
 │   │   └── traefik-mqtts-entrypoint.yaml  DEPRECATED — do not apply
@@ -64,9 +64,6 @@ _6G_integration_v3_k3s/
 ### 1. One-time cluster setup (FOCUS DevOps, done once)
 
 ```powershell
-# Add MQTT port 8883 to Traefik
-kubectl apply -f helm/extras/traefik-mqtts-entrypoint.yaml
-
 # Create namespace + registry pull secret
 kubectl create namespace fall-dashboard
 kubectl create secret docker-registry mcs-labs `
@@ -76,18 +73,18 @@ kubectl create secret docker-registry mcs-labs `
     --namespace fall-dashboard
 ```
 
-### 2. Fill in values.yaml
+### 2. Fill in values_production.yaml
 
-Open [helm/values.yaml](helm/values.yaml) and replace every `CHANGE_ME`.
+Open [helm/values_production.yaml](helm/values_production.yaml) and replace every `CHANGE_ME`.
 
 ### 3. Build image and deploy
 
 Run from this directory as working directory:
 
-```powershell
-.\helm\caregiver\build.ps1      # build + push fall-dashboard image
-.\helm\caregiver\install.ps1    # helm upgrade --install
-.\helm\caregiver\test.ps1       # smoke test (expected: 7/7 PASS)
+```bash
+bash helm/build.sh      # build + push fall-dashboard image
+bash helm/install.sh    # helm upgrade --install
+bash helm/test.sh       # smoke test (expected: 7/7 PASS)
 ```
 
 ---
@@ -96,10 +93,10 @@ Run from this directory as working directory:
 
 | Client | Protocol | Address |
 |---|---|---|
-| Mobile app (Isa) | MQTTS | `mqtts://<FOCUS-server-IP>:8883` |
-| Flutter dashboard | HTTPS | `https://<ingress.host>/api/stream` |
+| Mobile app (Isa) | MQTT over WSS | `wss://mqtt.<FOCUS-domain>` (port 443) |
+| Flutter dashboard | HTTPS | `https://fall.<FOCUS-domain>/api/stream` |
 | fall-dashboard -> mosquitto | MQTT (internal) | `mosquitto:1883` |
-| fall-dashboard -> InfluxDB | HTTPS | `https://influxdb.xxx.e-healthservice.de` |
+| fall-dashboard -> InfluxDB | HTTPS | configured via `INFLUXDB_URL` in values |
 
 ## MQTT topics
 
