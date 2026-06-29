@@ -240,6 +240,17 @@ class PredictRequest(BaseModel):
         description="Timestamps for each ACC sample in milliseconds (Unix epoch ms).",
     )
 
+    # ── Optional per-request sampling rate override ────────────────────────
+    hardware_sample_rate: Optional[int] = Field(
+        None,
+        description=(
+            f"Hardware ACC sample rate in Hz for this request. "
+            f"Overrides the server default ({HARDWARE_ACC_SAMPLE_RATE} Hz from .env). "
+            "Useful when different mobile devices record at different rates."
+        ),
+        example=25,
+    )
+
     # ── Barometer (required for v3 model, ignored for v0) ──────────────────
     pressure: Optional[List[float]] = Field(
         None,
@@ -436,14 +447,15 @@ async def predict(req: PredictRequest, background_tasks: BackgroundTasks):
         acc_time = np.array(req.timestamps_ms)
 
         # 2. Resample hardware rate → 50 Hz
-        if HARDWARE_ACC_SAMPLE_RATE != ACC_SAMPLE_RATE:
+        source_rate = req.hardware_sample_rate or HARDWARE_ACC_SAMPLE_RATE
+        if source_rate != ACC_SAMPLE_RATE:
             resampler = AccelerometerResampler(
-                source_rate=HARDWARE_ACC_SAMPLE_RATE,
+                source_rate=source_rate,
                 target_rate=ACC_SAMPLE_RATE,
                 method=RESAMPLING_METHOD,
             )
             acc_data, acc_time = resampler.process(acc_data, acc_time)
-            logger.info(f"  Resampled {HARDWARE_ACC_SAMPLE_RATE}Hz → {ACC_SAMPLE_RATE}Hz "
+            logger.info(f"  Resampled {source_rate}Hz → {ACC_SAMPLE_RATE}Hz "
                         f"({acc_data.shape[1]} samples)")
 
         # 3. LSB → g  (skip for models that expect raw LSB)
