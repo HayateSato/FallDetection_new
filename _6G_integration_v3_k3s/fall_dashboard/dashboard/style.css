@@ -96,6 +96,28 @@ header {
   padding: 0.35rem 1rem;
   letter-spacing: 0.01em;
 }
+.confirmed-notice {
+  background: #dc2626;
+  color: white;
+}
+.patient-card.is-confirmed {
+  border-color: #dc2626;
+}
+.patient-card.is-confirmed .patient-display-name,
+.patient-card.is-confirmed .patient-meta,
+.patient-card.is-confirmed .patient-card-hint {
+  display: none;
+}
+.help-overlay {
+  margin: 0.75rem -1rem -1rem -1rem;
+  padding: 1.5rem 1rem;
+  background: #fef2f2;
+  color: #dc2626;
+  font-size: 1.1rem;
+  font-weight: 700;
+  text-align: center;
+  letter-spacing: 0.02em;
+}
 .patient-name { font-weight: 600; color: #111827; margin-bottom: 0.25rem; }
 .patient-display-name { font-size: 0.85rem; color: #6b7280; margin-bottom: 0.4rem; }
 .patient-meta { display: flex; gap: 0.4rem; flex-wrap: wrap; }

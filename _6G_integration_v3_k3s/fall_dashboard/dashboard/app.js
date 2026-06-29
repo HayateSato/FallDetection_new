@@ -12,6 +12,9 @@ let eventSource = null;
 // observation_id -> patient_id for in-flight possible-fall notices
 const pendingAlerts = new Map();
 
+// patient_ids that have received a confirmed fall + help-needed alert
+const confirmedPatients = new Set();
+
 // ---------------------------------------------------------------------------
 // Patients tab
 // ---------------------------------------------------------------------------
@@ -41,6 +44,7 @@ async function loadPatients() {
     document.getElementById('stat-patients').textContent = data.patients.length;
     updateFallsToday(data.patients);
     reapplyPendingNotices();
+    reapplyConfirmedNotices();
   } catch (e) {
     list.innerHTML = `<p class="error">Failed to load patients: ${e.message}</p>`;
   }
@@ -71,7 +75,7 @@ async function openPatient(patientId) {
   document.getElementById('detail-help').textContent = '—';
 
   try {
-    const params = new URLSearchParams({ patient_id: patientId, only_falls: 'false', hours: '24', limit: '500' });
+    const params = new URLSearchParams({ patient_id: patientId, only_falls: 'true', hours: '24', limit: '500' });
     const resp = await fetch(`${API.falls}?${params}`);
     const data = await resp.json();
     const rows = data.falls || [];
@@ -86,7 +90,7 @@ async function openPatient(patientId) {
 
     if (rows.length === 0) {
       document.getElementById('detail-tbody').innerHTML =
-        '<tr><td colspan="4" class="empty">No fall events in the last 24 hours.</td></tr>';
+        '<tr><td colspan="3" class="empty">No fall events in the last 24 hours.</td></tr>';
       return;
     }
 
@@ -95,12 +99,11 @@ async function openPatient(patientId) {
         <td>${formatTime(r.detection_time)}</td>
         <td>${formatConfirmed(r.patient_confirmed)}</td>
         <td>${r.needs_help === true ? '<span class="tag tag-yes">Yes</span>' : '<span class="tag tag-no">No</span>'}</td>
-        <td>${r.confidence != null ? (r.confidence * 100).toFixed(0) + '%' : '—'}</td>
       </tr>
     `).join('');
   } catch (e) {
     document.getElementById('detail-tbody').innerHTML =
-      `<tr><td colspan="4" class="error">Failed to load: ${e.message}</td></tr>`;
+      `<tr><td colspan="3" class="error">Failed to load: ${e.message}</td></tr>`;
   }
 }
 
@@ -151,8 +154,10 @@ function handleFallEvent(event) {
     return;
   }
 
-  // Confirmed event: card stays pale red until caregiver clicks it open.
-  // Reload patients so the fall count in the header stat updates.
+  // Confirmed event: escalate card if patient asked for help.
+  if (event.needs_help === true) {
+    markPatientConfirmed(event.patient_id);
+  }
   if (!inDetailView) loadPatients();
 }
 
@@ -173,12 +178,48 @@ function markPatientPending(patientId) {
   card.classList.add('is-pending');
 }
 
+function markPatientConfirmed(patientId) {
+  // Remove from pending — confirmed supersedes possible-fall state
+  for (const [obsId, pid] of pendingAlerts) {
+    if (pid === patientId) pendingAlerts.delete(obsId);
+  }
+  confirmedPatients.add(patientId);
+
+  const card = document.querySelector(`.patient-card[data-patient-id="${CSS.escape(patientId)}"]`);
+  if (!card) return;
+
+  // Update banner text (reuse existing notice element if present)
+  let notice = card.querySelector('.pending-notice');
+  if (notice) {
+    notice.textContent = 'Fall is confirmed';
+    notice.classList.add('confirmed-notice');
+  } else {
+    notice = document.createElement('div');
+    notice.className = 'pending-notice confirmed-notice';
+    notice.textContent = 'Fall is confirmed';
+    card.insertBefore(notice, card.firstChild);
+  }
+
+  // Add the big help message below the patient name if not already present
+  if (!card.querySelector('.help-overlay')) {
+    const overlay = document.createElement('div');
+    overlay.className = 'help-overlay';
+    overlay.textContent = 'Help is requested';
+    card.appendChild(overlay);
+  }
+
+  card.classList.add('is-pending', 'is-confirmed');
+}
+
 function clearPatientPending(patientId) {
+  confirmedPatients.delete(patientId);
   const card = document.querySelector(`.patient-card[data-patient-id="${CSS.escape(patientId)}"]`);
   if (!card) return;
   const notice = card.querySelector('.pending-notice');
   if (notice) notice.remove();
-  card.classList.remove('is-pending');
+  const overlay = card.querySelector('.help-overlay');
+  if (overlay) overlay.remove();
+  card.classList.remove('is-pending', 'is-confirmed');
 }
 
 function reapplyPendingNotices() {
@@ -189,6 +230,10 @@ function reapplyPendingNotices() {
       markPatientPending(patientId);
     }
   });
+}
+
+function reapplyConfirmedNotices() {
+  confirmedPatients.forEach((patientId) => markPatientConfirmed(patientId));
 }
 
 // ---------------------------------------------------------------------------
