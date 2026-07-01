@@ -51,7 +51,7 @@ async function loadPatients() {
 }
 
 function updateFallsToday(patients) {
-  const total = patients.reduce((sum, p) => sum + (p.fall_count || 0), 0);
+  const total = patients.reduce((sum, p) => sum + (p.fall_count_today || 0), 0);
   document.getElementById('stat-falls-today').textContent = total;
 }
 

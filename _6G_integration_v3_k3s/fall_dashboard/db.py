@@ -51,19 +51,20 @@ def _get_influxdb_client() -> InfluxDBClient:
 # Read helpers
 # ---------------------------------------------------------------------------
 
-def _get_fall_counts() -> dict:
-    """Return {patient_id: fall_count} from InfluxDB. Returns {} on any error.
+def _get_fall_counts(hours: int = 720) -> dict:
+    """Return {patient_id: fall_count} from InfluxDB for the given time window.
 
-    Counts distinct observation_ids so that duplicate writes for the same fall
-    event (e.g. simulate-fall button reusing a fixed obs id, or the same
-    prediction triggering the popup twice) are not double-counted.
+    Counts distinct observation_ids to avoid double-counting duplicate writes
+    (e.g. simulate-fall button reusing a fixed obs id).
+    Default window is 720h (30 days) — used for per-card badges.
+    Pass hours=24 for the "Falls today" header stat.
     """
     bucket = _FALL_EVENTS_BUCKET
     if not bucket:
         return {}
     try:
         query = f'''from(bucket: "{bucket}")
-  |> range(start: -30d)
+  |> range(start: -{hours}h)
   |> filter(fn: (r) => r["_measurement"] == "fall_events")
   |> filter(fn: (r) => r["_field"] == "observation_id")
   |> filter(fn: (r) => r["_value"] != "simulated-fall")
@@ -92,10 +93,12 @@ def list_patients() -> List[dict]:
     caching), so patients added via sync_from_env() on container recreate show
     up immediately.
     """
-    fall_counts = _get_fall_counts()
+    fall_counts_30d = _get_fall_counts(hours=720)
+    fall_counts_today = _get_fall_counts(hours=24)
     patients = patient_store.list_patients()
     for p in patients:
-        p["fall_count"] = fall_counts.get(p["patient_id"], 0)
+        p["fall_count"] = fall_counts_30d.get(p["patient_id"], 0)
+        p["fall_count_today"] = fall_counts_today.get(p["patient_id"], 0)
     return patients
 
 
