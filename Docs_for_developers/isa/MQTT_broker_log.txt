@@ -1,0 +1,56 @@
+------------------ MQTT Broker   http://5.75.255.114/  oder wss://fall-mqtt.smarko-health.de on Hetzner2 ----------
+
+
+1782306610: New connection from 10.42.0.1:33704 on port 1883.
+1782306610: Client 10.42.0.1 [10.42.0.1:33704] disconnected: connection closed by client.
+1782306612: New connection from 10.42.0.1:33708 on port 1883.
+1782306612: Client 10.42.0.1 [10.42.0.1:33708] disconnected: connection closed by client.
+1782306622: New connection from 10.42.0.1:59886 on port 1883.
+1782306622: Client 10.42.0.1 [10.42.0.1:59886] disconnected: connection closed by client.
+1782306624: Received PINGREQ from rn-falldet-jzdwjf44
+1782306624: Sending PINGRESP to rn-falldet-jzdwjf44
+1782306625: Received PUBLISH from rn-falldet-jzdwjf44 (d0, q1, r0, m1, 'fall/possible/test-patient-111', ... (125 bytes))
+1782306625: Sending PUBLISH to fall-detection-caregiver (d0, q0, r0, m0, 'fall/possible/test-patient-111', ... (125 bytes))
+1782306625: Sending PUBLISH to auto-9FCF4971-770E-3A78-3C6E-9FE3BF19AF5B (d0, q0, r0, m0, 'fall/possible/test-patient-111', ... (125 bytes))
+1782306625: Sending PUBACK to rn-falldet-jzdwjf44 (m1, rc0)
+1782306632: New connection from 10.42.0.1:46338 on port 1883.
+1782306632: Client 10.42.0.1 [10.42.0.1:46338] disconnected: connection closed by client.
+1782306635: Received PUBLISH from rn-falldet-jzdwjf44 (d0, q1, r0, m1, 'fall/alert/test-patient-111', ... (246 bytes))
+1782306635: Sending PUBLISH to fall-detection-caregiver (d0, q0, r0, m0, 'fall/alert/test-patient-111', ... (246 bytes))
+1782306635: Sending PUBLISH to auto-9FCF4971-770E-3A78-3C6E-9FE3BF19AF5B (d0, q0, r0, m0, 'fall/alert/test-patient-111', ... (246 bytes))
+1782306635: Sending PUBACK to rn-falldet-jzdwjf44 (m1, rc0)
+
+
+------------------ Inference Server  167.233.76.59:9443/  oder https://fall-api.smarko-health.de/  on Hetzner1 ----------
+
+INFO:     127.0.0.1:50706 - "GET /health HTTP/1.1" 200 OK
+INFO:     172.18.0.6:34280 - "GET /metrics HTTP/1.1" 200 OK
+INFO:     172.18.0.6:60590 - "GET /metrics HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49052 - "GET /health HTTP/1.1" 200 OK
+INFO:     172.18.0.6:54090 - "GET /metrics HTTP/1.1" 200 OK
+
+INFO:     172.18.0.6:56934 - "GET /metrics HTTP/1.1" 200 OK
+
+INFO:     127.0.0.1:47998 - "GET /health HTTP/1.1" 200 OK
+
+INFO:     172.18.0.6:52350 - "GET /metrics HTTP/1.1" 200 OK
+
+2026-06-24 13:10:35,890 [INFO] Confirmation received  observation_id=simulated-fall  confirmed=yes  needs_help=True
+
+INFO:     172.19.0.3:53350 - "POST /inference/simulated-fall/confirm HTTP/1.1" 200 OK
+
+2026-06-24 13:10:35,893 [WARNING] Confirmation received for unknown observation_id=simulated-fall — inference_log row not yet written or ID is wrong
+
+INFO:     172.18.0.6:39904 - "GET /metrics HTTP/1.1" 200 OK
+
+INFO:     127.0.0.1:58706 - "GET /health HTTP/1.1" 200 OK
+
+INFO:     172.18.0.6:41902 - "GET /metrics HTTP/1.1" 200 OK
+
+INFO:     172.18.0.6:45900 - "GET /metrics HTTP/1.1" 200 OK
+
+INFO:     127.0.0.1:39722 - "GET /health HTTP/1.1" 200 OK
+
+INFO:     172.18.0.6:54884 - "GET /metrics HTTP/1.1" 200 OK
+
+INFO:     172.18.0.6:38336 - "GET /metrics HTTP/1.1" 200 OK

@@ -12,9 +12,9 @@ production system** — start with the table below to find your folder.
 
 | You are... | Read first | Then |
 |------------|-----------|------|
-| **Mohammed** — deploying MCS inference layer to Hetzner | [`mohammed/mohammed_handover.md`](mohammed/mohammed_handover.md) | [`_6G_integration_v3_docker_mcs/README.md`](_6G_integration_v3_docker_mcs/README.md) → [`FOCUS_devs_handover/production_config_checklist.md`](FOCUS_devs_handover/production_config_checklist.md) |
-| **Isa** — mobile-app developer (React Native) | [`isa/00_ISA_local_setup_quickstart.md`](isa/00_ISA_local_setup_quickstart.md) | [`isa/01_ISA_mobile_app_contract.md`](isa/01_ISA_mobile_app_contract.md) |
-| **FOCUS DevOps** — deploying caregiver layer to k3s | [`FOCUS_devs_handover/focus_devops_handover.md`](FOCUS_devs_handover/focus_devops_handover.md) | [`FOCUS_devs_handover/production_config_checklist.md`](FOCUS_devs_handover/production_config_checklist.md) → [`_6G_integration_v3_k3s/`](_6G_integration_v3_k3s/) Helm chart |
+| **Mohammed** — deploying MCS inference layer to Hetzner | [`Docs_for_developers/mohammed/mohammed_handover.md`](Docs_for_developers/mohammed/mohammed_handover.md) | [`_6G_integration_v3_docker_mcs/README.md`](_6G_integration_v3_docker_mcs/README.md) |
+| **Isa** — mobile-app developer (React Native) | [`Docs_for_developers/isa/00_ISA_local_setup_quickstart.md`](Docs_for_developers/isa/00_ISA_local_setup_quickstart.md) | [`Docs_for_developers/isa/01_ISA_mobile_app_contract.md`](Docs_for_developers/isa/01_ISA_mobile_app_contract.md) |
+| **FOCUS DevOps** — received delivery package | [`_6G_Focus/README.md`](_6G_Focus/README.md) | [`_6G_Focus/helm/values.yaml`](_6G_Focus/helm/values.yaml) — fill in 3 `CHANGE_ME` fields |
 | **New to project** — want the active production system | this README (sections below) | [`_6G_integration_v3_docker_mcs/README.md`](_6G_integration_v3_docker_mcs/README.md) |
 | Working on the legacy full-research stack | Not included in this repo | — |
 
@@ -27,12 +27,15 @@ This repository contains **multiple integration variants** across different fold
 | Folder / branch | Status | Event bus | Use |
 |-----------------|--------|:---------:|-----|
 | **`_6G_integration_v3_docker_mcs/`** | **Active — MCS inference layer** | MQTT | Docker Compose, 8 services, deploy to Hetzner |
-| **`_6G_integration_v3_k3s/`** | **Active — FOCUS caregiver layer** | MQTT | K3s Helm chart, 2 services, deploy to FOCUS cluster |
+| **`_6G_integration_v3_k3s/`** | **Active — FOCUS caregiver layer (source)** | MQTT | K3s Helm chart source — `helm/` is the authoritative chart |
+| **`_6G_Focus/`** | **Delivery package — shipped to FOCUS (2026-07-02)** | MQTT | Final handover zip for FOCUS DevOps: Helm chart + README + system overview + API reference. Branched from `_6G_integration_v3_k3s/helm/`. Do not edit unless re-shipping. |
 | `_6G_integration_v3_docker_focus/` | Backup / local test only | MQTT | Docker Compose version of the caregiver layer (two-laptop testing) |
 | `_6G_Integration_v2_mqtt/` | **Legacy — frozen** | MQTT | Previous version where FOCUS hosted all 10 services in k3s |
 | `_6G_Integration_v2_redis/` | **Legacy — frozen** | Redis | Older design before MQTT was introduced — do not run |
 | `_EcoSystem_Integration/` on `6G-integration` branch | **Legacy — frozen** | none | Stripped-down internal company integration, no Docker |
 | Repo root + `system_operator/ml_server/` | **Legacy — frozen** | Redis | Full research stack — not included in this repo |
+
+> **`Docs_for_developers/`** — developer-facing documentation and handover docs moved here: `FOCUS_devs_handover/`, `isa/`, `mohammed/`, `handover_docs/`, `handover_docs_2/`. Source files only — the delivery copy for FOCUS is in `_6G_Focus/`.
 
 > **v2 folders are frozen reference only.** Do not run `_6G_Integration_v2_mqtt/` or
 > `_6G_Integration_v2_redis/` — they reflect an older architecture where FOCUS hosted
@@ -75,7 +78,7 @@ Two separate stacks. Each is deployed independently by a different team.
 
 > Port 1883 (raw TCP) is cluster-internal only and is never reachable from outside.
 > All external MQTT connections (mobile app, local mock-app on a different machine) must use WebSocket
-> because React Native cannot open raw TCP sockets. See [`__Refactoring_docs/port_management.md`](__Refactoring_docs/port_management.md) for the full per-scenario port breakdown.
+> because React Native cannot open raw TCP sockets. See [`Docs_for_developers/`](Docs_for_developers/) for developer handover docs.
 
 ---
 

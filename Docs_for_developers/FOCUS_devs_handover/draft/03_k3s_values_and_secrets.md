@@ -1,0 +1,258 @@
+# K3s Values and Secrets
+
+**File to fill in:** `_6G_integration_v3_k3s/helm/values_production.yaml`
+Edit this file, then run `helm install` / `helm upgrade`.
+
+---
+
+## 1. Registry and image pull — REQUIRED
+
+| Key | Production value | Notes |
+|-----|-----------------|-------|
+| `imagePullSecret` | `mcs-labs` | Pull secret name for `registry-smarko-health.de`. Create with `kubectl create secret docker-registry mcs-labs ...` — get credentials from Mohammed. |
+| `fallDashboard.image` | `registry-smarko-health.de/fall-detection/fall-dashboard:latest` | Production image pushed by Mohammed |
+| `fallDashboard.imagePullPolicy` | `Always` | Always pull from registry in production |
+
+---
+
+## 2. NodePorts — blank both for production
+
+NodePorts were only needed for local two-laptop testing. Traefik handles all external access in production.
+
+| Key | Production value | Notes |
+|-----|-----------------|-------|
+| `mosquitto.wsNodePort` | `""` (blank) | Blank = ClusterIP only; Traefik IngressRoute handles external WSS |
+| `fallDashboard.httpNodePort` | `""` (blank) | Blank = ClusterIP only; Traefik IngressRoute handles external HTTPS |
+
+---
+
+## 3. Mosquitto ingress (Traefik) — REQUIRED
+
+| Key | Production value | Notes |
+|-----|-----------------|-------|
+| `mosquitto.ingress.host` | e.g. `mqtt.focus-hospital.de` | Domain the real mobile app connects to via WSS. Share this with Isa. |
+| `mosquitto.ingress.certResolver` | e.g. `le` | Traefik Let's Encrypt resolver name used in your cluster. Check your existing Traefik config for the resolver name. |
+
+---
+
+## 4. Fall-dashboard ingress (Traefik) — REQUIRED
+
+| Key | Production value | Notes |
+|-----|-----------------|-------|
+| `fallDashboard.ingress.host` | e.g. `fall.focus-hospital.de` | Domain Flutter dashboard calls for `/api/falls`, `/api/stream` SSE. Share this with Mohammed and Isa. |
+| `fallDashboard.ingress.certResolver` | e.g. `le` | Same resolver name as above |
+
+---
+
+## 5. InfluxDB — REQUIRED (your FOCUS InfluxDB instance)
+
+The fall-dashboard reads fall history from your InfluxDB. These must match what the mobile app writes to.
+
+| Key | Production value |
+|-----|-----------------|
+| `fallDashboard.influxdb.url` | Your InfluxDB URL |
+| `fallDashboard.influxdb.org` | Your InfluxDB organisation name |
+| `fallDashboard.influxdb.bucket` | Bucket name where raw sensor data is stored |
+| `fallDashboard.influxdb.fallEventsBucket` | Bucket where `fall_events` are written (often the same as `bucket`) |
+| `fallDashboard.influxdb.token` | InfluxDB token with read access to both buckets |
+
+Share the InfluxDB write credentials (URL, token, org, bucket) with Isa — the mobile app
+writes `fall_events` points directly to your InfluxDB after each patient confirmation popup.
+
+---
+
+## 6. MQTT auth — set if broker requires authentication
+
+| Key | Production value | Notes |
+|-----|-----------------|-------|
+| `fallDashboard.mqtt.username` | broker username | Leave blank if `allow_anonymous true` stays in mosquitto config |
+| `fallDashboard.mqtt.password` | broker password | Leave blank if anonymous allowed |
+
+> **Important:** If you set MQTT credentials here, you must share the same username and password
+> with Isa. The mobile app connects to the broker from outside the cluster and must use the
+> **exact same** credentials. If these change, inform Isa immediately — a mismatch causes silent
+> connection failure (falls never appear on the dashboard).
+
+---
+
+## 7. Patients — initial seed values (optional)
+
+Patient management is now **dynamic from the UI** — caregivers can add and delete patients
+directly from the fall-dashboard browser without editing `values.yaml` or restarting the pod.
+The patient list is stored in SQLite on a PVC and survives pod restarts.
+
+These values are only used to pre-seed patients on first install. Leave blank if you prefer
+to add patients manually from the UI after deployment.
+
+| Key | Notes |
+|-----|-------|
+| `fallDashboard.patientIds` | Comma-separated patient IDs. Must match the patient IDs in the mobile app and InfluxDB tag `patient_id`. |
+| `fallDashboard.macIds` | Comma-separated MAC addresses. Positional 1:1 mapping to `patientIds`. |
+
+---
+
+## 8. Values that do NOT need to change
+
+| Key | Value | Why unchanged |
+|-----|-------|---------------|
+| `namespace` | `fall-dashboard` | Standard namespace name |
+| `mosquitto.port` | `1883` | Internal TCP port (cluster-only, never changes) |
+| `mosquitto.wsPort` | `9001` | Internal WebSocket port (Traefik forwards to this) |
+| `mosquitto.image` | `eclipse-mosquitto:2` | Standard image, no custom build |
+| `fallDashboard.replicas` | `1` | **Must stay 1** — SSE fan-out is in-process; multiple replicas break live alerts |
+| `fallDashboard.port` | `8002` | Internal pod port |
+| `fallDashboard.mqtt.alertTopic` | `fall/alert` | Must match MCS `.env` `MQTT_ALERT_TOPIC` |
+| `fallDashboard.mqtt.possibleTopic` | `fall/possible` | Pre-confirmation alert topic |
+| `mosquitto.persistence.size` | `500Mi` | Sufficient for MQTT broker storage |
+| `fallDashboard.persistence.size` | `500Mi` | Sufficient for SQLite patient store |
+| `mosquitto.persistence.storageClass` | `""` | Blank = k3s default (`local-path`) |
+| `fallDashboard.persistence.storageClass` | `""` | Blank = k3s default (`local-path`) |
+| `registry` | `registry-smarko-health.de` | Already set to production registry |
+
+---
+
+## 9. How to install on FOCUS k3s
+
+Run all commands from `_6G_integration_v3_k3s/` as the working directory.
+
+### Step 1 — One-time cluster setup (run once, never again)
+
+```powershell
+# Create the namespace
+kubectl create namespace fall-dashboard
+
+# Create the registry pull secret
+# Get <username> and <password> from Mohammed before running this
+kubectl create secret docker-registry mcs-labs `
+    --docker-server=registry-smarko-health.de `
+    --docker-username=<username from Mohammed> `
+    --docker-password=<password from Mohammed> `
+    --namespace fall-dashboard
+```
+
+> The MQTT broker does **not** require a separate Traefik entrypoint patch.
+> MQTT traffic goes over WebSocket on the standard port 443 via IngressRoute —
+> no extra cluster-level change is needed.
+
+### Step 2 — Fill in values_production.yaml
+
+Open `helm/values_production.yaml` and replace all `CHANGE_ME` fields.
+See sections 1–8 above for what each field requires.
+
+### Step 3 — Install the Helm chart
+
+```powershell
+# First install
+helm upgrade --install caregiver helm/ `
+    --namespace fall-dashboard `
+    --create-namespace `
+    --values helm/values_production.yaml `
+    --wait `
+    --timeout 120s
+```
+
+### Step 4 — Verify pods are running
+
+```powershell
+kubectl get pods -n fall-dashboard
+# Expected output:
+#   NAME                             READY   STATUS    RESTARTS
+#   mosquitto-xxxx-xxxx              1/1     Running   0
+#   fall-dashboard-xxxx-xxxx         1/1     Running   0
+```
+
+Check services and IngressRoutes were created:
+
+```powershell
+kubectl get svc -n fall-dashboard
+kubectl get ingressroute -n fall-dashboard
+```
+
+### Step 5 — Run the smoke test
+
+A smoke test script is included in the chart. It checks pods, services, IngressRoutes,
+and the `/api/patients` endpoint (via port-forward):
+
+```bash
+# Linux
+bash helm/test.sh
+```
+
+```powershell
+# Windows
+.\helm\test.ps1
+```
+
+Expected output (both scripts):
+
+```
+  PASS  mosquitto pod Running
+  PASS  fall-dashboard pod Running
+  PASS  mosquitto Service exists
+  PASS  fall-dashboard Service exists
+  PASS  GET /api/patients returns 200
+  PASS  fall-dashboard IngressRoute exists
+  PASS  mosquitto WebSocket IngressRoute exists
+=== Results: 7 passed, 0 failed ===
+```
+
+### Future updates (after values change or new image pushed by Mohammed)
+
+```powershell
+helm upgrade caregiver helm/ `
+    --namespace fall-dashboard `
+    --values helm/values_production.yaml `
+    --wait `
+    --timeout 120s
+```
+
+> `helm upgrade` is required whenever `values_production.yaml` changes.
+> K3s does not watch the values file — changes only take effect after `helm upgrade`.
+
+---
+
+## 10. Cross-reference: values shared with MCS side
+
+These are already set to the correct defaults. **Leave them as-is unless explicitly asked to change.**
+If you change one of these, Mohammed must change his matching value at the same time — and vice versa.
+
+| Your `values.yaml` key | Matching MCS `.env` variable | Action |
+|------------------------|------------------------------|--------|
+| `fallDashboard.mqtt.alertTopic: fall/alert` | `MQTT_ALERT_TOPIC=fall/alert` | Leave as default |
+
+---
+
+## 11. What to share with others
+
+### You → Isa (mobile app) — share after deployment is live
+
+| What | Where you set it | What Isa does with it |
+|------|-----------------|----------------------|
+| MQTT broker domain | `mosquitto.ingress.host` | Mobile app connects as `wss://<host>:443` to publish fall alerts |
+| MQTT username | `fallDashboard.mqtt.username` | Mobile app authenticates with the broker |
+| MQTT password | `fallDashboard.mqtt.password` | Mobile app authenticates with the broker |
+| InfluxDB write credentials | Your FOCUS InfluxDB (URL, token, org, bucket) | Mobile app writes `fall_events` point after each confirmation popup |
+| Fall-dashboard domain | `fallDashboard.ingress.host` | Flutter dashboard uses this for `/api/stream` SSE and `/api/falls` |
+
+### You → Mohammed (MCS) — share after deployment is live
+
+| What | Where you set it | What Mohammed does with it |
+|------|-----------------|--------------------------|
+| Fall-dashboard domain | `fallDashboard.ingress.host` | Sets `FALL_DASHBOARD_URL` in MCS `.env` so server-health can probe your service |
+| MQTT broker domain | `mosquitto.ingress.host` | Sets `MQTT_BROKER_HOST` in MCS `.env` so server-health can probe the broker |
+
+### You receive from Mohammed (before you can install)
+
+| What | What you need it for |
+|------|---------------------|
+| Registry credentials for `registry-smarko-health.de` | `kubectl create secret docker-registry mcs-labs ...` |
+| Confirmation that fall-dashboard image is pushed | Before running `helm install` |
+
+---
+
+## 12. All three parties must agree on
+
+| What | Current value | Note |
+|------|--------------|-------|
+| MQTT alert topic | `fall/alert` | Hardcoded default — only change if all parties change together |
+| MQTT possible topic | `fall/possible` | Same as above |
