@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fall-dashboard
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: fall-dashboard
+    {{- include "caregiver.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.fallDashboard.replicas }}
+  selector:
+    matchLabels:
+      app: fall-dashboard
+  template:
+    metadata:
+      labels:
+        app: fall-dashboard
+    spec:
+      {{- if .Values.imagePullSecret }}
+      imagePullSecrets:
+        - name: {{ .Values.imagePullSecret }}
+      {{- end }}
+      containers:
+        - name: fall-dashboard
+          image: {{ .Values.fallDashboard.image }}
+          imagePullPolicy: {{ .Values.fallDashboard.imagePullPolicy | default "Always" }}
+          ports:
+            - containerPort: {{ .Values.fallDashboard.port }}
+              name: http
+          resources:
+            requests:
+              memory: "128Mi"
+              cpu: "100m"
+            limits:
+              memory: "256Mi"
+              cpu: "250m"
+          envFrom:
+            - configMapRef:
+                name: fall-dashboard-config
+            - secretRef:
+                name: fall-dashboard-secrets
+          volumeMounts:
+            - name: data
+              mountPath: /app/data
+          readinessProbe:
+            httpGet:
+              path: /api/patients
+              port: {{ .Values.fallDashboard.port }}
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /api/patients
+              port: {{ .Values.fallDashboard.port }}
+            initialDelaySeconds: 20
+            periodSeconds: 30
+            failureThreshold: 3
+      # Disable k8s service link injection -- it would overwrite CAREGIVER_PORT
+      # with a tcp://... URL and crash the int() cast in main.py (k8s gotcha)
+      enableServiceLinks: false
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: fall-dashboard-data
