@@ -22,8 +22,6 @@ mosquitto:
   port: 1883
   # WebSocket port -- Traefik forwards external WSS traffic here
   wsPort: 9001
-  # NodePort for WebSocket (30000-32767). Set for local two-laptop testing so the
-  # mock-app on Laptop 2 can reach ws://<node-ip>:<wsNodePort> without TLS.
   # Leave blank ("") for production -- Traefik IngressRoute handles external WSS.
   wsNodePort: ""    # e.g. 30901 for local testing
   persistence:
@@ -32,10 +30,10 @@ mosquitto:
   ingress:
     # Domain the mobile app connects to: wss://internal.e-healthservice.de
     # Set to a subdomain of the FOCUS server, e.g. mqtt.focus-server.hospital.de
-    host: "CHANGE_ME"
+    host: "CHANGE_ME"    # e.g. mqtt.your-hospital.de — subdomain on your Traefik cluster
     # TLS cert resolver -- set if FOCUS cluster uses Let's Encrypt via Traefik.
     # Leave blank to omit TLS config (FOCUS handles TLS externally).
-    certResolver: ""    # e.g. "le" for Let's Encrypt
+    certResolver: "le"    # e.g. "le" for Let's Encrypt
   # Full mosquitto.conf injected as a ConfigMap.
   # per_listener_settings false ensures auth applies to both listeners.
   config: |
@@ -80,12 +78,12 @@ fallDashboard:
     org: "mcs-data-labs"
     bucket: "6g-path"
     fallEventsBucket: "6g-path"
-    token: "CHANGE_ME"    # FOCUS DevOps: paste the InfluxDB read token here
+    token: "CHANGE_ME"    
 
 
   ingress:
     # Domain where the Flutter dashboard reaches fall-dashboard on port 443
-    host: "CHANGE_ME"    # e.g. https://internal.e-healthservice.de/  
+    host: "CHANGE_ME"    # e.g. fall-dashboard.your-hospital.de — subdomain on your Traefik cluster
     # TLS cert resolver -- set if the FOCUS cluster uses Let's Encrypt via Traefik.
     # Leave blank to omit TLS config from this chart (FOCUS handles TLS externally).
-    certResolver: ""     # e.g. "le" for Let's Encrypt
+    certResolver: "le"     # e.g. "le" for Let's Encrypt

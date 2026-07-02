@@ -7,10 +7,10 @@
 # NOTE: Kubernetes namespace names cannot contain underscores -- use hyphens.
 # =============================================================================
 
-namespace: fall-dashboard
+namespace: fall-dashboard                    # do not change
 
 # Container registry (FOCUS private registry + pull secret)
-registry: registry.smarko-health.de
+registry: registry.smarko-health.de          # do not change
 imagePullSecret: mcs-labs
 
 # =============================================================================
@@ -30,9 +30,9 @@ mosquitto:
     size: 500Mi
     storageClass: ""    # blank = use k3s cluster default (local-path provisioner)
   ingress:
-    # Domain the mobile app connects to: wss://internal.e-healthservice.de
+    # Domain the mobile app (Isa) connects to: wss://internal.e-healthservice.de/  
     # Set to a subdomain of the FOCUS server, e.g. mqtt.focus-server.hospital.de
-    host: "CHANGE_ME"
+    host: "5.75.255.114"
     # TLS cert resolver -- set if FOCUS cluster uses Let's Encrypt via Traefik.
     # Leave blank to omit TLS config (FOCUS handles TLS externally).
     certResolver: ""    # e.g. "le" for Let's Encrypt
@@ -40,7 +40,7 @@ mosquitto:
   # per_listener_settings false ensures auth applies to both listeners.
   config: |
     per_listener_settings false
-    allow_anonymous true
+    allow_anonymous true                   
     listener 1883
     listener 9001
     protocol websockets
@@ -54,18 +54,16 @@ mosquitto:
 # =============================================================================
 fallDashboard:
   image: registry.smarko-health.de/fall-dashboard:latest
-  imagePullPolicy: Always    # re-pull on every helm upgrade (required with latest tag)
   # Keep replicas at 1 -- SSE fan-out is in-process; multiple replicas silently drop events
   replicas: 1
   port: 8002
-  httpNodePort: ""           # ClusterIP in production -- Traefik IngressRoute handles external access
 
   persistence:
     size: 500Mi         # SQLite patient store -- small, but needs a real PVC
     storageClass: ""    # blank = use k3s cluster default (local-path provisioner)
 
   # Comma-separated patient IDs and MAC addresses (positional 1:1 mapping)
-  patientIds: ""    # e.g. "patient_01,patient_02"
+  patientIds: ""             # e.g. "patient_01,patient_02" (optional)
   macIds: ""                 # e.g. "aa:bb:cc:dd:ee:01,aa:bb:cc:dd:ee:02" (optional)
 
   mqtt:
@@ -76,16 +74,17 @@ fallDashboard:
     password: ""
 
   influxdb:
-    url: "https://influxdb.internal.e-healthservice.de/"
-    org: "mcs-data-labs"
-    bucket: "6g-path"
-    fallEventsBucket: "6g-path"
-    token: "CHANGE_ME"    # FOCUS DevOps: paste the InfluxDB read token here
-
+    url: "http://influxdb-influxdb2.influxdb.svc.cluster.local:8086"               # e.g. https://influxdb.internal.e-healthservice.de/
+    org: "focus"               # InfluxDB organisation name
+    bucket: "sensors"            # bucket for raw ACC sensor data (read by fall-dashboard)
+    fallEventsBucket: "sensors"  # bucket for fall_events measurement (often same as bucket)
+    # Token is stored in a Kubernetes Secret.
+    # Set this here or pass via --set fallDashboard.influxdb.token=XXX at install time.
+    token: "22fac594337ca38fe779460b0c23f7301abc6ab663141edee314cd824111b05e"
 
   ingress:
     # Domain where the Flutter dashboard reaches fall-dashboard on port 443
-    host: "CHANGE_ME"    # e.g. https://internal.e-healthservice.de/  
+    host: "5.75.255.114"    # e.g. https://internal.e-healthservice.de/  
     # TLS cert resolver -- set if the FOCUS cluster uses Let's Encrypt via Traefik.
     # Leave blank to omit TLS config from this chart (FOCUS handles TLS externally).
     certResolver: ""     # e.g. "le" for Let's Encrypt

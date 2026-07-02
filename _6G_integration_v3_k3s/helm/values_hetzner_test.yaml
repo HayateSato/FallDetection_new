@@ -1,0 +1,90 @@
+# =============================================================================
+# Fall Detection -- Caregiver Layer Helm Values
+# Hetzner test deployment -- public connectivity test
+# =============================================================================
+# Purpose: test that the mobile app can reach the MQTT broker (WSS) and the
+#          fall-dashboard (HTTPS) over the public internet from Hetzner.
+# Domain:  company.smarkohealth.de (MCS-owned)
+#   MQTT broker:    wss://mqtt.company.smarkohealth.de
+#   fall-dashboard: https://fall.company.smarkohealth.de
+#
+# NOTE: certResolver must match the name configured in your Traefik
+#       HelmChartConfig on this k3s node. Check with:
+#         kubectl get helmchartconfig traefik -n kube-system -o yaml | grep certResolver
+#       Common names: "le", "letsencrypt". Change both certResolver fields if needed.
+# =============================================================================
+
+namespace: fall-dashboard
+
+# Pull from MCS private registry -- create the pull secret first:
+#   kubectl create secret docker-registry mcs-labs \
+#     --docker-server=registry.smarko-health.de \
+#     --docker-username=<user> \
+#     --docker-password=<pass> \
+#     --namespace fall-dashboard
+registry: registry.smarko-health.de
+imagePullSecret: "mcs-labs"
+
+# =============================================================================
+# mosquitto MQTT broker
+# =============================================================================
+mosquitto:
+  image: eclipse-mosquitto:2
+  port: 1883
+  wsPort: 9001
+  # No NodePort needed -- Traefik IngressRoute handles external WSS on port 443
+  wsNodePort: ""
+  persistence:
+    size: 500Mi
+    storageClass: ""    # k3s default: local-path provisioner
+  ingress:
+    host: "fall-mqtt.smarko-health.de"
+    certResolver: "le"    # verify name: kubectl get helmchartconfig traefik -n kube-system -o yaml
+  # Anonymous auth for this test -- no password file needed
+  config: |
+    per_listener_settings false
+    allow_anonymous true
+    listener 1883
+    listener 9001
+    protocol websockets
+    persistence true
+    persistence_location /mosquitto/data/
+    log_dest stdout
+    log_type all
+
+# =============================================================================
+# fall-dashboard
+# =============================================================================
+fallDashboard:
+  image: registry.smarko-health.de/fall-dashboard:latest
+  imagePullPolicy: Always    # always pull from registry on Hetzner
+  replicas: 1
+  port: 8002
+  # No NodePort needed -- Traefik IngressRoute handles external HTTPS on port 443
+  httpNodePort: ""
+
+  persistence:
+    size: 500Mi
+    storageClass: ""    # k3s default: local-path provisioner
+
+  # Seed patient for testing -- add more from the dashboard UI after deploy
+  patientIds: ""
+  macIds: ""
+
+  mqtt:
+    alertTopic: fall/alert
+    possibleTopic: fall/possible
+    # Anonymous -- matches allow_anonymous true in mosquitto config above
+    username: ""
+    password: ""
+
+  influxdb:
+    url: "http://influxdb-influxdb2.influxdb.svc.cluster.local:8086"    # NOTE: this is FOCUS cluster internal DNS -- not valid on Hetzner. Update to http://5.75.255.114:8086 if InfluxDB is on the Hetzner host, or confirm actual URL
+    org: "focus"
+    bucket: "sensors"          # verify against actual bucket name in InfluxDB UI
+    fallEventsBucket: "sensors"
+    token: "22fac594337ca38fe779460b0c23f7301abc6ab663141edee314cd824111b05e"
+
+  ingress:
+    host: "fall-dashboard.smarkohealth.de"    # NOTE: no DNS A record exists for this yet -- fall-dashboard accessible at http://5.75.255.114:8002 only
+    certResolver: "le"    # verify name: kubectl get helmchartconfig traefik -n kube-system -o yaml
