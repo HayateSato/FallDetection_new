@@ -7,6 +7,9 @@ Topic structure:
                               NOT subscribed here — that's the mobile app's concern
   fall/alert/<patient_id>   — mobile app publishes AFTER patient confirmation/timeout
                               THIS listener subscribes to fall/alert/#
+  fall/ack/<patient_id>     — THIS listener publishes back to the mobile app, immediately
+                              on receipt of fall/alert, so the app can measure MQTT
+                              round-trip latency for its KPI report.
 
 The caregiver dashboard only receives events that have passed through the
 patient confirmation step. Raw fall detections (fall/events) are handled
@@ -17,6 +20,7 @@ import asyncio
 import json
 import logging
 import os
+from datetime import datetime, timezone
 from typing import Optional, Set
 
 try:
@@ -30,6 +34,7 @@ MQTT_BROKER_HOST    = os.getenv("MQTT_BROKER_HOST", "").strip()
 MQTT_BROKER_PORT    = int(os.getenv("MQTT_BROKER_PORT", "1883"))
 MQTT_ALERT_TOPIC    = os.getenv("MQTT_ALERT_TOPIC",    "fall/alert")    # confirmed alerts from mobile app
 MQTT_POSSIBLE_TOPIC = os.getenv("MQTT_POSSIBLE_TOPIC", "fall/possible") # pre-confirmation alerts
+MQTT_ACK_TOPIC      = os.getenv("MQTT_ACK_TOPIC",      "fall/ack")      # KPI round-trip ack, dashboard -> mobile app
 MQTT_USERNAME       = os.getenv("MQTT_USERNAME", "").strip()
 MQTT_PASSWORD       = os.getenv("MQTT_PASSWORD", "").strip()
 
@@ -121,6 +126,27 @@ class FallEventBroker:
                 logger.warning("SSE subscriber queue full — dropping event")
 
     # ------------------------------------------------------------------
+    def _publish_ack(self, alert_topic: str, event: dict) -> None:
+        """
+        KPI round-trip ack: echo the alert's observation_id straight back to the
+        mobile app on fall/ack/<patient_id>, before any DB write or SSE fan-out,
+        so the ack timing reflects delivery, not our processing time.
+        """
+        if self._client is None:
+            return
+
+        patient_id  = alert_topic.rsplit("/", 1)[-1]
+        received_at = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+        ack_payload = {
+            "observation_id": event.get("observation_id"),
+            "received_at":    received_at,
+        }
+        try:
+            self._client.publish(f"{MQTT_ACK_TOPIC}/{patient_id}", json.dumps(ack_payload), qos=1)
+        except Exception as exc:
+            logger.warning(f"Failed to publish ack for {patient_id}: {exc}")
+
+    # ------------------------------------------------------------------
     # paho callbacks (called from paho's background thread)
     # ------------------------------------------------------------------
 
@@ -170,7 +196,10 @@ class FallEventBroker:
             asyncio.run_coroutine_threadsafe(self.publish_local(event), self._loop)
             return
 
-        # Confirmed alert: route through on_fall for DB write + SSE
+        # Confirmed alert: ack immediately (KPI round-trip), then route through
+        # on_fall for DB write + SSE
+        self._publish_ack(msg.topic, event)
+
         if self.on_fall is not None:
             try:
                 self.on_fall(event)

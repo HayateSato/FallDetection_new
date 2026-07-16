@@ -1,0 +1,3 @@
+patient_id,device_id,observation_id,fall_detected,confidence,model_version,kpi1_predict_ms,kpi2_alert_rtt_ms,ack_received,error
+sim-9001,sim-device-00,ff78169a-dc4b-4c2e-b40a-275871771249,True,0.9944,v0,174.6,25.8,True,
+sim-9002,sim-device-01,f7fdeb32-570e-4a37-889e-3f74d6289e75,True,0.9854,v0,142.4,21.9,True,

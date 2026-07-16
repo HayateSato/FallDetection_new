@@ -54,8 +54,8 @@ def _get_influxdb_client() -> InfluxDBClient:
 def _get_fall_counts(hours: int = 720) -> dict:
     """Return {patient_id: fall_count} from InfluxDB for the given time window.
 
-    Counts distinct observation_ids to avoid double-counting duplicate writes
-    (e.g. simulate-fall button reusing a fixed obs id).
+    Counts rows where fall_detected == true. Using fall_detected (not observation_id)
+    as the anchor field makes this robust when the mobile app omits observation_id.
     Default window is 720h (30 days) — used for per-card badges.
     Pass hours=24 for the "Falls today" header stat.
     """
@@ -66,10 +66,9 @@ def _get_fall_counts(hours: int = 720) -> dict:
         query = f'''from(bucket: "{bucket}")
   |> range(start: -{hours}h)
   |> filter(fn: (r) => r["_measurement"] == "fall_events")
-  |> filter(fn: (r) => r["_field"] == "observation_id")
-  |> filter(fn: (r) => r["_value"] != "simulated-fall")
+  |> filter(fn: (r) => r["_field"] == "fall_detected")
+  |> filter(fn: (r) => r["_value"] == true)
   |> group(columns: ["patient_id"])
-  |> distinct(column: "_value")
   |> count()
 '''
         tables = _get_influxdb_client().query_api().query(query)

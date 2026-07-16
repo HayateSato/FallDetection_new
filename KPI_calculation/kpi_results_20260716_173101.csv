@@ -1,0 +1,9 @@
+patient_id,device_id,observation_id,fall_detected,confidence,model_version,kpi1_predict_ms,kpi2_alert_rtt_ms,ack_received,error
+sim-9001,6c:1d:eb:04:a9:01,e4c886c9-6688-418c-95e5-7e53da9999e6,True,0.9944,v0,365.9,25.5,True,
+sim-9002,6c:1d:eb:04:a9:02,c716b1a1-faac-4e9c-b270-8ed0f90c72cc,True,0.9854,v0,327.9,35.3,True,
+sim-9003,6c:1d:eb:04:a9:03,90d820d7-35d9-4119-bd9d-0b4edb6ecc74,True,0.9950,v0,303.8,20.6,True,
+sim-9004,6c:1d:eb:04:a9:04,d628edc7-cc62-4688-91e4-7c9f1209a5c2,True,0.9961,v0,306.5,54.1,True,
+sim-9005,6c:1d:eb:04:a9:05,fc311da3-4b34-4cdc-a0bc-eb18ddc4ffb8,True,0.9944,v0,303.3,77.5,True,
+sim-9006,6c:1d:eb:04:a9:06,5c206c22-7d71-4264-b5ec-32428cc2153b,True,0.9854,v0,369.6,61.8,True,
+sim-9007,6c:1d:eb:04:a9:07,25eb1421-a320-4236-a93f-33b319cdf86c,True,0.9950,v0,281.2,45.2,True,
+sim-9008,6c:1d:eb:04:a9:08,178e66d9-68cd-4b37-b4e4-cd1249a1ac28,True,0.9961,v0,349.8,33.5,True,

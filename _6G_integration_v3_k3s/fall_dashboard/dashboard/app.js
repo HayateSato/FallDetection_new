@@ -81,8 +81,8 @@ async function openPatient(patientId) {
     const rows = data.falls || [];
 
     const total      = rows.length;
-    const confirmed  = rows.filter((r) => r.patient_confirmed === 1).length;
-    const helpNeeded = rows.filter((r) => r.needs_help === true).length;
+    const confirmed  = rows.filter((r) => r.patient_confirmed === 1 || r.patient_confirmed === 'yes').length;
+    const helpNeeded = rows.filter((r) => r.needs_help === true || r.needs_help === 1).length;
 
     document.getElementById('detail-falls-24h').textContent = total;
     document.getElementById('detail-confirmed').textContent = confirmed;
@@ -98,7 +98,7 @@ async function openPatient(patientId) {
       <tr>
         <td>${formatTime(r.detection_time)}</td>
         <td>${formatConfirmed(r.patient_confirmed)}</td>
-        <td>${r.needs_help === true ? '<span class="tag tag-yes">Yes</span>' : '<span class="tag tag-no">No</span>'}</td>
+        <td>${(r.needs_help === true || r.needs_help === 1) ? '<span class="tag tag-yes">Yes</span>' : '<span class="tag tag-no">No</span>'}</td>
       </tr>
     `).join('');
   } catch (e) {
@@ -249,9 +249,9 @@ function formatTime(iso) {
 //   0  = patient denied, false positive   ("no")
 //  -1  = no response within timeout       ("not_answered")
 function formatConfirmed(c) {
-  if (c === 1)  return '<span class="tag tag-yes">Confirmed</span>';
-  if (c === 0)  return '<span class="tag tag-no">Not a fall</span>';
-  if (c === -1) return '<span class="tag tag-pending">No response</span>';
+  if (c === 1 || c === 'yes')           return '<span class="tag tag-yes">Confirmed</span>';
+  if (c === 0 || c === 'no')            return '<span class="tag tag-no">Not a fall</span>';
+  if (c === -1 || c === 'not_answered') return '<span class="tag tag-pending">No response</span>';
   return '<span class="tag tag-pending">—</span>';
 }
 

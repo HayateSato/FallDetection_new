@@ -1,0 +1,13 @@
+patient_id,device_id,observation_id,fall_detected,confidence,model_version,kpi1_predict_ms,kpi2_alert_rtt_ms,ack_received,error
+sim-9001,6c:1d:eb:04:a9:01,b870cb32-94fb-47fb-a13c-f2e51a8e277c,True,0.9944,v0,198.1,31.2,True,
+sim-9002,6c:1d:eb:04:a9:02,d1e597e4-b972-4c31-8987-f53b17b12b29,True,0.9854,v0,187.1,30.9,True,
+sim-9003,6c:1d:eb:04:a9:03,7de286f0-f848-4cc0-927e-5c65875e3f53,True,0.9950,v0,230.3,19.4,True,
+sim-9004,6c:1d:eb:04:a9:04,1347bf7d-afab-4c81-b3ad-dcb9f29dfae5,True,0.9961,v0,234.4,20.7,True,
+sim-9005,6c:1d:eb:04:a9:05,82ccc5ef-4909-4726-bd03-a98f4ab697a2,True,0.9944,v0,186.0,35.1,True,
+sim-9006,6c:1d:eb:04:a9:06,5d196dc6-b4b0-43b4-9f7a-b7fef4a1ec79,True,0.9854,v0,194.8,39.7,True,
+sim-9007,6c:1d:eb:04:a9:07,8df01264-48a6-4f2e-8caf-92faf490ed69,True,0.9950,v0,167.3,45.3,True,
+sim-9008,6c:1d:eb:04:a9:08,4b34cc1c-db1e-4fd9-8cf2-a15bd9663168,True,0.9961,v0,227.1,40.9,True,
+
+metric,n,min,max,mean,var,std
+kpi1_predict_ms,8,167.30090000055498,234.4346999998379,203.1571749998875,602.8516291177706,24.553037065051047
+kpi2_alert_rtt_ms,8,19.441600001300685,45.30720000184374,32.91050000098039,86.35956022827132,9.292984462930697

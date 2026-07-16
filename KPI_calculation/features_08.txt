@@ -1,0 +1,39 @@
+cd C:\Users\hayat\Documents\6G\FallDetection_new\_6G_integration_v3_docker_mcs
+docker compose up -d postgres
+
+docker exec -it mcs_fall_postgres psql -U fall_user -d fall_detection
+
+fall_detection=# SELECT id, patient_id, fall_detected, patient_confirmed, confidence FROM inference_log WHERE fall_detected = True LIMIT 10;
+ id | patient_id  | fall_detected | patient_confirmed |     confidence
+----+-------------+---------------+-------------------+--------------------
+  8 | patient_200 | t             |                   | 0.9931341409683228
+  9 | patient_200 | t             |                   | 0.9931341409683228
+ 10 | patient_200 | t             |                   | 0.9944165945053101
+ 11 | patient_200 | t             |                   | 0.9944165945053101
+ 12 | patient_200 | t             |                   | 0.9985824823379517
+ 49 | patient_200 | t             |                   | 0.9903287291526794
+ 50 | patient_200 | t             |                   | 0.9940934777259827
+ 51 | patient_200 | t             |                   | 0.9940934777259827
+ 52 | patient_200 | t             |                   | 0.9942873120307922
+ 53 | patient_200 | t             |                   |  0.995643138885498
+
+
+fall_detection=# SELECT * FROM feature_snapshot WHERE inference_id = 8;
+ id  | inference_id | feature_name |    feature_value
+-----+--------------+--------------+----------------------
+ 113 |            8 | acc_x_min    |     -1.9976806640625
+ 114 |            8 | acc_x_max    |     1.71429443359375
+ 115 |            8 | acc_x_mean   | -0.07312798394097222
+ 116 |            8 | acc_x_var    |  0.08340782695780564
+ 117 |            8 | acc_y_min    |                   -2
+ 118 |            8 | acc_y_max    |      0.1605224609375
+ 119 |            8 | acc_y_mean   | -0.07387953016493055
+ 120 |            8 | acc_y_var    |  0.14073671754033842
+ 121 |            8 | acc_z_min    |                   -2
+ 122 |            8 | acc_z_max    |     1.98785400390625
+ 123 |            8 | acc_z_mean   |  0.18924967447916666
+ 124 |            8 | acc_z_var    |  0.15407186902231637
+ 125 |            8 | acc_mag_min  |  0.20708597107831336
+ 126 |            8 | acc_mag_max  |    3.202351246978814
+ 127 |            8 | acc_mag_mean |   0.3971410750994628
+ 128 |            8 | acc_mag_var  |  0.26711670629243595
