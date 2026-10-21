@@ -111,12 +111,17 @@ async def _start_mqtt_with_callback() -> None:
         # Caregiver alert conditions (SSE fan-out -> dashboard):
         #   -1 (not_answered) -> patient could not respond at all -> treat as serious fall
         #    1 (yes) + needs_help=True -> confirmed fall, patient asked for help
-        # Silent (stored in InfluxDB for history; no banner):
+        # No alert (stored in InfluxDB for history; possible-fall notice is dismissed):
         #    0 (no) -> patient says they didn't fall (false positive)
         #    1 (yes) + needs_help=False -> confirmed fall but patient says they are okay
         should_alert = (pc_int == -1 or (pc_int == 1 and needs_help is True))
+
+        # Every outcome goes to the browser so it can resolve the "Possible fall"
+        # notice; caregiver_alert tells it whether to escalate or dismiss.
+        event["caregiver_alert"] = should_alert
+        asyncio.run_coroutine_threadsafe(broker.publish_local(event), _loop)
+
         if should_alert:
-            asyncio.run_coroutine_threadsafe(broker.publish_local(event), _loop)
             logger.info(
                 f"Fall ALERT -> caregiver  patient={patient_id}  "
                 f"confirmed={pc_int}  needs_help={needs_help}"

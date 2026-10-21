@@ -12,8 +12,19 @@ let eventSource = null;
 // observation_id -> patient_id for in-flight possible-fall notices
 const pendingAlerts = new Map();
 
-// patient_ids that have received a confirmed fall + help-needed alert
-const confirmedPatients = new Set();
+// patient_id -> {notice, overlay} text for cards with a caregiver alert
+// (confirmed fall + help needed, or patient did not respond)
+const confirmedPatients = new Map();
+
+// patient_id -> notice text for possible falls the patient dismissed
+// (shown briefly, then the card returns to normal)
+const resolvedPatients = new Map();
+const resolvedTimers = new Map();
+const RESOLVED_NOTICE_MS = 8000;
+
+// Safety net: drop a possible-fall notice if no fall/alert follows
+// (popup is 2 x 10s, so 60s is well past any normal answer)
+const PENDING_TIMEOUT_MS = 60000;
 
 // ---------------------------------------------------------------------------
 // Patients tab
@@ -45,6 +56,7 @@ async function loadPatients() {
     updateFallsToday(data.patients);
     reapplyPendingNotices();
     reapplyConfirmedNotices();
+    reapplyResolvedNotices();
   } catch (e) {
     list.innerHTML = `<p class="error">Failed to load patients: ${e.message}</p>`;
   }
@@ -149,16 +161,41 @@ function handleFallEvent(event) {
   const obsId  = event.observation_id;
 
   if (status === 'pending') {
-    if (obsId) pendingAlerts.set(obsId, event.patient_id);
+    if (obsId) {
+      pendingAlerts.set(obsId, event.patient_id);
+      setTimeout(() => expirePending(obsId), PENDING_TIMEOUT_MS);
+    }
+    clearPatientResolved(event.patient_id);
     markPatientPending(event.patient_id);
     return;
   }
 
-  // Confirmed event: escalate card if patient asked for help.
-  if (event.needs_help === true) {
-    markPatientConfirmed(event.patient_id);
+  // Confirmed event: escalate or dismiss. caregiver_alert is set by the backend;
+  // if it is missing (older backend), only alerts were forwarded, so escalate.
+  if (event.caregiver_alert === false) {
+    markPatientResolved(event.patient_id, resolvedNoticeText(event));
+  } else {
+    const noResponse = event.patient_confirmed === -1;
+    markPatientConfirmed(event.patient_id, {
+      notice:  noResponse ? 'Patient did not respond' : 'Fall is confirmed',
+      overlay: noResponse ? 'Check on patient' : 'Help is requested',
+    });
   }
   if (!inDetailView) loadPatients();
+}
+
+function resolvedNoticeText(event) {
+  if (event.patient_confirmed === 0) return 'Patient reported no fall';
+  if (event.patient_confirmed === 1 && event.needs_help === false) return 'Fall confirmed, patient is okay';
+  return 'Possible fall resolved';
+}
+
+function expirePending(obsId) {
+  const patientId = pendingAlerts.get(obsId);
+  if (patientId === undefined) return;  // already resolved or confirmed
+  pendingAlerts.delete(obsId);
+  const stillPending = [...pendingAlerts.values()].includes(patientId);
+  if (!stillPending && !confirmedPatients.has(patientId)) clearPatientPending(patientId);
 }
 
 // ---------------------------------------------------------------------------
@@ -178,41 +215,81 @@ function markPatientPending(patientId) {
   card.classList.add('is-pending');
 }
 
-function markPatientConfirmed(patientId) {
+function markPatientConfirmed(patientId, texts) {
   // Remove from pending — confirmed supersedes possible-fall state
   for (const [obsId, pid] of pendingAlerts) {
     if (pid === patientId) pendingAlerts.delete(obsId);
   }
-  confirmedPatients.add(patientId);
+  clearPatientResolved(patientId);
+  confirmedPatients.set(patientId, texts);
 
   const card = document.querySelector(`.patient-card[data-patient-id="${CSS.escape(patientId)}"]`);
   if (!card) return;
 
   // Update banner text (reuse existing notice element if present)
   let notice = card.querySelector('.pending-notice');
-  if (notice) {
-    notice.textContent = 'Fall is confirmed';
-    notice.classList.add('confirmed-notice');
-  } else {
+  if (!notice) {
     notice = document.createElement('div');
-    notice.className = 'pending-notice confirmed-notice';
-    notice.textContent = 'Fall is confirmed';
+    notice.className = 'pending-notice';
     card.insertBefore(notice, card.firstChild);
   }
+  notice.textContent = texts.notice;
+  notice.classList.add('confirmed-notice');
 
   // Add the big help message below the patient name if not already present
-  if (!card.querySelector('.help-overlay')) {
-    const overlay = document.createElement('div');
+  let overlay = card.querySelector('.help-overlay');
+  if (!overlay) {
+    overlay = document.createElement('div');
     overlay.className = 'help-overlay';
-    overlay.textContent = 'Help is requested';
     card.appendChild(overlay);
   }
+  overlay.textContent = texts.overlay;
 
   card.classList.add('is-pending', 'is-confirmed');
 }
 
+function markPatientResolved(patientId, text) {
+  for (const [obsId, pid] of pendingAlerts) {
+    if (pid === patientId) pendingAlerts.delete(obsId);
+  }
+  // An earlier unacknowledged alert stays up — a later "no" must not hide it
+  if (confirmedPatients.has(patientId)) return;
+
+  resolvedPatients.set(patientId, text);
+  clearTimeout(resolvedTimers.get(patientId));
+  resolvedTimers.set(patientId, setTimeout(() => clearPatientResolved(patientId), RESOLVED_NOTICE_MS));
+  applyResolvedNotice(patientId);
+}
+
+function applyResolvedNotice(patientId) {
+  const card = document.querySelector(`.patient-card[data-patient-id="${CSS.escape(patientId)}"]`);
+  if (!card) return;
+  let notice = card.querySelector('.pending-notice');
+  if (!notice) {
+    notice = document.createElement('div');
+    notice.className = 'pending-notice';
+    card.insertBefore(notice, card.firstChild);
+  }
+  notice.textContent = resolvedPatients.get(patientId);
+  notice.classList.add('resolved-notice');
+  card.classList.remove('is-pending');
+  card.classList.add('is-resolved');
+}
+
+function clearPatientResolved(patientId) {
+  clearTimeout(resolvedTimers.get(patientId));
+  resolvedTimers.delete(patientId);
+  if (!resolvedPatients.delete(patientId)) return;
+  const card = document.querySelector(`.patient-card[data-patient-id="${CSS.escape(patientId)}"]`);
+  if (!card) return;
+  const notice = card.querySelector('.pending-notice.resolved-notice');
+  if (notice) notice.remove();
+  card.classList.remove('is-resolved');
+}
+
 function clearPatientPending(patientId) {
   confirmedPatients.delete(patientId);
+  clearPatientResolved(patientId);
   const card = document.querySelector(`.patient-card[data-patient-id="${CSS.escape(patientId)}"]`);
   if (!card) return;
   const notice = card.querySelector('.pending-notice');
@@ -233,7 +310,11 @@ function reapplyPendingNotices() {
 }
 
 function reapplyConfirmedNotices() {
-  confirmedPatients.forEach((patientId) => markPatientConfirmed(patientId));
+  confirmedPatients.forEach((texts, patientId) => markPatientConfirmed(patientId, texts));
+}
+
+function reapplyResolvedNotices() {
+  resolvedPatients.forEach((_text, patientId) => applyResolvedNotice(patientId));
 }
 
 // ---------------------------------------------------------------------------
