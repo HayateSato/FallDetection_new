@@ -143,7 +143,7 @@ mqtt.connect('wss://mqtt.focus-hospital.de')
 
 ---
 
-## 5. Test Status (updated 2026-06-09)
+## 5. Test Status (updated 2026-06-22)
 
 ### Two-laptop Docker test — PASSED (2026-06-08)
 - Laptop 1: `_6G_integration_v3_docker_mcs/` (inference layer)
@@ -160,6 +160,17 @@ mqtt.connect('wss://mqtt.focus-hospital.de')
 - server_health (Docker, Laptop 2) probes all K3s services on Laptop 1
 - fall-dashboard probe: `http://<laptop1-ip>:30802` ✓
 - mqtt_broker TCP probe: `<laptop1-ip>:30901` ✓
+
+### Hetzner K3s caregiver layer — publicly deployed (2026-06-22)
+- K3s chart deployed on Hetzner `5.75.255.114` by Mohammed's colleague
+- MQTT subdomain created: `fall-mqtt.smarko-health.de` → `5.75.255.114` (DNS A record)
+- MQTT is now routable via `wss://fall-mqtt.smarko-health.de:443` — routing conflict resolved
+- Helm upgrade with `values_hetzner_test.yaml` still needs to be run to pick up new host value
+- Fall-dashboard: still accessible at `http://5.75.255.114:8002` (no subdomain yet for fall-dashboard)
+- Hetzner test endpoints for mobile app:
+  - Inference server: `https://fall-api.smarko-health.de` (API key: `J7gEYm2mOgaLqRRKhCAOZZpYOz_VnoHo-CwlFUJBMfc`)
+  - MQTT broker: `wss://fall-mqtt.smarko-health.de:443`
+  - InfluxDB: `http://5.75.255.114:8086`, org: `focus`, bucket: `sensors`
 
 ### NOT working yet (open gap — needs Isa)
 - Mobile app does NOT write `fall_events` to InfluxDB after confirmation

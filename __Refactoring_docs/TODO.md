@@ -115,8 +115,18 @@ End-to-end flow verified between two Windows laptops:
 - [ ] The `observation_id` field links a fall event back to MCS inference logs (future cross-reference)
 - [ ] Exact Flux query examples for all three views above (including integer filter: `r["patient_confirmed"] == 1`)
 
-- [ ] **Prepare the instruction document** (see `handover_docs_2/` for format)
-- [ ] Send instruction document to FOCUS DevOps for Flutter implementation
+- [x] **Prepare the instruction document** — delivery package assembled in `_6G_Focus/` (2026-07-02):
+      - `README.md` — step-by-step deployment guide (STEP 1–5, context, data privacy rationale)
+      - `system_overview.md` — ASCII diagram of the full three-party system
+      - `api_reference.md` — fall dashboard HTTP API + SSE bridge explanation
+      - `helm/values.yaml` — pre-filled, 3 CHANGE_ME fields remaining for FOCUS
+      - `caregiver_user_guide.docx` — attached separately outside the zip
+      - Email template at `FOCUS_devs_handover/email_template_handover.md`
+- [ ] **Send delivery package to FOCUS DevOps** — zip `_6G_Focus/` + attach `caregiver_user_guide.docx` separately; email template ready
+
+> **Decision (2026-06-30):** We will NOT merge the fall-dashboard (Python) into the Flutter app.
+> The fall-dashboard runs as a separate pod in FOCUS's k3s cluster and is accessed via its own subdomain.
+> FOCUS DevOps will implement the Flutter-side integration based on the instruction document above.
 
 ---
 
@@ -147,11 +157,9 @@ End-to-end flow verified between two Windows laptops:
 
 ## 6. End-to-End Testing
 
-- [ ] Full sequence: SmarKo -> mobile app -> inference server -> response -> InfluxDB injection -> MQTT -> caregiver dashboard alert
-      ⚠️ **Partially done (2026-06-08):** SmarKo → mobile app → inference server → MQTT → caregiver alert all verified.
-      InfluxDB injection step is missing — Isa has not yet implemented the `fall_events` write.
-- [ ] Fall-history dashboard: verify it reads correctly from InfluxDB (filter by patient, period, help-requested)
-      ⚠️ **Blocked** until Isa implements InfluxDB injection above.
+- [x] Full sequence: SmarKo -> mobile app -> inference server -> response -> InfluxDB injection -> MQTT -> caregiver dashboard alert
+      **PASSED (2026-06-30):** Full end-to-end flow verified — SmarKo wearable → mobile app → inference server → MQTT broker → caregiver dashboard alert all confirmed working.
+- [x] Fall-history dashboard: verified reading correctly from InfluxDB (filter by patient, period, help-requested) — **PASSED (2026-06-30)**
 - [x] Retraining pipeline: feature_snapshot (MCS Postgres) -> retrain script -> MLflow -> hot-swap from ml-dashboard
       — **PASSED on Docker version of the inference layer** (`_6G_integration_v3_docker_mcs/`)
 - [x] Grafana dashboards loading correctly for MCS-hosted components
@@ -213,20 +221,18 @@ needs to be adapted for their cluster. Two open architectural questions before i
 - [x] **Production config checklist** prepared: `FOCUS_devs_handover/production_config_checklist.md`
 - [x] **Patient add/delete from UI (2026-06-09)**: fall_dashboard now has "+ Add Patient" button + modal + per-card delete button. `POST /api/patients` and `DELETE /api/patients/{id}` endpoints added. No longer need to edit `PATIENT_IDS` in values.yaml and restart the pod — SQLite store on the PVC persists dynamically added patients across restarts.
 - [x] **Docker MCS ↔ K3s caregiver cross-layer connectivity verified (2026-06-09)**: server_health (Laptop 2 Docker) now probes fall-dashboard (:30802) and mqtt-broker (:30901) on Laptop 1 K3s. Root cause of earlier failures: (1) server-health docker-compose was missing `DATABASE_URL`, `MLFLOW_TRACKING_URI`, `MLFLOW_S3_ENDPOINT_URL`, `MQTT_BROKER_HOST`, `MQTT_BROKER_PORT` env vars; (2) fall-dashboard K3s Service was ClusterIP — `helm upgrade` was never run after `httpNodePort: 30802` was added to values.yaml.
-- [ ] **[Mohammed]** Fill in all `CHANGE_ME` values in `values_production.yaml` and deliver chart to FOCUS DevOps
-- [ ] **Verify** MQTT_POSSIBLE_TOPIC (`fall/possible/#`) is documented in the FOCUS instruction doc — both topics must be subscribed by the Flutter client
+- [x] **Chart delivery to FOCUS DevOps** — `_6G_Focus/` package ready (2026-07-02); `values.yaml` pre-filled except 3 CHANGE_ME fields (subdomains + InfluxDB token) which FOCUS fills themselves
+- [ ] **[Mohammed]** Push latest `fall-dashboard` Docker image to registry after "Falls today" bug fix (rebuild from `_6G_integration_v3_k3s/`, then `kubectl rollout restart deployment/fall-dashboard -n fall-dashboard` on live Hetzner cluster)
+- [x] **Verify** MQTT_POSSIBLE_TOPIC (`fall/possible/#`) documented — covered in `api_reference.md` (SSE bridge section) and in `README.md` (§3 What Each Service Does)
 
 ---
 
 ## Internal Future Options (not documented for FOCUS)
 
-- [ ] **Q1 upgrade — merge fall-dashboard into Flutter patient dashboard source**
-  - If FOCUS grants source-repo access to the Flutter patient dashboard (their existing app),
-    Isa could integrate the fall alert features directly into it.
-  - This would eliminate the separate `fall.<domain>` subdomain — caregivers use one URL.
-  - Status: waiting for FOCUS to confirm whether they will grant repo access.
-  - **Not mentioned in any handover doc or external-facing doc** — do not raise with FOCUS
-    unless they bring it up or confirm repo access.
+- [x] ~~**Q1 upgrade — merge fall-dashboard into Flutter patient dashboard source**~~
+  - **Decision (2026-06-30): NOT pursued.** The fall-dashboard runs as a standalone pod
+    in FOCUS's k3s cluster. FOCUS DevOps implements Flutter-side integration via instruction document.
+  - The separate `fall.<domain>` subdomain approach is the final architecture.
 
 ---
 

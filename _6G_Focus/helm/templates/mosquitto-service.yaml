@@ -1,0 +1,27 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mosquitto
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: mosquitto
+    {{- include "caregiver.labels" . | nindent 4 }}
+spec:
+  selector:
+    app: mosquitto
+  ports:
+    - name: mqtt
+      port: {{ .Values.mosquitto.port }}
+      targetPort: {{ .Values.mosquitto.port }}
+    - name: mqtt-ws
+      port: {{ .Values.mosquitto.wsPort }}
+      targetPort: {{ .Values.mosquitto.wsPort }}
+      {{- if .Values.mosquitto.wsNodePort }}
+      nodePort: {{ .Values.mosquitto.wsNodePort }}
+      {{- end }}
+  type: {{ if .Values.mosquitto.wsNodePort }}NodePort{{ else }}ClusterIP{{ end }}
+  # fall-dashboard reaches broker via internal DNS (plain TCP):
+  #   mosquitto.fall-dashboard.svc.cluster.local:1883
+  # Production: Traefik IngressRoute forwards mobile app WSS traffic to port 9001.
+  # Local two-laptop testing: set mosquitto.wsNodePort (e.g. 30901) to expose port
+  # 9001 as a NodePort on the node NIC -- bypasses Traefik, no TLS needed.

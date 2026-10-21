@@ -1,0 +1,33 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fall-dashboard-config
+  namespace: {{ .Values.namespace }}
+  labels:
+    app: fall-dashboard
+    {{- include "caregiver.labels" . | nindent 4 }}
+data:
+  # Service binding
+  CAREGIVER_HOST: "0.0.0.0"
+  CAREGIVER_PORT: {{ .Values.fallDashboard.port | quote }}
+
+  # MQTT -- mosquitto is in the same namespace so short DNS name resolves
+  MQTT_BROKER_HOST: "mosquitto"
+  MQTT_BROKER_PORT: {{ .Values.mosquitto.port | quote }}
+  MQTT_ALERT_TOPIC: {{ .Values.fallDashboard.mqtt.alertTopic | quote }}
+  MQTT_POSSIBLE_TOPIC: {{ .Values.fallDashboard.mqtt.possibleTopic | quote }}
+
+  # InfluxDB (non-secret fields)
+  INFLUXDB_URL: {{ .Values.fallDashboard.influxdb.url | quote }}
+  INFLUXDB_ORG: {{ .Values.fallDashboard.influxdb.org | quote }}
+  INFLUXDB_BUCKET: {{ .Values.fallDashboard.influxdb.bucket | quote }}
+  INFLUXDB_FALL_EVENTS_BUCKET: {{ .Values.fallDashboard.influxdb.fallEventsBucket | quote }}
+
+  # Patient list -- comma-separated; used for display and patient_store sync
+  PATIENT_IDS: {{ .Values.fallDashboard.patientIds | quote }}
+  MAC_IDS: {{ .Values.fallDashboard.macIds | quote }}
+
+  # SQLite patient store -- path inside the container; backed by a PVC
+  PATIENT_DB_PATH: "/app/data/patients.db"
+
+  LOG_LEVEL: "INFO"

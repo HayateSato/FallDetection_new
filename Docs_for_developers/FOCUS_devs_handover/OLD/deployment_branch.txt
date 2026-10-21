@@ -1,0 +1,11 @@
+i create a new branch for deployment 
+
+update the gitignore or git tracking for me so that the branch contains only following folder
+
+ _6G_integration_v3_docker_focus/
+ _6G_integration_v3_docker_mcs/
+ _6G_integration_v3_k3s/
+ FOCUS_devs_handover/
+ mohammed/
+ gitignore
+ readme

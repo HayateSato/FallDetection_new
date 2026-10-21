@@ -1,0 +1,79 @@
+KPI Test — Notes for reading the results
+=========================================
+
+DATA USED
+---------
+The test does not use a live wearable. Instead it replays pre-recorded
+sensor windows (9 seconds of accelerometer + barometer data, captured
+earlier from real fall recordings) stored as *_predict_payload.json files
+in this folder. Each simulated device sends one of these pre-loaded windows
+to the inference server, exactly as the mobile app would if it had just
+read 9 seconds of live sensor data.
+
+Number of subjects: 8
+Each subject is a fake patient ID with its own device (MAC) ID, standing in
+for 8 separate mobile phones/wearables. Since only 4 distinct recordings are
+available, some subjects reuse the same recording — this only affects which
+raw sensor window was sent, not the timing measurements below.
+
+KPI 1 — Inference round trip
+-----------------------------
+What it measures: the time from when the phone sends the POST request to
+the inference server (/predict) until the phone receives the response
+(fall detected / not detected, confidence score, etc.).
+
+This measures how fast the AI model + server can analyze one 9-second
+window of sensor data and answer back to the phone. A lower number means
+the patient gets a faster fall/no-fall decision.
+
+Column in results: kpi1_predict_ms (milliseconds)
+
+KPI 2 — MQTT alert round trip
+-------------------------------
+What it measures: the time from when the phone publishes a fall alert
+message (MQTT) until the phone receives a confirmation ("ack") that the
+caregiver dashboard has received it.
+
+This measures how fast a confirmed fall alert actually reaches the
+caregiver side over the network, which matters for how quickly a caregiver
+could be notified in a real emergency.
+
+Column in results: kpi2_alert_rtt_ms (milliseconds)
+(Note: this is a round trip — phone to dashboard to phone. The one-way
+delivery time to the dashboard is roughly half of this number.)
+
+Why round trip instead of one-way: measuring one-way delivery (phone
+publish time vs. dashboard receive time) would require the phone's clock
+and the server's clock to be perfectly synchronized to the millisecond.
+In practice there is always some clock drift between two separate devices,
+which would corrupt a one-way measurement. A round trip avoids this
+problem entirely — both the "publish" timestamp and the "ack received"
+timestamp are taken on the same clock (the phone's), so clock drift
+between phone and server never enters the calculation.
+
+SCENARIO 1 — Sequential
+------------------------
+All 8 subjects run one after another. Subject 1 fully finishes (both KPI1
+and KPI2) before subject 2 starts, and so on. This shows how the system
+performs with no simultaneous load — a baseline, best-case timing per
+device.
+
+SCENARIO 2 — Concurrent
+-------------------------
+All 8 subjects run at the same time, sending their requests/alerts
+simultaneously (like 8 patients happening to fall at once). This shows how
+the system performs under real concurrent load, which is the more
+realistic worst-case scenario for a hospital with multiple patients
+wearing the device at once.
+
+READING THE RESULTS
+--------------------
+Each run produces:
+- A CSV table (kpi_results_<timestamp>.csv) — one row per subject with
+  both KPI numbers, plus a small summary block at the bottom showing
+  min/max/mean/variance/standard deviation across all 8 subjects for each
+  KPI.
+- A log file (logs/kpi_run_<timestamp>.log) — the same information plus a
+  timestamped line for when each subject started and finished, useful for
+  double-checking the scenario (sequential vs. concurrent) actually ran as
+  expected.

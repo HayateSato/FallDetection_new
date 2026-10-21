@@ -1,3 +1,8 @@
+# ----------------------------------------------------------------------------
+#      LOCAL TESTING VERSION -- FOR PRODUCTION USE values_production.yaml
+# ----------------------------------------------------------------------------
+
+
 # =============================================================================
 # Fall Detection -- Caregiver Layer Helm Values
 # =============================================================================
@@ -69,8 +74,8 @@ fallDashboard:
     storageClass: ""    # blank = use k3s cluster default (local-path provisioner)
 
   # Comma-separated patient IDs and MAC addresses (positional 1:1 mapping)
-  patientIds: "patient_test_50"    # e.g. "patient_01,patient_02"
-  macIds: "6c:1d:eb:04:a9:d9"                 # e.g. "aa:bb:cc:dd:ee:01,aa:bb:cc:dd:ee:02" (optional)
+  patientIds: ""    # e.g. "patient_01,patient_02"
+  macIds: ""                 # e.g. "aa:bb:cc:dd:ee:01,aa:bb:cc:dd:ee:02" (optional)
 
   mqtt:
     alertTopic: fall/alert
@@ -80,12 +85,10 @@ fallDashboard:
     password: ""
 
   influxdb:
-    url: "https://ecosystem-influxdb.smarko-health.de"               # e.g. https://influxdb.xxx.e-healthservice.de
-    org: "MCS Datalabs GmbH"               # InfluxDB organisation name
-    bucket: "fd_test"            # bucket for raw ACC sensor data (read by fall-dashboard)
-    fallEventsBucket: "fd_test"  # bucket for fall_events measurement (often same as bucket)
-    # Token is stored in a Kubernetes Secret.
-    # Set this here or pass via --set fallDashboard.influxdb.token=XXX at install time.
+    url: "https://ecosystem-influxdb.smarko-health.de"
+    org: "MCS Datalabs GmbH"
+    bucket: "fd_test"
+    fallEventsBucket: "fd_test"
     token: "v3vG3RliwQKPhUCYmlu4GAjrQcf0uITn_J2E08FaJdpn1-rNU5j0lSX9Cp9VNKw4i9fRjB6cvSO-euuG5IOnWg=="
 
   ingress:

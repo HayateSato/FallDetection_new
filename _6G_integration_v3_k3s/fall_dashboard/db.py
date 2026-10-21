@@ -51,14 +51,20 @@ def _get_influxdb_client() -> InfluxDBClient:
 # Read helpers
 # ---------------------------------------------------------------------------
 
-def _get_fall_counts() -> dict:
-    """Return {patient_id: fall_count} from InfluxDB. Returns {} on any error."""
+def _get_fall_counts(hours: int = 720) -> dict:
+    """Return {patient_id: fall_count} from InfluxDB for the given time window.
+
+    Counts rows where fall_detected == true. Using fall_detected (not observation_id)
+    as the anchor field makes this robust when the mobile app omits observation_id.
+    Default window is 720h (30 days) — used for per-card badges.
+    Pass hours=24 for the "Falls today" header stat.
+    """
     bucket = _FALL_EVENTS_BUCKET
     if not bucket:
         return {}
     try:
         query = f'''from(bucket: "{bucket}")
-  |> range(start: -30d)
+  |> range(start: -{hours}h)
   |> filter(fn: (r) => r["_measurement"] == "fall_events")
   |> filter(fn: (r) => r["_field"] == "fall_detected")
   |> filter(fn: (r) => r["_value"] == true)
@@ -86,10 +92,12 @@ def list_patients() -> List[dict]:
     caching), so patients added via sync_from_env() on container recreate show
     up immediately.
     """
-    fall_counts = _get_fall_counts()
+    fall_counts_30d = _get_fall_counts(hours=720)
+    fall_counts_today = _get_fall_counts(hours=24)
     patients = patient_store.list_patients()
     for p in patients:
-        p["fall_count"] = fall_counts.get(p["patient_id"], 0)
+        p["fall_count"] = fall_counts_30d.get(p["patient_id"], 0)
+        p["fall_count_today"] = fall_counts_today.get(p["patient_id"], 0)
     return patients
 
 
@@ -127,7 +135,9 @@ def list_falls(
   |> range(start: -{hours}h)
   |> filter(fn: (r) => r["_measurement"] == "fall_events")
 {patient_filter}  |> pivot(rowKey:["_time"], columnKey: ["_field"], valueColumn: "_value")
-{only_falls_post}  |> sort(columns: ["_time"], desc: true)
+  |> filter(fn: (r) => r["observation_id"] != "simulated-fall")
+{only_falls_post}  |> unique(column: "observation_id")
+  |> sort(columns: ["_time"], desc: true)
   |> limit(n: {limit})
 '''
 
