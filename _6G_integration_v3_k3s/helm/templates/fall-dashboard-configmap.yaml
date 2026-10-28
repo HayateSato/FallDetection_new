@@ -22,6 +22,8 @@ data:
   INFLUXDB_ORG: {{ .Values.fallDashboard.influxdb.org | quote }}
   INFLUXDB_BUCKET: {{ .Values.fallDashboard.influxdb.bucket | quote }}
   INFLUXDB_FALL_EVENTS_BUCKET: {{ .Values.fallDashboard.influxdb.fallEventsBucket | quote }}
+  # "true" = dashboard writes fall_events itself from each fall/alert (needs a write token)
+  FALL_EVENTS_WRITE: {{ .Values.fallDashboard.influxdb.writeFallEvents | default false | quote }}
 
   # Patient list -- comma-separated; used for display and patient_store sync
   PATIENT_IDS: {{ .Values.fallDashboard.patientIds | quote }}

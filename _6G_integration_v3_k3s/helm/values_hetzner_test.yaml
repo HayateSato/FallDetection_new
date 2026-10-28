@@ -83,6 +83,9 @@ fallDashboard:
     org: "focus"
     bucket: "sensors"          # verify against actual bucket name in InfluxDB UI
     fallEventsBucket: "sensors"
+    # Dashboard writes fall_events itself, so counts work even when the mobile app
+    # sends its data to FOKUS's InfluxDB instead of this one (2026-10-21)
+    writeFallEvents: true
     token: "22fac594337ca38fe779460b0c23f7301abc6ab663141edee314cd824111b05e"
 
   ingress:

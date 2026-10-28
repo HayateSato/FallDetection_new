@@ -13,6 +13,7 @@ The mock_app (or eventually the real mobile app) is responsible for:
 This service only:
   - Listens to MQTT fall/alert/# (confirmed alerts from the mobile app)
   - Fans the event out to connected dashboard browsers via SSE
+  - Optionally writes each fall/alert to InfluxDB fall_events (FALL_EVENTS_WRITE=true)
   - No local database — patient list from PATIENT_IDS env var, history from InfluxDB
 
 Run from _6G_Integration_v2_mqtt/ as working directory:
@@ -25,6 +26,7 @@ import logging
 import os
 import signal
 import sys
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 import uvicorn
@@ -32,6 +34,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+from fall_dashboard import db as cdb
 from fall_dashboard import patient_store
 from fall_dashboard import web as cweb
 from fall_dashboard.web import app, broker
@@ -72,6 +75,9 @@ WEB_PORT = int(os.getenv("CAREGIVER_PORT", "8002"))
 
 # Share the MAC map with the web layer so API responses include MAC addresses
 cweb.mac_map = MAC_MAP
+
+# fall_events writes run off paho's thread so a slow InfluxDB never delays MQTT
+_influx_writer = ThreadPoolExecutor(max_workers=1, thread_name_prefix="fall-events-writer")
 
 # ---------------------------------------------------------------------------
 # Wire MQTT → DB + SSE
@@ -120,6 +126,9 @@ async def _start_mqtt_with_callback() -> None:
         # notice; caregiver_alert tells it whether to escalate or dismiss.
         event["caregiver_alert"] = should_alert
         asyncio.run_coroutine_threadsafe(broker.publish_local(event), _loop)
+
+        if cdb.FALL_EVENTS_WRITE:
+            _influx_writer.submit(cdb.write_fall_event, dict(event))
 
         if should_alert:
             logger.info(
