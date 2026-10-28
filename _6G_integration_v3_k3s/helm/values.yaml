@@ -42,6 +42,16 @@ mosquitto:
     # TLS cert resolver -- set if FOCUS cluster uses Let's Encrypt via Traefik.
     # Leave blank to omit TLS config (FOCUS handles TLS externally).
     certResolver: ""    # e.g. "le" for Let's Encrypt
+    # true = TCP route (IngressRouteTCP "mosquitto-ws-tcp", Traefik terminates
+    # TLS and passes the WebSocket stream through), as live on Hetzner.
+    # false = HTTP IngressRoute "mosquitto-ws" (original setup).
+    tcp: false
+    # With tcp: true, e.g. "VersionTLS13" adds TLSOption "mqtt-tls-13". Empty = Traefik default.
+    tlsMinVersion: ""
+  # Name of a Secret holding the mosquitto login files ("passwd" and "acl"),
+  # created by hand with kubectl (not by this chart). Empty = no login files
+  # are mounted. Hetzner sets "mosquitto-auth" (see values_hetzner_test.yaml).
+  authSecret: ""
   # Full mosquitto.conf injected as a ConfigMap.
   # per_listener_settings false ensures auth applies to both listeners.
   config: |

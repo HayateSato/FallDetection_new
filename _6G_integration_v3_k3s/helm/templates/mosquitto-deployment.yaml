@@ -8,6 +8,10 @@ metadata:
     {{- include "caregiver.labels" . | nindent 4 }}
 spec:
   replicas: 1
+  # Stop the old broker before starting the new one. RollingUpdate briefly ran
+  # two brokers on the same data volume, so clients could land on different ones.
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: mosquitto
@@ -16,12 +20,18 @@ spec:
       labels:
         app: mosquitto
     spec:
+      {{- if .Values.mosquitto.authSecret }}
+      securityContext:
+        fsGroup: 1883    # mosquitto's group, so the broker can read the login files
+      {{- end }}
       containers:
         - name: mosquitto
           image: {{ .Values.mosquitto.image }}
           ports:
             - containerPort: {{ .Values.mosquitto.port }}
               name: mqtt
+            - containerPort: {{ .Values.mosquitto.wsPort }}
+              name: mqtt-ws
           resources:
             requests:
               memory: "64Mi"
@@ -36,14 +46,21 @@ spec:
               readOnly: true
             - name: data
               mountPath: /mosquitto/data
+            {{- if .Values.mosquitto.authSecret }}
+            - name: auth
+              mountPath: /mosquitto/secrets
+              readOnly: true
+            {{- end }}
+          # Probe the WebSocket listener: that's what the app and browsers use
+          # (through Traefik). A broken 9001 listener would otherwise go unnoticed.
           livenessProbe:
             tcpSocket:
-              port: {{ .Values.mosquitto.port }}
+              port: {{ .Values.mosquitto.wsPort }}
             initialDelaySeconds: 10
             periodSeconds: 30
           readinessProbe:
             tcpSocket:
-              port: {{ .Values.mosquitto.port }}
+              port: {{ .Values.mosquitto.wsPort }}
             initialDelaySeconds: 5
             periodSeconds: 10
       volumes:
@@ -53,3 +70,9 @@ spec:
         - name: data
           persistentVolumeClaim:
             claimName: mosquitto-data
+        {{- if .Values.mosquitto.authSecret }}
+        - name: auth
+          secret:
+            secretName: {{ .Values.mosquitto.authSecret }}
+            defaultMode: 0440    # owner and group (mosquitto) read only
+        {{- end }}
